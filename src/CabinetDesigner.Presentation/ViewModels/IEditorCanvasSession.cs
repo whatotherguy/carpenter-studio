@@ -13,4 +13,10 @@ public interface IEditorCanvasSession
     ViewportTransform Viewport { get; }
 
     void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds);
+
+    void SetHoveredCabinetId(Guid? cabinetId);
+
+    void ZoomAt(double screenX, double screenY, double scaleFactor);
+
+    void PanBy(double dx, double dy);
 }

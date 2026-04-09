@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>CabinetDesigner.App</RootNamespace>
+    <AssemblyName>CabinetDesigner.App</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CabinetDesigner.Application\CabinetDesigner.Application.csproj" />
+    <ProjectReference Include="..\CabinetDesigner.Editor\CabinetDesigner.Editor.csproj" />
+    <ProjectReference Include="..\CabinetDesigner.Persistence\CabinetDesigner.Persistence.csproj" />
+    <ProjectReference Include="..\CabinetDesigner.Presentation\CabinetDesigner.Presentation.csproj" />
+    <ProjectReference Include="..\CabinetDesigner.Rendering\CabinetDesigner.Rendering.csproj"
+                      AdditionalProperties="TargetFramework=net8.0-windows" />
+  </ItemGroup>
+
+</Project>

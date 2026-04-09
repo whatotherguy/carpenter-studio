@@ -1,0 +1,77 @@
+<UserControl x:Class="CabinetDesigner.Presentation.Views.ShellToolbarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <Border Background="{StaticResource ShellSurfaceBrush}"
+            BorderBrush="{StaticResource ShellBorderSoftBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="12,10">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center">
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding NewProjectCommand}"
+                        Content="New" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding OpenProjectCommand}"
+                        Content="Open" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding SaveCommand}"
+                        Content="Save" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding CloseProjectCommand}"
+                        Content="Close" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding UndoCommand}"
+                        Content="Undo" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding RedoCommand}"
+                        Content="Redo"
+                        Margin="0" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center">
+                <Border Style="{StaticResource ShellStatusBadgeStyle}"
+                        Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="Project"
+                                   Style="{StaticResource ShellMiniLabelStyle}" />
+                        <TextBlock Text="{Binding ActiveProjectNameText}"
+                                   Style="{StaticResource ShellStatusBadgeTextStyle}"
+                                   MaxWidth="220"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource ShellStatusBadgeStyle}"
+                        Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="State"
+                                   Style="{StaticResource ShellMiniLabelStyle}" />
+                        <TextBlock Text="{Binding ProjectOpenText}"
+                                   Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource ShellStatusBadgeStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Status"
+                                   Style="{StaticResource ShellMiniLabelStyle}" />
+                        <TextBlock Text="{Binding CurrentStatusText}"
+                                   Style="{StaticResource ShellStatusBadgeTextStyle}"
+                                   MaxWidth="280"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

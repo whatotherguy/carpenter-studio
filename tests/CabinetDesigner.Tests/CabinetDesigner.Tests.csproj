@@ -5,6 +5,8 @@
     <RootNamespace>CabinetDesigner.Tests</RootNamespace>
     <AssemblyName>CabinetDesigner.Tests</AssemblyName>
     <IsPackable>false</IsPackable>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>

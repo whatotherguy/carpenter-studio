@@ -30,6 +30,8 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
 
     public IReadOnlyList<CabinetRun> GetAllRuns() => _runs.Values.OrderBy(run => run.Id.Value).ToArray();
 
+    public IReadOnlyList<Wall> GetAllWalls() => _walls.Values.OrderBy(wall => wall.Id.Value).ToArray();
+
     public IReadOnlyList<CabinetStateRecord> GetAllCabinets() => _cabinets.Values.OrderBy(cabinet => cabinet.CabinetId.Value).ToArray();
 
     public RunSpatialInfo? GetRunSpatialInfo(RunId runId) =>
@@ -63,6 +65,47 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
     {
         ArgumentNullException.ThrowIfNull(cabinet);
         _cabinets[cabinet.CabinetId] = cabinet;
+    }
+
+    public void LoadWorkingRevision(WorkingRevision revision)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        ClearAll();
+
+        foreach (var wall in revision.Walls.OrderBy(wall => wall.Id.Value))
+        {
+            AddWall(wall);
+        }
+
+        foreach (var run in revision.Runs.OrderBy(run => run.Id.Value))
+        {
+            var wall = GetWall(run.WallId)
+                ?? throw new InvalidOperationException($"Wall {run.WallId} was not found while loading working revision.");
+            AddRun(run, wall.StartPoint, wall.StartPoint + wall.Direction * run.Capacity.Inches);
+        }
+
+        foreach (var cabinet in revision.Cabinets.OrderBy(cabinet => cabinet.Id.Value))
+        {
+            var slot = revision.Runs
+                .SelectMany(run => run.Slots)
+                .FirstOrDefault(candidate => candidate.CabinetId == cabinet.Id)
+                ?? throw new InvalidOperationException($"Cabinet {cabinet.Id} was not assigned to a run slot.");
+            AddCabinet(new CabinetStateRecord(
+                cabinet.Id,
+                cabinet.CabinetTypeId,
+                cabinet.NominalWidth,
+                cabinet.Depth,
+                slot.RunId,
+                slot.Id));
+        }
+    }
+
+    public void ClearAll()
+    {
+        _runs.Clear();
+        _walls.Clear();
+        _cabinets.Clear();
+        _runSpatialInfo.Clear();
     }
 
     public void RemoveEntity(string entityId, string entityType)

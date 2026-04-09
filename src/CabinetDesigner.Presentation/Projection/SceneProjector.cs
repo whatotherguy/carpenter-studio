@@ -54,6 +54,7 @@ public sealed class SceneProjector : ISceneProjector
                 var bounds = SceneProjectionGeometry.CreateWorldBounds(leftEdge, wall.Direction, slot.OccupiedWidth, cabinet.NominalDepth);
                 cabinets.Add(new CabinetRenderDto(
                     cabinet.CabinetId.Value,
+                    run.Id.Value,
                     bounds,
                     cabinet.CabinetTypeId,
                     cabinet.CabinetTypeId,

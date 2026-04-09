@@ -1,0 +1,25 @@
+<UserControl x:Class="CabinetDesigner.Presentation.Views.ShellPanelHeaderView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="Transparent">
+    <Border Style="{StaticResource ShellPanelHeaderBorderStyle}">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="{Binding Title, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                           Style="{StaticResource ShellSectionTitleStyle}" />
+                <TextBlock Text="{Binding Subtitle, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                           Style="{StaticResource ShellSectionSubtitleStyle}" />
+            </StackPanel>
+
+            <ContentPresenter Grid.Column="1"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center"
+                              Content="{Binding RightContent, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+        </Grid>
+    </Border>
+</UserControl>

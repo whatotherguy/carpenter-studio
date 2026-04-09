@@ -14,6 +14,7 @@ public sealed class SelectionOverlayFactoryTests
         var bounds = new Rect2D(Point2D.Origin, Length.FromInches(24m), Length.FromInches(12m));
         var cabinet = new CabinetRenderDto(
             cabinetId,
+            Guid.NewGuid(),
             bounds,
             "cab",
             "base",
@@ -63,6 +64,7 @@ public sealed class SelectionOverlayFactoryTests
     private static CabinetRenderDto CreateCabinet(Guid cabinetId, Rect2D bounds) =>
         new(
             cabinetId,
+            Guid.NewGuid(),
             bounds,
             "cab",
             "base",

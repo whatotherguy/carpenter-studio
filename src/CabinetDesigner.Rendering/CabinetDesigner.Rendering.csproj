@@ -1,28 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net8.0-windows</TargetFrameworks>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
     <RootNamespace>CabinetDesigner.Rendering</RootNamespace>
     <AssemblyName>CabinetDesigner.Rendering</AssemblyName>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CabinetDesigner.Domain\CabinetDesigner.Domain.csproj" />
     <ProjectReference Include="..\CabinetDesigner.Editor\CabinetDesigner.Editor.csproj" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-    <Compile Include="IRenderLayer.cs" />
-    <Compile Include="Layers\BackgroundLayer.cs" />
-    <Compile Include="Layers\CabinetLayer.cs" />
-    <Compile Include="Layers\RunLayer.cs" />
-    <Compile Include="Layers\SelectionOverlayLayer.cs" />
-    <Compile Include="Layers\WallLayer.cs" />
-    <Compile Include="EditorCanvas.cs" />
   </ItemGroup>
 
 </Project>

@@ -1,10 +1,16 @@
 using System.Threading;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
+using CabinetDesigner.Application.Persistence;
+using CabinetDesigner.Application.State;
 using CabinetDesigner.Application.Services;
 using CabinetDesigner.Presentation.Projection;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
+using CabinetDesigner.Domain.ProjectContext;
+using CabinetDesigner.Domain.RunContext;
+using CabinetDesigner.Domain.SpatialContext;
 using CabinetDesigner.Editor;
 using CabinetDesigner.Presentation.ViewModels;
 using CabinetDesigner.Rendering;
@@ -18,7 +24,7 @@ public sealed class ShellViewModelTests
     [Fact]
     public async Task SaveCommand_DelegatesToProjectService_AndRaisesPropertyChanges()
     {
-        using var shell = CreateShellViewModel(out var projectService, out _, out var eventBus);
+        using var shell = CreateShellViewModel(out var projectService, out _, out _, out var eventBus);
         var project = new ProjectSummaryDto(Guid.NewGuid(), "Shop A", "C:\\shop.cab", DateTimeOffset.UtcNow, "Rev 1", true);
         projectService.SeedCurrentProject(project);
         eventBus.Publish(new ProjectOpenedEvent(project));
@@ -40,10 +46,21 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
-    public void ProjectOpenedEvent_UpdatesWindowTitle_AndCommandState()
+    public void ProjectOpenedEvent_UpdatesVisibleProjectState()
     {
-        using var shell = CreateShellViewModel(out _, out var undoRedoService, out var eventBus);
+        using var shell = CreateShellViewModel(out _, out var undoRedoService, out _, out var eventBus, out var currentState);
+        SeedRunSummaryState(currentState);
         undoRedoService.CanUndoValue = true;
+        undoRedoService.CanRedoValue = true;
+
+        var saveCommandChanges = 0;
+        var closeCommandChanges = 0;
+        var undoCommandChanges = 0;
+        var redoCommandChanges = 0;
+        shell.SaveCommand.CanExecuteChanged += (_, _) => saveCommandChanges++;
+        shell.CloseProjectCommand.CanExecuteChanged += (_, _) => closeCommandChanges++;
+        shell.UndoCommand.CanExecuteChanged += (_, _) => undoCommandChanges++;
+        shell.RedoCommand.CanExecuteChanged += (_, _) => redoCommandChanges++;
 
         eventBus.Publish(new ProjectOpenedEvent(new ProjectSummaryDto(
             Guid.NewGuid(),
@@ -54,29 +71,217 @@ public sealed class ShellViewModelTests
             false)));
 
         Assert.True(shell.HasActiveProject);
+        Assert.Equal("Demo Project", shell.ActiveProjectNameText);
+        Assert.Equal("Project open", shell.ProjectOpenText);
+        Assert.Equal("Revision Rev 3", shell.RevisionText);
+        Assert.Equal("Saved", shell.SaveStateText);
         Assert.Equal("Demo Project - Carpenter Studio", shell.WindowTitle);
         Assert.True(shell.SaveCommand.CanExecute(null));
+        Assert.True(shell.CloseProjectCommand.CanExecute(null));
         Assert.True(shell.UndoCommand.CanExecute(null));
+        Assert.True(shell.RedoCommand.CanExecute(null));
+        Assert.True(shell.RunSummary.IsProjectOpen);
+        Assert.True(shell.RunSummary.HasActiveRun);
+        Assert.Equal("Live run summary", shell.RunSummary.SourceLabel);
+        Assert.Equal("2 cabinets", shell.RunSummary.CabinetCountDisplay);
+        Assert.Equal("66\"", shell.RunSummary.TotalWidthDisplay);
+        Assert.Equal("2 slots", shell.RunSummary.SlotCountDisplay);
+        Assert.NotEqual(0, saveCommandChanges);
+        Assert.NotEqual(0, closeCommandChanges);
+        Assert.NotEqual(0, undoCommandChanges);
+        Assert.NotEqual(0, redoCommandChanges);
+    }
+
+    [Fact]
+    public void PendingProjectName_TogglesNewCommandAvailability()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out _);
+
+        Assert.True(shell.NewProjectCommand.CanExecute(null));
+
+        shell.PendingProjectName = "   ";
+
+        Assert.False(shell.NewProjectCommand.CanExecute(null));
+
+        shell.PendingProjectName = "Kitchen Remodel";
+
+        Assert.True(shell.NewProjectCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void PendingProjectFilePath_TogglesOpenCommandAvailability()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out _);
+
+        Assert.False(shell.OpenProjectCommand.CanExecute(null));
+
+        shell.PendingProjectFilePath = "C:\\project.cab";
+
+        Assert.True(shell.OpenProjectCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void DesignChangedEvent_RefreshesCurrentStatusText()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out var eventBus);
+
+        var changedProperties = new List<string>();
+        shell.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is not null)
+            {
+                changedProperties.Add(args.PropertyName);
+            }
+        };
+
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "layout.update", true, [], [], [])));
+
+        Assert.Equal("Design updated.", shell.CurrentStatusText);
+        Assert.Contains(nameof(ShellViewModel.CurrentStatusText), changedProperties);
+    }
+
+    [Fact]
+    public void CanvasSelection_UpdatesInspectorAndRunSummary()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out var projector, out var eventBus, out var currentState);
+        SeedRunSummaryState(currentState);
+        var selectedCabinetId = Guid.NewGuid();
+        projector.Scene = new RenderSceneDto(
+            [],
+            [],
+            [
+                new CabinetRenderDto(
+                    selectedCabinetId,
+                    Guid.NewGuid(),
+                    new Rect2D(Point2D.Origin, Length.FromInches(36m), Length.FromInches(24m)),
+                    "base-36",
+                    "Base Cabinet 36\"",
+                    CabinetRenderState.Normal,
+                    [])
+            ],
+            null,
+            new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "layout.update", true, [], [], [])));
+
+        shell.Canvas.SetSelectedCabinetIds([selectedCabinetId]);
+
+        Assert.True(shell.PropertyInspector.HasSelection);
+        Assert.True(shell.PropertyInspector.HasSingleSelection);
+        Assert.StartsWith("Base Cabinet 36\"", shell.PropertyInspector.SelectedEntityLabel);
+        Assert.Equal("Projected scene data", shell.PropertyInspector.SourceLabel);
+        Assert.Equal("Nominal width editable", shell.PropertyInspector.EditabilityStatusDisplay);
+        Assert.Equal("1 selected", shell.PropertyInspector.SelectionSummaryDisplay);
+        Assert.Equal("6 details", shell.PropertyInspector.PropertySummaryDisplay);
+        Assert.Equal("36\"", shell.PropertyInspector.NominalWidthDisplay);
+        Assert.True(shell.RunSummary.HasSelection);
+        Assert.Equal("1 selected", shell.RunSummary.SelectionSummaryDisplay);
+        Assert.True(shell.RunSummary.HasActiveRun);
+        Assert.Equal("Live run summary", shell.RunSummary.SourceLabel);
+        Assert.Equal("Showing the run for the selected cabinet.", shell.RunSummary.StatusMessage);
+        Assert.Equal("2 cabinets", shell.RunSummary.CabinetCountDisplay);
+        Assert.Equal("66\"", shell.RunSummary.TotalWidthDisplay);
+        Assert.Equal(2, shell.RunSummary.Slots.Count);
+        Assert.False(shell.RunSummary.Slots[0].IsSelected);
+        Assert.True(shell.RunSummary.Slots[1].IsSelected);
+    }
+
+    [Fact]
+    public void ProjectClosedEvent_ClearsSelectionDrivenPanels()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out var projector, out var eventBus, out var currentState);
+        SeedRunSummaryState(currentState);
+        var selectedCabinetId = Guid.NewGuid();
+        projector.Scene = new RenderSceneDto(
+            [],
+            [],
+            [
+                new CabinetRenderDto(
+                    selectedCabinetId,
+                    Guid.NewGuid(),
+                    new Rect2D(Point2D.Origin, Length.FromInches(36m), Length.FromInches(24m)),
+                    "base-36",
+                    "Base Cabinet 36\"",
+                    CabinetRenderState.Normal,
+                    [])
+            ],
+            null,
+            new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "layout.update", true, [], [], [])));
+        shell.Canvas.SetSelectedCabinetIds([selectedCabinetId]);
+
+        currentState.Clear();
+        eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
+
+        Assert.False(shell.PropertyInspector.HasSelection);
+        Assert.Equal("Open a project to inspect properties.", shell.PropertyInspector.EmptyStateText);
+        Assert.Equal("No editable properties", shell.PropertyInspector.EditabilityStatusDisplay);
+        Assert.Equal("-", shell.PropertyInspector.NominalWidthDisplay);
+        Assert.False(shell.RunSummary.HasSelection);
+        Assert.False(shell.RunSummary.IsProjectOpen);
+        Assert.Equal("No project open", shell.RunSummary.SourceLabel);
+        Assert.Equal("Open a project to see the run summary.", shell.RunSummary.EmptyStateText);
+        Assert.Equal("Project closed.", shell.StatusBar.StatusMessage);
     }
 
     private static ShellViewModel CreateShellViewModel(
         out RecordingProjectService projectService,
         out RecordingUndoRedoService undoRedoService,
-        out ApplicationEventBus eventBus)
+        out RecordingSceneProjector projector,
+        out ApplicationEventBus eventBus,
+        out CurrentWorkingRevisionSource currentState)
     {
         projectService = new RecordingProjectService();
         undoRedoService = new RecordingUndoRedoService();
         eventBus = new ApplicationEventBus();
+        var validationSummaryService = new RecordingValidationSummaryService();
+        var stateStore = new InMemoryDesignStateStore();
+        currentState = new CurrentWorkingRevisionSource(stateStore);
+        var runSummaryService = new RunSummaryService(currentState, stateStore);
 
+        projector = new RecordingSceneProjector();
+        var runService = new RecordingRunService();
         var canvas = new EditorCanvasViewModel(
-            new RecordingRunService(),
+            runService,
             eventBus,
-            new RecordingSceneProjector(),
+            projector,
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             new RecordingCanvasHost());
 
-        return new ShellViewModel(projectService, undoRedoService, eventBus, canvas);
+        var catalog = new CatalogPanelViewModel(new CatalogService());
+        var propertyInspector = new PropertyInspectorViewModel(runService, eventBus);
+        var runSummary = new RunSummaryPanelViewModel(runSummaryService, currentState, eventBus);
+        var statusBar = new StatusBarViewModel(eventBus, validationSummaryService);
+        var issuePanel = new IssuePanelViewModel(validationSummaryService, eventBus);
+
+        return new ShellViewModel(projectService, undoRedoService, eventBus, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar);
+    }
+
+    private static void SeedRunSummaryState(CurrentWorkingRevisionSource currentState)
+    {
+        var createdAt = DateTimeOffset.UtcNow;
+        var projectId = ProjectId.New();
+        var revisionId = RevisionId.New();
+        var project = new ProjectRecord(projectId, "Demo Project", null, createdAt, createdAt, ApprovalState.Draft);
+        var revision = new RevisionRecord(revisionId, projectId, 1, ApprovalState.Draft, createdAt, null, null, "Rev 1");
+        var room = new Room(RoomId.New(), revisionId, "Kitchen", Length.FromFeet(8));
+        var wall = new Wall(
+            new WallId(Guid.Parse("11111111-1111-1111-1111-111111111111")),
+            room.Id,
+            Point2D.Origin,
+            new Point2D(96m, 0m),
+            Thickness.Exact(Length.FromInches(4m)));
+        var run = new CabinetRun(new RunId(Guid.Parse("00000000-0000-0000-0000-000000000001")), wall.Id, Length.FromInches(96m));
+        var firstCabinetId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var secondCabinetId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        run.AppendCabinet(new CabinetId(firstCabinetId), Length.FromInches(24m));
+        run.AppendCabinet(new CabinetId(secondCabinetId), Length.FromInches(36m));
+        var firstCabinet = new Cabinet(new CabinetId(firstCabinetId), revisionId, "base-24", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(24m), Length.FromInches(24m), Length.FromInches(34.5m));
+        var secondCabinet = new Cabinet(new CabinetId(secondCabinetId), revisionId, "base-36", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(36m), Length.FromInches(24m), Length.FromInches(34.5m));
+
+        var workingRevision = new WorkingRevision(revision, [room], [wall], [run], [firstCabinet, secondCabinet], []);
+        var checkpoint = new AutosaveCheckpoint(Guid.NewGuid().ToString("N"), projectId, revisionId, createdAt, null, true);
+        currentState.SetCurrentState(new PersistedProjectState(project, revision, workingRevision, checkpoint));
     }
 
     private sealed class RecordingProjectService : IProjectService
@@ -134,6 +339,8 @@ public sealed class ShellViewModelTests
 
     private sealed class RecordingRunService : IRunService
     {
+        public ResizeCabinetRequestDto? LastResizeRequest { get; private set; }
+
         public Task<CommandResultDto> CreateRunAsync(CreateRunRequestDto request) => throw new NotImplementedException();
 
         public Task<CommandResultDto> DeleteRunAsync(RunId runId) => throw new NotImplementedException();
@@ -144,21 +351,38 @@ public sealed class ShellViewModelTests
 
         public Task<CommandResultDto> MoveCabinetAsync(MoveCabinetRequestDto request) => throw new NotImplementedException();
 
-        public Task<CommandResultDto> ResizeCabinetAsync(ResizeCabinetRequestDto request) => throw new NotImplementedException();
+        public Task<CommandResultDto> ResizeCabinetAsync(ResizeCabinetRequestDto request)
+        {
+            LastResizeRequest = request;
+            return Task.FromResult(new CommandResultDto(Guid.NewGuid(), "resize_cabinet", true, [], [], []));
+        }
 
         public Task<CommandResultDto> SetCabinetOverrideAsync(SetCabinetOverrideRequestDto request) => throw new NotImplementedException();
 
         public RunSummaryDto GetRunSummary(RunId runId) => throw new NotImplementedException();
     }
 
+    private sealed class RecordingValidationSummaryService : IValidationSummaryService
+    {
+        public IReadOnlyList<ValidationIssueSummaryDto> GetAllIssues() => [];
+
+        public IReadOnlyList<ValidationIssueSummaryDto> GetIssuesFor(string entityId) => [];
+
+        public bool HasManufactureBlockers => false;
+    }
+
     private sealed class RecordingSceneProjector : ISceneProjector
     {
-        public RenderSceneDto Project() => new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        public RenderSceneDto Scene { get; set; } = new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+
+        public RenderSceneDto Project() => Scene;
     }
 
     private sealed class RecordingCanvasHost : IEditorCanvasHost
     {
         public object View => new();
+
+        public bool IsCtrlHeld => false;
 
         public void UpdateScene(RenderSceneDto scene)
         {
@@ -167,19 +391,48 @@ public sealed class ShellViewModelTests
         public void UpdateViewport(ViewportTransform viewport)
         {
         }
+
+        public void SetMouseDownHandler(Action<double, double> handler)
+        {
+        }
+
+        public void SetMouseMoveHandler(Action<double, double> handler)
+        {
+        }
+
+        public void SetMouseWheelHandler(Action<double, double, double> handler)
+        {
+        }
+
+        public void SetMiddleButtonDragHandler(Action<double, double> onStart, Action<double, double> onMove, Action onEnd)
+        {
+        }
     }
 
     private sealed class TestEditorCanvasSession : IEditorCanvasSession
     {
         public EditorMode CurrentMode => EditorMode.Idle;
 
-        public IReadOnlyList<Guid> SelectedCabinetIds => [];
+        public IReadOnlyList<Guid> SelectedCabinetIds { get; private set; } = [];
 
         public Guid? HoveredCabinetId => null;
 
         public ViewportTransform Viewport => ViewportTransform.Default;
 
         public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds)
+        {
+            SelectedCabinetIds = cabinetIds.ToArray();
+        }
+
+        public void SetHoveredCabinetId(Guid? cabinetId)
+        {
+        }
+
+        public void ZoomAt(double screenX, double screenY, double scaleFactor)
+        {
+        }
+
+        public void PanBy(double dx, double dy)
         {
         }
     }

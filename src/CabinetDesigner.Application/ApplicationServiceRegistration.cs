@@ -20,6 +20,9 @@ public static class ApplicationServiceRegistration
         services.AddSingleton<InMemoryDesignStateStore>();
         services.AddSingleton<IDesignStateStore>(provider => provider.GetRequiredService<InMemoryDesignStateStore>());
         services.AddSingleton<IStateManager>(provider => provider.GetRequiredService<InMemoryDesignStateStore>());
+        services.AddSingleton<CurrentWorkingRevisionSource>();
+        services.AddSingleton<IWorkingRevisionSource>(provider => provider.GetRequiredService<CurrentWorkingRevisionSource>());
+        services.AddSingleton<ICurrentPersistedProjectState>(provider => provider.GetRequiredService<CurrentWorkingRevisionSource>());
         services.AddSingleton<IDeltaTracker, InMemoryDeltaTracker>();
         services.AddSingleton<IUndoStack, InMemoryUndoStack>();
         services.AddSingleton<IWhyEngine, WhyEngine>();
@@ -40,9 +43,11 @@ public static class ApplicationServiceRegistration
         services.AddScoped<IEditorCommandHandler, EditorCommandHandler>();
 
         services.AddScoped<IRunService, RunService>();
+        services.AddSingleton<IRunSummaryService, RunSummaryService>();
         services.AddScoped<IUndoRedoService, UndoRedoService>();
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<ISnapshotService, SnapshotService>();
+        services.AddSingleton<ICatalogService, CatalogService>();
 
         return services;
     }

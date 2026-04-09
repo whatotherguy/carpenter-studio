@@ -15,6 +15,7 @@ public sealed class ProjectService : IProjectService
     private readonly IAutosaveCheckpointRepository _checkpointRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IApplicationEventBus _eventBus;
+    private readonly ICurrentPersistedProjectState? _currentPersistedProjectState;
     private readonly IClock _clock;
     private readonly IAppLogger? _logger;
 
@@ -27,6 +28,29 @@ public sealed class ProjectService : IProjectService
         IApplicationEventBus eventBus,
         IClock clock,
         IAppLogger? logger = null)
+        : this(
+            projectRepository,
+            revisionRepository,
+            workingRevisionRepository,
+            checkpointRepository,
+            unitOfWork,
+            eventBus,
+            clock,
+            null,
+            logger)
+    {
+    }
+
+    public ProjectService(
+        IProjectRepository projectRepository,
+        IRevisionRepository revisionRepository,
+        IWorkingRevisionRepository workingRevisionRepository,
+        IAutosaveCheckpointRepository checkpointRepository,
+        IUnitOfWork unitOfWork,
+        IApplicationEventBus eventBus,
+        IClock clock,
+        ICurrentPersistedProjectState? currentPersistedProjectState,
+        IAppLogger? logger = null)
     {
         _projectRepository = projectRepository ?? throw new ArgumentNullException(nameof(projectRepository));
         _revisionRepository = revisionRepository ?? throw new ArgumentNullException(nameof(revisionRepository));
@@ -34,6 +58,7 @@ public sealed class ProjectService : IProjectService
         _checkpointRepository = checkpointRepository ?? throw new ArgumentNullException(nameof(checkpointRepository));
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _currentPersistedProjectState = currentPersistedProjectState;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger;
     }
@@ -46,8 +71,10 @@ public sealed class ProjectService : IProjectService
             ?? throw new InvalidOperationException("No persisted project was found in the current cabinet file.");
         var revision = await _revisionRepository.FindWorkingAsync(project.Id, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("No working revision was found for the persisted project.");
-        _ = await _workingRevisionRepository.LoadAsync(project.Id, ct).ConfigureAwait(false);
+        var workingRevision = await _workingRevisionRepository.LoadAsync(project.Id, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("No working revision payload was found for the persisted project.");
         var checkpoint = await _checkpointRepository.FindByProjectAsync(project.Id, ct).ConfigureAwait(false);
+        _currentPersistedProjectState?.SetCurrentState(new PersistedProjectState(project, revision, workingRevision, checkpoint));
 
         CurrentProject = ToSummary(project, revision, filePath, checkpoint is { IsClean: false });
         if (checkpoint is { IsClean: false })
@@ -115,6 +142,8 @@ public sealed class ProjectService : IProjectService
             throw;
         }
 
+        var workingRevision = new WorkingRevision(revision, [], [], [], [], []);
+        _currentPersistedProjectState?.SetCurrentState(new PersistedProjectState(project, revision, workingRevision, checkpoint));
         CurrentProject = ToSummary(project, revision, string.Empty, hasUnsavedChanges: false);
         _logger?.Log(new LogEntry
         {
@@ -162,6 +191,11 @@ public sealed class ProjectService : IProjectService
             State = ApprovalState.UnderReview
         };
         await _revisionRepository.SaveAsync(updated, ct).ConfigureAwait(false);
+        if (_currentPersistedProjectState?.CurrentState is { } currentState)
+        {
+            _currentPersistedProjectState.SetCurrentState(currentState with { Revision = updated });
+        }
+
         CurrentProject = CurrentProject with
         {
             CurrentRevisionLabel = label,
@@ -205,6 +239,7 @@ public sealed class ProjectService : IProjectService
             }
         });
         CurrentProject = null;
+        _currentPersistedProjectState?.Clear();
     }
 
     private static RevisionDto ToRevisionDto(RevisionRecord revision) =>

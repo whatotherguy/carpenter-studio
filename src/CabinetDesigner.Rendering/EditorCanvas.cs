@@ -21,6 +21,7 @@ public sealed class EditorCanvas : FrameworkElement
     public EditorCanvas(IReadOnlyList<IRenderLayer> layers)
     {
         _layers = layers ?? throw new ArgumentNullException(nameof(layers));
+        Focusable = true;
     }
 
     public void UpdateScene(RenderSceneDto scene)

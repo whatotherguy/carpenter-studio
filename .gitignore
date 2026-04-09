@@ -1,9 +1,22 @@
 # .NET build outputs
 bin/
 obj/
+publish/
 
 # Visual Studio / local IDE state
 .vs/
+.vscode/
+.idea/
+.fleet/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS / file manager noise
+.DS_Store
+Thumbs.db
+Desktop.ini
 
 # Local tool and package caches
 .appdata/
@@ -12,6 +25,11 @@ obj/
 
 # Local test artifacts
 .artifacts/test-databases/
+TestResults/
+Coverage/
+*.trx
+*.coverage
+*.coveragexml
 
 # Root-level build and restore logs
 *.log

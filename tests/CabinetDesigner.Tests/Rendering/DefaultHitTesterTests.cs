@@ -25,7 +25,7 @@ public sealed class DefaultHitTesterTests
         var scene = new RenderSceneDto(
             [],
             [],
-            [new CabinetRenderDto(cabinetId, new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
+            [new CabinetRenderDto(cabinetId, Guid.NewGuid(), new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
             null,
             new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 
@@ -44,7 +44,7 @@ public sealed class DefaultHitTesterTests
         var scene = new RenderSceneDto(
             [],
             [],
-            [new CabinetRenderDto(cabinetId, bounds, "cab", "cab", CabinetRenderState.Selected, [handle])],
+            [new CabinetRenderDto(cabinetId, Guid.NewGuid(), bounds, "cab", "cab", CabinetRenderState.Selected, [handle])],
             new SelectionOverlayDto([cabinetId], null, [handle]),
             new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 

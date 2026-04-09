@@ -1,3 +1,4 @@
+using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Editor;
 
 namespace CabinetDesigner.Presentation.ViewModels;
@@ -23,5 +24,24 @@ public sealed class EditorCanvasSessionAdapter : IEditorCanvasSession
     {
         ArgumentNullException.ThrowIfNull(cabinetIds);
         _session.SetSelection(cabinetIds);
+    }
+
+    public void SetHoveredCabinetId(Guid? cabinetId) => _session.SetHover(cabinetId is null ? null : new CabinetId(cabinetId.Value));
+
+    public void ZoomAt(double screenX, double screenY, double scaleFactor)
+    {
+        var viewport = Viewport;
+        var currentScale = (double)viewport.ScalePixelsPerInch;
+        var newScale = Math.Clamp(currentScale * scaleFactor, 2.0, 200.0);
+        var actualFactor = newScale / currentScale;
+        var newOriginX = screenX - actualFactor * (screenX - (double)viewport.OffsetXPixels);
+        var newOriginY = screenY - actualFactor * (screenY - (double)viewport.OffsetYPixels);
+        _session.SetViewport(new ViewportTransform((decimal)newScale, (decimal)newOriginX, (decimal)newOriginY));
+    }
+
+    public void PanBy(double dx, double dy)
+    {
+        var viewport = Viewport;
+        _session.SetViewport(viewport.Panned((decimal)dx, (decimal)dy));
     }
 }

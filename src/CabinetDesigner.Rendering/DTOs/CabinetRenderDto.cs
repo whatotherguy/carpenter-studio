@@ -4,6 +4,7 @@ namespace CabinetDesigner.Rendering.DTOs;
 
 public sealed record CabinetRenderDto(
     Guid CabinetId,
+    Guid RunId,
     Rect2D WorldBounds,
     string Label,
     string TypeDisplayName,

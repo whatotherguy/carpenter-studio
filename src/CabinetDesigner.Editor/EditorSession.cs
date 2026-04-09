@@ -84,7 +84,9 @@ public sealed class EditorSession
 
     public void RecordSnapWinner(SnapCandidate? winner) => PreviousSnapWinner = winner;
 
-    public void UpdateViewport(ViewportTransform viewport) => Viewport = viewport;
+    public void SetViewport(ViewportTransform viewport) => Viewport = viewport;
+
+    public void UpdateViewport(ViewportTransform viewport) => SetViewport(viewport);
 
     private void AssertMode(EditorMode expected)
     {

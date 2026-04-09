@@ -1,0 +1,473 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="clr-namespace:CabinetDesigner.Presentation.ViewModels">
+    <SolidColorBrush x:Key="ShellWindowBrush" Color="#E9EDF2" />
+    <SolidColorBrush x:Key="ShellSurfaceBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="ShellSurfaceSoftBrush" Color="#F6F8FB" />
+    <SolidColorBrush x:Key="ShellSurfaceDarkBrush" Color="#1F2937" />
+    <SolidColorBrush x:Key="ShellAccentBrush" Color="#1E4D62" />
+    <SolidColorBrush x:Key="ShellAccentMutedBrush" Color="#D7E2EA" />
+    <SolidColorBrush x:Key="ShellBorderBrush" Color="#C7D2DD" />
+    <SolidColorBrush x:Key="ShellBorderSoftBrush" Color="#DCE3EB" />
+    <SolidColorBrush x:Key="ShellTextBrush" Color="#102030" />
+    <SolidColorBrush x:Key="ShellTextMutedBrush" Color="#5F6D7A" />
+    <SolidColorBrush x:Key="ShellTextInverseBrush" Color="#F9FBFD" />
+    <SolidColorBrush x:Key="ShellErrorBrush" Color="#9B1C1C" />
+    <SolidColorBrush x:Key="ShellErrorSurfaceBrush" Color="#FDECEC" />
+    <SolidColorBrush x:Key="ShellWarningBrush" Color="#8A5A12" />
+    <SolidColorBrush x:Key="ShellWarningSurfaceBrush" Color="#FBF5E8" />
+    <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+
+    <Style x:Key="ShellCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Padding" Value="14" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="ShellSectionTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+    </Style>
+
+    <Style x:Key="ShellSectionSubtitleStyle" TargetType="TextBlock">
+        <Setter Property="Margin" Value="0,3,0,0" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="ShellBadgeStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellAccentMutedBrush}" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ShellBadgeTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellAccentBrush}" />
+    </Style>
+
+    <Style x:Key="ShellToolbarButtonStyle" TargetType="Button">
+        <Setter Property="MinWidth" Value="76" />
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+
+    <Style x:Key="ShellToolbarTextBoxStyle" TargetType="TextBox">
+        <Setter Property="MinWidth" Value="170" />
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+    </Style>
+
+    <Style x:Key="ShellMiniLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="ShellPanelHeaderBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="12" />
+    </Style>
+
+    <Style x:Key="ShellStatusBadgeStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="12,6" />
+    </Style>
+
+    <Style x:Key="ShellStatusBadgeTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+    </Style>
+
+    <Style x:Key="ShellStatusIssueBadgeStyle" TargetType="Border" BasedOn="{StaticResource ShellStatusBadgeStyle}">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasManufactureBlockers}" Value="True">
+                <Setter Property="Background" Value="{StaticResource ShellErrorSurfaceBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource ShellErrorBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ShellIssueBlockerBadgeStyle" TargetType="Border" BasedOn="{StaticResource ShellStatusBadgeStyle}">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasManufactureBlockers}" Value="True">
+                <Setter Property="Background" Value="{StaticResource ShellErrorSurfaceBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource ShellErrorBrush}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ShellCatalogSearchBoxStyle" TargetType="TextBox">
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <Style x:Key="ShellCatalogListScrollViewerStyle" TargetType="ScrollViewer">
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+        <Setter Property="Padding" Value="0,0,4,0" />
+    </Style>
+
+    <Style x:Key="ShellCatalogItemsControlStyle" TargetType="ItemsControl">
+        <Setter Property="Visibility" Value="Visible" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasFilteredItems}" Value="False">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ShellCatalogEmptyStateBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="18" />
+        <Setter Property="Visibility" Value="Collapsed" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasFilteredItems}" Value="False">
+                <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ShellRunSummaryEmptyStateBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="18" />
+        <Setter Property="Visibility" Value="Visible" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasActiveRun}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ShellCatalogCategoryPillStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellAccentMutedBrush}" />
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ShellCatalogCategoryTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellAccentBrush}" />
+    </Style>
+
+    <Style x:Key="ShellCatalogItemCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="ShellCatalogDisplayNameStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+    </Style>
+
+    <Style x:Key="ShellCatalogMetaStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="ShellCatalogWidthBadgeStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="12,0,0,0" />
+    </Style>
+
+    <Style x:Key="ShellCatalogWidthBadgeTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+    </Style>
+
+    <Style x:Key="ShellCatalogEmptyStateTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ShellRunSummarySlotCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+
+    <Style x:Key="ShellRunSummaryValueStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+    </Style>
+
+    <Style x:Key="ShellRunSummaryLabelStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <DataTemplate x:Key="RunSlotTemplate" DataType="{x:Type vm:RunSlotViewModel}">
+        <Border Style="{StaticResource ShellRunSummarySlotCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Style="{StaticResource ShellBadgeStyle}"
+                        Margin="0,0,12,0">
+                    <TextBlock Text="{Binding Index}"
+                               Style="{StaticResource ShellBadgeTextStyle}" />
+                </Border>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding CabinetTypeId}"
+                               Style="{StaticResource ShellRunSummaryValueStyle}" />
+                    <TextBlock Text="{Binding WidthDisplay}"
+                               Style="{StaticResource ShellRunSummaryLabelStyle}"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+
+                <Border Grid.Column="2"
+                        Style="{StaticResource ShellCatalogWidthBadgeStyle}"
+                        Margin="12,0,0,0">
+                    <TextBlock Text="{Binding IsSelected, StringFormat=Selected: {0}}"
+                               Style="{StaticResource ShellCatalogWidthBadgeTextStyle}" />
+                </Border>
+            </Grid>
+        </Border>
+    </DataTemplate>
+
+    <Style x:Key="ShellIssueCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="ShellIssueSeverityBadgeStyle" TargetType="Border">
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ShellIssueSeverityTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextInverseBrush}" />
+    </Style>
+
+    <Style x:Key="ShellIssueMetaTextStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="ShellIssueEmptyStateBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="18" />
+        <Setter Property="Visibility" Value="Collapsed" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasFilteredIssues}" Value="False">
+                <Setter Property="Visibility" Value="Visible" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <DataTemplate x:Key="IssueRowTemplate" DataType="{x:Type vm:IssueRowViewModel}">
+        <Border Style="{StaticResource ShellIssueCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Margin="0,0,12,0">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource ShellIssueSeverityBadgeStyle}">
+                            <Setter Property="Background" Value="{StaticResource ShellAccentBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Severity}" Value="Warning">
+                                    <Setter Property="Background" Value="{StaticResource ShellWarningBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Severity}" Value="Info">
+                                    <Setter Property="Background" Value="{StaticResource ShellAccentBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Severity}" Value="ManufactureBlocker">
+                                    <Setter Property="Background" Value="{StaticResource ShellErrorBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Severity}" Value="Error">
+                                    <Setter Property="Background" Value="{StaticResource ShellErrorBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock Text="{Binding Severity}"
+                               Style="{StaticResource ShellIssueSeverityTextStyle}" />
+                </Border>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="{Binding Code}"
+                               Style="{StaticResource ShellRunSummaryValueStyle}" />
+                    <TextBlock Text="{Binding Message}"
+                               Style="{StaticResource ShellIssueMetaTextStyle}"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2"
+                            HorizontalAlignment="Right"
+                            Margin="12,0,0,0">
+                    <TextBlock Text="{Binding AffectedEntityIds.Count, StringFormat={}{0} entities}"
+                               Style="{StaticResource ShellMiniLabelStyle}"
+                               HorizontalAlignment="Right" />
+                    <Button Content="Select"
+                            Command="{Binding DataContext.GoToEntityCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                            CommandParameter="{Binding}"
+                            Style="{StaticResource ShellToolbarButtonStyle}"
+                            MinWidth="88"
+                            Margin="0,6,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </DataTemplate>
+
+    <Style x:Key="ShellPropertyCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+    </Style>
+
+    <Style x:Key="ShellPropertyKeyStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="ShellPropertyValueStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="ShellPropertyEmptyStateBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="18" />
+        <Setter Property="Visibility" Value="Visible" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasSingleSelection}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="ShellPropertyItemsControlStyle" TargetType="ItemsControl">
+        <Setter Property="Visibility" Value="Visible" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasSingleSelection}" Value="False">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <DataTemplate x:Key="PropertyRowTemplate" DataType="{x:Type vm:PropertyRowViewModel}">
+        <Border Style="{StaticResource ShellPropertyCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding DisplayName}"
+                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                    <TextBlock Text="{Binding Key}"
+                               Style="{StaticResource ShellCatalogMetaStyle}"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+
+                <Border Grid.Column="1"
+                        Style="{StaticResource ShellStatusBadgeStyle}"
+                        Margin="12,0,0,0"
+                        MaxWidth="240">
+                    <StackPanel>
+                        <TextBlock Text="{Binding DisplayValue}"
+                                   Style="{StaticResource ShellStatusBadgeTextStyle}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap" />
+                        <TextBlock Text="{Binding EditabilityDisplay}"
+                                   Style="{StaticResource ShellMiniLabelStyle}"
+                                   Margin="0,3,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+    </DataTemplate>
+</ResourceDictionary>

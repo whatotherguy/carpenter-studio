@@ -34,7 +34,7 @@ public sealed class EditorCanvasViewModelTests
         projector.Scene = new RenderSceneDto(
             [],
             [],
-            [new CabinetRenderDto(Guid.NewGuid(), new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
+            [new CabinetRenderDto(Guid.NewGuid(), Guid.NewGuid(), new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
             null,
             new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 
@@ -53,7 +53,7 @@ public sealed class EditorCanvasViewModelTests
         projector.Scene = new RenderSceneDto(
             [],
             [],
-            [new CabinetRenderDto(selectedCabinetId, new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
+            [new CabinetRenderDto(selectedCabinetId, Guid.NewGuid(), new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
             null,
             new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
         eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
@@ -128,6 +128,8 @@ public sealed class EditorCanvasViewModelTests
     {
         public object View => new();
 
+        public bool IsCtrlHeld => false;
+
         public RenderSceneDto? Scene { get; private set; }
 
         public ViewportTransform Viewport { get; private set; } = ViewportTransform.Default;
@@ -135,6 +137,22 @@ public sealed class EditorCanvasViewModelTests
         public void UpdateScene(RenderSceneDto scene) => Scene = scene;
 
         public void UpdateViewport(ViewportTransform viewport) => Viewport = viewport;
+
+        public void SetMouseDownHandler(Action<double, double> handler)
+        {
+        }
+
+        public void SetMouseMoveHandler(Action<double, double> handler)
+        {
+        }
+
+        public void SetMouseWheelHandler(Action<double, double, double> handler)
+        {
+        }
+
+        public void SetMiddleButtonDragHandler(Action<double, double> onStart, Action<double, double> onMove, Action onEnd)
+        {
+        }
     }
 
     private sealed class TestEditorCanvasSession : IEditorCanvasSession
@@ -150,6 +168,19 @@ public sealed class EditorCanvasViewModelTests
         public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds)
         {
             SelectedCabinetIds = cabinetIds.ToArray();
+        }
+
+        public void SetHoveredCabinetId(Guid? cabinetId)
+        {
+            HoveredCabinetId = cabinetId;
+        }
+
+        public void ZoomAt(double screenX, double screenY, double scaleFactor)
+        {
+        }
+
+        public void PanBy(double dx, double dy)
+        {
         }
     }
 }

@@ -1,0 +1,128 @@
+<UserControl x:Class="CabinetDesigner.Presentation.Views.RunSummaryPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="clr-namespace:CabinetDesigner.Presentation.Views"
+             Background="Transparent">
+    <Border Style="{StaticResource ShellCardStyle}"
+            Padding="0">
+        <DockPanel LastChildFill="True">
+            <views:ShellPanelHeaderView DockPanel.Dock="Top"
+                                        Title="Run Summary"
+                                        Subtitle="Track the active run and selection context."
+                                        Margin="0,0,0,12">
+                <views:ShellPanelHeaderView.RightContent>
+                    <StackPanel Orientation="Vertical"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center">
+                        <Border Style="{StaticResource ShellBadgeStyle}"
+                                Margin="0,0,0,6">
+                            <TextBlock Text="{Binding SourceLabel}"
+                                       Style="{StaticResource ShellBadgeTextStyle}" />
+                        </Border>
+                        <TextBlock Text="{Binding SelectionSummaryDisplay}"
+                                   Style="{StaticResource ShellMiniLabelStyle}"
+                                   HorizontalAlignment="Right" />
+                    </StackPanel>
+                </views:ShellPanelHeaderView.RightContent>
+            </views:ShellPanelHeaderView>
+
+            <Grid Margin="0,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="12" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Style="{StaticResource ShellStatusBadgeStyle}"
+                            Margin="0,0,6,0">
+                        <StackPanel>
+                            <TextBlock Text="Run"
+                                       Style="{StaticResource ShellMiniLabelStyle}" />
+                            <TextBlock Text="{Binding ActiveRunDisplay}"
+                                       Style="{StaticResource ShellStatusBadgeTextStyle}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="1"
+                            Style="{StaticResource ShellStatusBadgeStyle}"
+                            Margin="3,0,3,0">
+                        <StackPanel>
+                            <TextBlock Text="Width"
+                                       Style="{StaticResource ShellMiniLabelStyle}" />
+                            <TextBlock Text="{Binding TotalWidthDisplay}"
+                                       Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="2"
+                            Style="{StaticResource ShellStatusBadgeStyle}"
+                            Margin="6,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Cabinets"
+                                       Style="{StaticResource ShellMiniLabelStyle}" />
+                            <TextBlock Text="{Binding CabinetCountDisplay}"
+                                       Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <StackPanel Grid.Row="2">
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Style="{StaticResource ShellSectionSubtitleStyle}"
+                               Margin="2,0,0,10" />
+
+                    <Grid Margin="2,0,2,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Slot"
+                                   Style="{StaticResource ShellMiniLabelStyle}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="Cabinet"
+                                   Style="{StaticResource ShellMiniLabelStyle}" />
+                        <TextBlock Grid.Column="2"
+                                   Text="Width"
+                                   Style="{StaticResource ShellMiniLabelStyle}" />
+                    </Grid>
+
+                    <ScrollViewer Style="{StaticResource ShellCatalogListScrollViewerStyle}">
+                        <ItemsControl ItemsSource="{Binding Slots}"
+                                      ItemTemplate="{StaticResource RunSlotTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <Border Style="{StaticResource ShellRunSummaryEmptyStateBorderStyle}"
+                            Margin="0,12,0,0">
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding SourceLabel}"
+                                       Style="{StaticResource ShellSectionTitleStyle}"
+                                       TextAlignment="Center" />
+                            <TextBlock Text="{Binding EmptyStateText}"
+                                       Style="{StaticResource ShellCatalogEmptyStateTextStyle}"
+                                       Margin="0,6,0,0"
+                                       MaxWidth="220" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </DockPanel>
+    </Border>
+</UserControl>

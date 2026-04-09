@@ -1,20 +1,28 @@
+using System.Threading;
+using System.ComponentModel;
 using System.Windows.Input;
 
 namespace CabinetDesigner.Presentation.Commands;
 
-public sealed class AsyncRelayCommand : ICommand
+public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 {
     private readonly Func<Task> _executeAsync;
     private readonly Func<bool>? _canExecute;
+    private readonly SynchronizationContext? _synchronizationContext;
     private bool _isExecuting;
 
     public AsyncRelayCommand(Func<Task> executeAsync, Func<bool>? canExecute = null)
     {
         _executeAsync = executeAsync ?? throw new ArgumentNullException(nameof(executeAsync));
         _canExecute = canExecute;
+        _synchronizationContext = SynchronizationContext.Current;
     }
 
     public event EventHandler? CanExecuteChanged;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsExecuting => _isExecuting;
 
     public bool CanExecute(object? parameter) => !_isExecuting && (_canExecute?.Invoke() ?? true);
 
@@ -28,7 +36,11 @@ public sealed class AsyncRelayCommand : ICommand
         }
 
         _isExecuting = true;
-        NotifyCanExecuteChanged();
+        PostToUiThread(() =>
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExecuting)));
+            NotifyCanExecuteChanged();
+        });
 
         try
         {
@@ -37,9 +49,25 @@ public sealed class AsyncRelayCommand : ICommand
         finally
         {
             _isExecuting = false;
-            NotifyCanExecuteChanged();
+            PostToUiThread(() =>
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExecuting)));
+                NotifyCanExecuteChanged();
+            });
         }
     }
 
     public void NotifyCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+
+    private void PostToUiThread(Action action)
+    {
+        if (_synchronizationContext is not null && SynchronizationContext.Current != _synchronizationContext)
+        {
+            _synchronizationContext.Post(_ => action(), null);
+        }
+        else
+        {
+            action();
+        }
+    }
 }

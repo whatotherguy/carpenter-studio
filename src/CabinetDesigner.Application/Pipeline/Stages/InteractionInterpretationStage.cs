@@ -168,11 +168,6 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             _ => throw new InvalidOperationException("Move command is missing a target index.")
         };
 
-        if (isSameRunMove && command.TargetPlacement == DomainRunPlacement.AtIndex && command.TargetIndex is int requested && requested > sourceIndex)
-        {
-            index--;
-        }
-
         return index;
     }
 }

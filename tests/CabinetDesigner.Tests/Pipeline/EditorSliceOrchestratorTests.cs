@@ -77,13 +77,14 @@ public sealed class EditorSliceOrchestratorTests
         var run = Assert.Single(store.GetAllRuns());
         Assert.True(orchestrator.Execute(new AddCabinetToRunCommand(run.Id, "base-24", Length.FromInches(24m), RunPlacement.EndOfRun, CommandOrigin.User, "add-1", DateTimeOffset.UnixEpoch)).Success);
         Assert.True(orchestrator.Execute(new AddCabinetToRunCommand(run.Id, "base-30", Length.FromInches(30m), RunPlacement.EndOfRun, CommandOrigin.User, "add-2", DateTimeOffset.UnixEpoch)).Success);
-        var cabinets = store.GetAllCabinets();
+        var originalFirstCabinetId = store.GetRun(run.Id)!.Slots[0].CabinetId!.Value;
+        var originalSecondCabinetId = store.GetRun(run.Id)!.Slots[1].CabinetId!.Value;
 
-        var result = orchestrator.Execute(new MoveCabinetCommand(cabinets[0].CabinetId, run.Id, run.Id, RunPlacement.AtIndex, CommandOrigin.User, "move", DateTimeOffset.UnixEpoch, 1));
+        var result = orchestrator.Execute(new MoveCabinetCommand(originalFirstCabinetId, run.Id, run.Id, RunPlacement.AtIndex, CommandOrigin.User, "move", DateTimeOffset.UnixEpoch, 1));
 
         Assert.True(result.Success);
-        Assert.Equal(cabinets[1].CabinetId, store.GetRun(run.Id)!.Slots[0].CabinetId);
-        Assert.Equal(cabinets[0].CabinetId, store.GetRun(run.Id)!.Slots[1].CabinetId);
+        Assert.Equal(originalSecondCabinetId, store.GetRun(run.Id)!.Slots[0].CabinetId);
+        Assert.Equal(originalFirstCabinetId, store.GetRun(run.Id)!.Slots[1].CabinetId);
     }
 
     [Fact]
