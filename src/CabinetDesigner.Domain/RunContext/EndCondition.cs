@@ -1,0 +1,24 @@
+using System;
+using CabinetDesigner.Domain.Geometry;
+
+namespace CabinetDesigner.Domain.RunContext;
+
+public sealed record EndCondition
+{
+    public EndConditionType Type { get; init; }
+    public Length? FillerWidth { get; init; }
+
+    public EndCondition(EndConditionType type, Length? fillerWidth = null)
+    {
+        if (type is EndConditionType.Filler or EndConditionType.Scribe && fillerWidth is null)
+            throw new ArgumentException($"{type} end condition requires a width.", nameof(fillerWidth));
+
+        Type = type;
+        FillerWidth = fillerWidth;
+    }
+
+    public static EndCondition Open() => new(EndConditionType.Open);
+    public static EndCondition AgainstWall() => new(EndConditionType.AgainstWall);
+    public static EndCondition WithFiller(Length width) => new(EndConditionType.Filler, width);
+    public static EndCondition WithScribe(Length width) => new(EndConditionType.Scribe, width);
+}

@@ -1,0 +1,124 @@
+using System.Threading;
+using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.Commands;
+using CabinetDesigner.Domain.Commands.Layout;
+using CabinetDesigner.Domain.Geometry;
+using CabinetDesigner.Domain.Identifiers;
+using CabinetDesigner.Editor;
+using CabinetDesigner.Editor.Snap;
+using Xunit;
+
+namespace CabinetDesigner.Tests.Editor;
+
+public sealed class EditorInteractionServiceTests
+{
+    [Fact]
+    public async Task DragPreview_UsesPreviewHandlerUntilCommitAndKeepsCommittedPathSeparate()
+    {
+        var runId = RunId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        CabinetId.New(),
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var previewHandler = new RecordingPreviewCommandExecutor();
+        var designHandler = new RecordingCommitCommandExecutor();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            previewHandler,
+            designHandler,
+            new StubClock());
+
+        service.BeginPlaceCabinet("base-24", Length.FromInches(24m), Length.FromInches(24m), 238d, 0d);
+
+        var preview = service.OnDragMoved(238d, 0d);
+
+        Assert.True(preview.IsValid);
+        Assert.Equal(1, previewHandler.PreviewCallCount);
+        Assert.Equal(0, designHandler.CommitCallCount);
+        Assert.Equal(EditorMode.PlacingCabinet, session.Mode);
+        var previewCommand = Assert.IsType<AddCabinetToRunCommand>(preview.PreviewCommand);
+        Assert.Equal(1, previewCommand.InsertAtIndex);
+
+        var committed = await service.OnDragCommittedAsync();
+
+        Assert.True(committed.Success);
+        Assert.Equal(1, previewHandler.PreviewCallCount);
+        Assert.Equal(1, designHandler.CommitCallCount);
+        Assert.Equal(EditorMode.Idle, session.Mode);
+        var committedCommand = Assert.IsType<AddCabinetToRunCommand>(committed.CommittedCommand);
+        Assert.Equal(previewCommand.RunId, committedCommand.RunId);
+        Assert.Equal(previewCommand.InsertAtIndex, committedCommand.InsertAtIndex);
+    }
+
+    private sealed class StubSceneGraph : IEditorSceneGraph
+    {
+        private readonly EditorSceneSnapshot _scene;
+        private readonly RunId _hitRunId;
+
+        public StubSceneGraph(EditorSceneSnapshot scene, RunId hitRunId)
+        {
+            _scene = scene;
+            _hitRunId = hitRunId;
+        }
+
+        public EditorSceneSnapshot Capture() => _scene;
+
+        public RunId? HitTestRun(Point2D worldPoint, Length hitRadius) => _hitRunId;
+    }
+
+    private sealed class RecordingPreviewCommandExecutor : IPreviewCommandExecutor
+    {
+        public int PreviewCallCount { get; private set; }
+
+        public IDesignCommand? LastCommand { get; private set; }
+
+        public DragPreviewResult Preview(IDesignCommand command)
+        {
+            PreviewCallCount++;
+            LastCommand = command;
+            return new DragPreviewResult(true, command, null);
+        }
+    }
+
+    private sealed class RecordingCommitCommandExecutor : ICommitCommandExecutor
+    {
+        public int CommitCallCount { get; private set; }
+
+        public IDesignCommand? LastCommand { get; private set; }
+
+        public Task<DragCommitResult> ExecuteAsync(IDesignCommand command, CancellationToken ct = default)
+        {
+            CommitCallCount++;
+            LastCommand = command;
+            return Task.FromResult(new DragCommitResult(true, command, null));
+        }
+    }
+
+    private sealed class StubClock : IClock
+    {
+        public DateTimeOffset Now => DateTimeOffset.UnixEpoch;
+    }
+}

@@ -1,0 +1,17 @@
+# .NET build outputs
+bin/
+obj/
+
+# Visual Studio / local IDE state
+.vs/
+
+# Local tool and package caches
+.appdata/
+.dotnet_cli/
+.nuget/
+
+# Local test artifacts
+.artifacts/test-databases/
+
+# Root-level build and restore logs
+*.log

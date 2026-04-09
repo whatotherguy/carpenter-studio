@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>CabinetDesigner.Persistence</RootNamespace>
+    <AssemblyName>CabinetDesigner.Persistence</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="CabinetDesigner.Application">
+      <HintPath>..\CabinetDesigner.Application\bin\Debug\net8.0\CabinetDesigner.Application.dll</HintPath>
+    </Reference>
+    <Reference Include="CabinetDesigner.Domain">
+      <HintPath>..\CabinetDesigner.Domain\bin\Debug\net8.0\CabinetDesigner.Domain.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

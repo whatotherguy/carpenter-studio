@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net8.0-windows</TargetFrameworks>
+    <RootNamespace>CabinetDesigner.Presentation</RootNamespace>
+    <AssemblyName>CabinetDesigner.Presentation</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CabinetDesigner.Application\CabinetDesigner.Application.csproj" />
+    <ProjectReference Include="..\CabinetDesigner.Editor\CabinetDesigner.Editor.csproj" />
+    <ProjectReference Include="..\CabinetDesigner.Rendering\CabinetDesigner.Rendering.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <Page Include="MainWindow.xaml" />
+    <Compile Include="MainWindow.xaml.cs">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>CabinetDesigner.Editor</RootNamespace>
+    <AssemblyName>CabinetDesigner.Editor</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CabinetDesigner.Domain\CabinetDesigner.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>CabinetDesigner.Application</RootNamespace>
+    <AssemblyName>CabinetDesigner.Application</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CabinetDesigner.Domain\CabinetDesigner.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

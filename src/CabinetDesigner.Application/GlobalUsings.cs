@@ -1,0 +1,12 @@
+global using System;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Text.Json;
+global using System.Threading;
+global using System.Threading.Tasks;
+global using CabinetDesigner.Application.DTOs;
+global using CabinetDesigner.Application.Events;
+global using CabinetDesigner.Application.Handlers;
+global using CabinetDesigner.Application.Persistence;
+global using CabinetDesigner.Application.Services;
+global using CabinetDesigner.Domain.MaterialContext;
