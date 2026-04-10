@@ -1,6 +1,7 @@
 using CabinetDesigner.Persistence.Mapping;
 using CabinetDesigner.Persistence.Models;
 using CabinetDesigner.Persistence.UnitOfWork;
+using Microsoft.Data.Sqlite;
 
 namespace CabinetDesigner.Persistence.Repositories;
 
@@ -54,44 +55,65 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
         WithConnectionAsync(
             async (connection, transaction) =>
             {
-                var timestamp = revision.Revision.CreatedAt;
-                await DeleteExistingRowsAsync(connection, transaction, revision.Revision.Id, ct).ConfigureAwait(false);
-
-                foreach (var room in revision.Rooms)
+                if (transaction is not null)
                 {
-                    await InsertRoomAsync(connection, transaction, RoomMapper.ToRow(room, timestamp), ct).ConfigureAwait(false);
+                    await SaveCoreAsync(connection, transaction, revision, ct).ConfigureAwait(false);
+                    return;
                 }
 
-                foreach (var wall in revision.Walls)
+                await using var localTransaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+                try
                 {
-                    await InsertWallAsync(connection, transaction, WallMapper.ToRow(wall, revision.Revision.Id, timestamp), ct).ConfigureAwait(false);
+                    await SaveCoreAsync(connection, localTransaction, revision, ct).ConfigureAwait(false);
+                    await localTransaction.CommitAsync(ct).ConfigureAwait(false);
                 }
-
-                foreach (var run in revision.Runs.Select((run, index) => (run, index)))
+                catch
                 {
-                    await InsertRunAsync(connection, transaction, RunMapper.ToRow(run.run, revision.Revision.Id, run.index, timestamp), ct).ConfigureAwait(false);
-                }
-
-                var runByCabinetId = revision.Runs
-                    .SelectMany(run => run.Slots.Where(slot => slot.CabinetId is not null).Select(slot => (run.Id, slot.CabinetId!.Value, slot.SlotIndex)))
-                    .ToDictionary(item => item.Value, item => (item.Id, item.SlotIndex));
-
-                foreach (var cabinet in revision.Cabinets)
-                {
-                    if (!runByCabinetId.TryGetValue(cabinet.Id, out var placement))
-                    {
-                        continue;
-                    }
-
-                    await InsertCabinetAsync(connection, transaction, CabinetMapper.ToRow(cabinet, revision.Revision.Id, placement.Id, placement.SlotIndex, timestamp), ct).ConfigureAwait(false);
-                }
-
-                foreach (var part in revision.Parts)
-                {
-                    await InsertPartAsync(connection, transaction, PartMapper.ToRow(part, revision.Revision.Id, timestamp), ct).ConfigureAwait(false);
+                    await localTransaction.RollbackAsync(ct).ConfigureAwait(false);
+                    throw;
                 }
             },
             ct);
+
+    private static async Task SaveCoreAsync(SqliteConnection connection, SqliteTransaction transaction, WorkingRevision revision, CancellationToken ct)
+    {
+        var timestamp = revision.Revision.CreatedAt;
+        await DeleteExistingRowsAsync(connection, transaction, revision.Revision.Id, ct).ConfigureAwait(false);
+
+        foreach (var room in revision.Rooms)
+        {
+            await InsertRoomAsync(connection, transaction, RoomMapper.ToRow(room, timestamp), ct).ConfigureAwait(false);
+        }
+
+        foreach (var wall in revision.Walls)
+        {
+            await InsertWallAsync(connection, transaction, WallMapper.ToRow(wall, revision.Revision.Id, timestamp), ct).ConfigureAwait(false);
+        }
+
+        foreach (var run in revision.Runs.Select((run, index) => (run, index)))
+        {
+            await InsertRunAsync(connection, transaction, RunMapper.ToRow(run.run, revision.Revision.Id, run.index, timestamp), ct).ConfigureAwait(false);
+        }
+
+        var runByCabinetId = revision.Runs
+            .SelectMany(run => run.Slots.Where(slot => slot.CabinetId is not null).Select(slot => (run.Id, slot.CabinetId!.Value, slot.SlotIndex)))
+            .ToDictionary(item => item.Value, item => (item.Id, item.SlotIndex));
+
+        foreach (var cabinet in revision.Cabinets)
+        {
+            if (!runByCabinetId.TryGetValue(cabinet.Id, out var placement))
+            {
+                continue;
+            }
+
+            await InsertCabinetAsync(connection, transaction, CabinetMapper.ToRow(cabinet, revision.Revision.Id, placement.Id, placement.SlotIndex, timestamp), ct).ConfigureAwait(false);
+        }
+
+        foreach (var part in revision.Parts)
+        {
+            await InsertPartAsync(connection, transaction, PartMapper.ToRow(part, revision.Revision.Id, timestamp), ct).ConfigureAwait(false);
+        }
+    }
 
     private static async Task<RevisionRecord?> LoadRevisionAsync(
         Microsoft.Data.Sqlite.SqliteConnection connection,

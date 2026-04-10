@@ -33,7 +33,7 @@ public sealed class SqliteConnectionFactory : IDbConnectionFactory
         await foreignKeys.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
         using var busy = connection.CreateCommand();
-        busy.CommandText = "PRAGMA busy_timeout=0;";
+        busy.CommandText = "PRAGMA busy_timeout=5000;";
         await busy.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
         return connection;
