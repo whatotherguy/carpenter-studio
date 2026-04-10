@@ -100,8 +100,13 @@ public sealed class EditorCanvasHost : IEditorCanvasHost
 
     private void OnCanvasMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
+        if (_mouseWheelHandler is null)
+        {
+            return;
+        }
+
         var pos = e.GetPosition(_canvas);
-        _mouseWheelHandler?.Invoke(pos.X, pos.Y, e.Delta);
+        _mouseWheelHandler(pos.X, pos.Y, e.Delta);
         e.Handled = true;
     }
 }

@@ -243,7 +243,10 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         // already handled selection, so no further action is needed.
         _pendingDragCabinetId = null;
 
-        if (_isDragActive)
+        var wasDragActive = _isDragActive;
+        _isDragActive = false;
+
+        if (wasDragActive)
         {
             _ = CommitDragAsync();
         }
@@ -325,14 +328,18 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             var result = await _interactionService.OnDragCommittedAsync().ConfigureAwait(true);
             StatusMessage = result.Success ? "Drag committed." : "Drag rejected.";
         }
-        catch (InvalidOperationException)
+        catch (OperationCanceledException)
         {
             _interactionService.OnDragAborted();
-            StatusMessage = "Drag aborted.";
+            StatusMessage = "Drag cancelled.";
+        }
+        catch (Exception)
+        {
+            _interactionService.OnDragAborted();
+            StatusMessage = "Drag failed.";
         }
         finally
         {
-            _isDragActive = false;
             EndBusy();
             RefreshScene();
         }
@@ -358,6 +365,11 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     private void OnProjectClosed(ProjectClosedEvent _)
     {
+        if (_isDragActive || _pendingDragCabinetId is not null)
+        {
+            _interactionService.OnDragAborted();
+        }
+
         _pendingDragCabinetId = null;
         _isDragActive = false;
         Scene = null;
