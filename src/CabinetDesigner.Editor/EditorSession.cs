@@ -173,6 +173,32 @@ public sealed class EditorSession
 
     public void AbortDrag() => EndDrag();
 
+    public void BeginPan()
+    {
+        lock (_sync)
+        {
+            AssertMode(EditorMode.Idle);
+            _mode = EditorMode.PanningViewport;
+        }
+    }
+
+    public void EndPan()
+    {
+        lock (_sync)
+        {
+            AssertMode(EditorMode.PanningViewport);
+            _mode = EditorMode.Idle;
+        }
+    }
+
+    public void ResetViewport()
+    {
+        lock (_sync)
+        {
+            _viewport = ViewportTransform.Default;
+        }
+    }
+
     public void SetSelection(IReadOnlyList<CabinetId> ids)
     {
         // Copy to an immutable array so callers cannot mutate the backing list from

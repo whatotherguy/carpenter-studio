@@ -35,6 +35,10 @@
                         Command="{Binding RedoCommand}"
                         Content="Redo"
                         Margin="0" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding ResetZoomCommand}"
+                        Content="Reset Zoom"
+                        Margin="0" />
             </StackPanel>
 
             <StackPanel Grid.Column="2"

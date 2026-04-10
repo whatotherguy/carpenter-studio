@@ -44,4 +44,10 @@ public sealed class EditorCanvasSessionAdapter : IEditorCanvasSession
         var viewport = Viewport;
         _session.SetViewport(viewport.Panned((decimal)dx, (decimal)dy));
     }
+
+    public void BeginPan() => _session.BeginPan();
+
+    public void EndPan() => _session.EndPan();
+
+    public void ResetViewport() => _session.ResetViewport();
 }

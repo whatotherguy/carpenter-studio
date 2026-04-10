@@ -246,6 +246,99 @@ public sealed class EditorCanvasViewModelTests
         Assert.Equal(0, interactionService.CommitCallCount);
     }
 
+    [Fact]
+    public void OnMouseWheel_ScrollUp_UpdatesViewportScale()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out _, out var canvasHost, out _);
+        projector.Scene = new RenderSceneDto([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        var initialScale = canvasHost.Viewport.ScalePixelsPerInch;
+
+        viewModel.OnMouseWheel(100d, 100d, 120d); // positive delta = zoom in
+
+        Assert.True(canvasHost.Viewport.ScalePixelsPerInch > initialScale);
+    }
+
+    [Fact]
+    public void OnMouseWheel_ScrollDown_DecreasesViewportScale()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out _, out var canvasHost, out _);
+        projector.Scene = new RenderSceneDto([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        var initialScale = canvasHost.Viewport.ScalePixelsPerInch;
+
+        viewModel.OnMouseWheel(100d, 100d, -120d); // negative delta = zoom out
+
+        Assert.True(canvasHost.Viewport.ScalePixelsPerInch < initialScale);
+    }
+
+    [Fact]
+    public void OnPanStart_SetsPanningMode_AndPanMoveUpdatesOffset()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out _, out var canvasHost, out _);
+        projector.Scene = new RenderSceneDto([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+
+        viewModel.OnPanStart(100d, 200d);
+        Assert.Equal(EditorMode.PanningViewport.ToString(), viewModel.CurrentMode);
+
+        viewModel.OnPanMove(130d, 220d); // pan by (+30, +20)
+
+        Assert.True(canvasHost.Viewport.OffsetXPixels > 0m);
+        Assert.True(canvasHost.Viewport.OffsetYPixels > 0m);
+    }
+
+    [Fact]
+    public void OnPanStart_WhenSceneIsNull_DoesNotEnterPanningMode()
+    {
+        // Scene is null when no project is open. BeginPan must not be called to avoid
+        // corrupting the session mode (e.g. PanningViewport with no active content).
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
+
+        viewModel.OnPanStart(0d, 0d);
+
+        Assert.Equal(EditorMode.Idle.ToString(), viewModel.CurrentMode);
+    }
+
+    [Fact]
+    public void ResetZoomCommand_WhenSceneIsNull_DoesNotRepopulateScene()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out var canvasHost, out _);
+        // Deliberately leave Scene null (no project open).
+
+        viewModel.ResetZoomCommand.Execute(null);
+
+        Assert.Null(viewModel.Scene);
+        Assert.Equal(ViewportTransform.Default, canvasHost.Viewport);
+        Assert.Equal("Zoom reset.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void OnPanEnd_RestoresIdleMode()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out _, out _, out _);
+        projector.Scene = new RenderSceneDto([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+
+        viewModel.OnPanStart(0d, 0d);
+        viewModel.OnPanEnd();
+
+        Assert.Equal(EditorMode.Idle.ToString(), viewModel.CurrentMode);
+    }
+
+    [Fact]
+    public void ResetZoomCommand_ResetsViewportToDefault()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out _, out var canvasHost, out _);
+        projector.Scene = new RenderSceneDto([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        // Pan and zoom first.
+        viewModel.OnMouseWheel(0d, 0d, 120d);
+        viewModel.OnPanStart(0d, 0d);
+        viewModel.OnPanMove(50d, 40d);
+        viewModel.OnPanEnd();
+
+        viewModel.ResetZoomCommand.Execute(null);
+
+        Assert.Equal(ViewportTransform.Default, canvasHost.Viewport);
+        Assert.Equal("Zoom reset.", viewModel.StatusMessage);
+    }
+
     private static RenderSceneDto MakeSingleCabinetScene(Guid cabinetId) =>
         new RenderSceneDto(
             [],
@@ -367,7 +460,7 @@ public sealed class EditorCanvasViewModelTests
 
         public Guid? HoveredCabinetId { get; private set; }
 
-        public ViewportTransform Viewport { get; } = ViewportTransform.Default;
+        public ViewportTransform Viewport { get; private set; } = ViewportTransform.Default;
 
         public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds)
         {
@@ -381,11 +474,24 @@ public sealed class EditorCanvasViewModelTests
 
         public void ZoomAt(double screenX, double screenY, double scaleFactor)
         {
+            var currentScale = (double)Viewport.ScalePixelsPerInch;
+            var newScale = Math.Clamp(currentScale * scaleFactor, 2.0, 200.0);
+            var actualFactor = newScale / currentScale;
+            var newOriginX = screenX - actualFactor * (screenX - (double)Viewport.OffsetXPixels);
+            var newOriginY = screenY - actualFactor * (screenY - (double)Viewport.OffsetYPixels);
+            Viewport = new ViewportTransform((decimal)newScale, (decimal)newOriginX, (decimal)newOriginY);
         }
 
         public void PanBy(double dx, double dy)
         {
+            Viewport = Viewport.Panned((decimal)dx, (decimal)dy);
         }
+
+        public void BeginPan() => CurrentMode = EditorMode.PanningViewport;
+
+        public void EndPan() => CurrentMode = EditorMode.Idle;
+
+        public void ResetViewport() => Viewport = ViewportTransform.Default;
     }
 
     private sealed class RecordingInteractionService : IEditorInteractionService
@@ -628,6 +734,12 @@ public sealed class EditorCanvasViewModelForwardingTests
         public void ZoomAt(double screenX, double screenY, double scaleFactor) { }
 
         public void PanBy(double dx, double dy) { }
+
+        public void BeginPan() => CurrentMode = EditorMode.PanningViewport;
+
+        public void EndPan() => CurrentMode = EditorMode.Idle;
+
+        public void ResetViewport() { }
     }
 
     private sealed class RecordingInteractionService : IEditorInteractionService

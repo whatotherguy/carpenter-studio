@@ -3,6 +3,7 @@ using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Editor;
+using CabinetDesigner.Presentation.Commands;
 using CabinetDesigner.Presentation.Projection;
 using CabinetDesigner.Rendering;
 using CabinetDesigner.Rendering.DTOs;
@@ -50,6 +51,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         _canvasHost = canvasHost ?? throw new ArgumentNullException(nameof(canvasHost));
         _interactionService = interactionService ?? throw new ArgumentNullException(nameof(interactionService));
 
+        ResetZoomCommand = new RelayCommand(ExecuteResetZoom);
+
         _eventBus.Subscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Subscribe<UndoAppliedEvent>(OnUndoApplied);
         _eventBus.Subscribe<RedoAppliedEvent>(OnRedoApplied);
@@ -91,6 +94,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     }
 
     public bool IsBusy => _busyCount > 0;
+
+    public RelayCommand ResetZoomCommand { get; }
 
     public void SetStatusMessage(string statusMessage) => StatusMessage = statusMessage;
 
@@ -267,8 +272,15 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     public void OnPanStart(double screenX, double screenY)
     {
+        if (Scene is null)
+        {
+            return;
+        }
+
+        _editorSession.BeginPan();
         _lastPanX = screenX;
         _lastPanY = screenY;
+        RefreshInteractionState();
     }
 
     public void OnPanMove(double screenX, double screenY)
@@ -286,6 +298,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     public void OnPanEnd()
     {
+        _editorSession.EndPan();
+        RefreshInteractionState();
     }
 
     public void Dispose()
@@ -294,6 +308,21 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<UndoAppliedEvent>(OnUndoApplied);
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnRedoApplied);
         _eventBus.Unsubscribe<ProjectClosedEvent>(OnProjectClosed);
+    }
+
+    private void ExecuteResetZoom()
+    {
+        _editorSession.ResetViewport();
+        if (Scene is null)
+        {
+            RefreshInteractionState();
+        }
+        else
+        {
+            RefreshScene();
+        }
+
+        StatusMessage = "Zoom reset.";
     }
 
     private void BeginDrag(Guid cabinetId, HitTestTarget target, double screenX, double screenY)
