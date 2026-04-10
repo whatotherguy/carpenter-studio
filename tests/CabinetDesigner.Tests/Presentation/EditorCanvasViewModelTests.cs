@@ -88,23 +88,23 @@ public sealed class EditorCanvasViewModelTests
     [Fact]
     public void OnMouseDown_WithCtrlHeld_AddsSecondCabinetToSelection()
     {
-        // Cabinet A at world (0,0)–(10,10): screen hit at (5,5).
-        // Cabinet B at world (20,0)–(30,10): screen hit at (250,50) with 10px/inch default viewport.
         using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
         var cabinetIdA = Guid.NewGuid();
         var cabinetIdB = Guid.NewGuid();
         projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
         eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+        var (aHitX, aHitY) = ViewportTransform.Default.ToScreen(new Point2D(5m, 5m));
+        var (bHitX, bHitY) = ViewportTransform.Default.ToScreen(new Point2D(25m, 5m));
 
         // First click selects cabinet A without Ctrl.
         canvasHost.IsCtrlHeld = false;
-        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseDown(aHitX, aHitY);
         Assert.Single(viewModel.SelectedCabinetIds);
         Assert.Contains(cabinetIdA, viewModel.SelectedCabinetIds);
 
         // Second click on cabinet B with Ctrl held adds it to the selection.
         canvasHost.IsCtrlHeld = true;
-        viewModel.OnMouseDown(250d, 50d);
+        viewModel.OnMouseDown(bHitX, bHitY);
 
         Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
         Assert.Contains(cabinetIdA, viewModel.SelectedCabinetIds);
@@ -120,16 +120,18 @@ public sealed class EditorCanvasViewModelTests
         var cabinetIdB = Guid.NewGuid();
         projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
         eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+        var (aHitX, aHitY) = ViewportTransform.Default.ToScreen(new Point2D(5m, 5m));
+        var (bHitX, bHitY) = ViewportTransform.Default.ToScreen(new Point2D(25m, 5m));
 
         // Select both cabinets via Ctrl+Click.
         canvasHost.IsCtrlHeld = false;
-        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseDown(aHitX, aHitY);
         canvasHost.IsCtrlHeld = true;
-        viewModel.OnMouseDown(250d, 50d);
+        viewModel.OnMouseDown(bHitX, bHitY);
         Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
 
         // Ctrl+Click cabinet A again toggles it off.
-        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseDown(aHitX, aHitY);
 
         Assert.Single(viewModel.SelectedCabinetIds);
         Assert.DoesNotContain(cabinetIdA, viewModel.SelectedCabinetIds);
@@ -145,17 +147,19 @@ public sealed class EditorCanvasViewModelTests
         var cabinetIdB = Guid.NewGuid();
         projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
         eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+        var (aHitX, aHitY) = ViewportTransform.Default.ToScreen(new Point2D(5m, 5m));
+        var (bHitX, bHitY) = ViewportTransform.Default.ToScreen(new Point2D(25m, 5m));
 
         // Build up a multi-selection with Ctrl.
         canvasHost.IsCtrlHeld = false;
-        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseDown(aHitX, aHitY);
         canvasHost.IsCtrlHeld = true;
-        viewModel.OnMouseDown(250d, 50d);
+        viewModel.OnMouseDown(bHitX, bHitY);
         Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
 
         // Click cabinet A without Ctrl — only cabinet A should remain selected.
         canvasHost.IsCtrlHeld = false;
-        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseDown(aHitX, aHitY);
 
         Assert.Single(viewModel.SelectedCabinetIds);
         Assert.Contains(cabinetIdA, viewModel.SelectedCabinetIds);
@@ -250,9 +254,9 @@ public sealed class EditorCanvasViewModelTests
             new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 
     /// <summary>
-    /// Cabinet A at world (0,0)–(10,10), screen (0,0)–(100,100): hit at screen (5,5).
-    /// Cabinet B at world (20,0)–(30,10), screen (200,0)–(300,100): hit at screen (250,50).
-    /// Uses <see cref="ViewportTransform.Default"/> (10 px/inch, no offset).
+    /// Cabinet A at world (0,0)–(10,10); cabinet B at world (20,0)–(30,10).
+    /// Use <see cref="ViewportTransform.Default"/> to compute hit screen coordinates
+    /// (e.g. <c>ViewportTransform.Default.ToScreen(new Point2D(5m, 5m))</c> for cabinet A centre).
     /// </summary>
     private static RenderSceneDto MakeTwoCabinetScene(Guid cabinetIdA, Guid cabinetIdB) =>
         new RenderSceneDto(
