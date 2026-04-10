@@ -86,6 +86,83 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
+    public void OnMouseDown_WithCtrlHeld_AddsSecondCabinetToSelection()
+    {
+        // Cabinet A at world (0,0)–(10,10): screen hit at (5,5).
+        // Cabinet B at world (20,0)–(30,10): screen hit at (250,50) with 10px/inch default viewport.
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
+        var cabinetIdA = Guid.NewGuid();
+        var cabinetIdB = Guid.NewGuid();
+        projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // First click selects cabinet A without Ctrl.
+        canvasHost.IsCtrlHeld = false;
+        viewModel.OnMouseDown(5d, 5d);
+        Assert.Single(viewModel.SelectedCabinetIds);
+        Assert.Contains(cabinetIdA, viewModel.SelectedCabinetIds);
+
+        // Second click on cabinet B with Ctrl held adds it to the selection.
+        canvasHost.IsCtrlHeld = true;
+        viewModel.OnMouseDown(250d, 50d);
+
+        Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
+        Assert.Contains(cabinetIdA, viewModel.SelectedCabinetIds);
+        Assert.Contains(cabinetIdB, viewModel.SelectedCabinetIds);
+        Assert.Equal("2 cabinets selected.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void OnMouseDown_WithCtrlHeld_OnAlreadySelectedCabinet_TogglesItOff()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
+        var cabinetIdA = Guid.NewGuid();
+        var cabinetIdB = Guid.NewGuid();
+        projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // Select both cabinets via Ctrl+Click.
+        canvasHost.IsCtrlHeld = false;
+        viewModel.OnMouseDown(5d, 5d);
+        canvasHost.IsCtrlHeld = true;
+        viewModel.OnMouseDown(250d, 50d);
+        Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
+
+        // Ctrl+Click cabinet A again toggles it off.
+        viewModel.OnMouseDown(5d, 5d);
+
+        Assert.Single(viewModel.SelectedCabinetIds);
+        Assert.DoesNotContain(cabinetIdA, viewModel.SelectedCabinetIds);
+        Assert.Contains(cabinetIdB, viewModel.SelectedCabinetIds);
+        Assert.Equal("Cabinet selected.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void OnMouseDown_WithoutCtrl_AfterMultiSelect_ReplacesPreviousSelection()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
+        var cabinetIdA = Guid.NewGuid();
+        var cabinetIdB = Guid.NewGuid();
+        projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // Build up a multi-selection with Ctrl.
+        canvasHost.IsCtrlHeld = false;
+        viewModel.OnMouseDown(5d, 5d);
+        canvasHost.IsCtrlHeld = true;
+        viewModel.OnMouseDown(250d, 50d);
+        Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
+
+        // Click cabinet A without Ctrl — only cabinet A should remain selected.
+        canvasHost.IsCtrlHeld = false;
+        viewModel.OnMouseDown(5d, 5d);
+
+        Assert.Single(viewModel.SelectedCabinetIds);
+        Assert.Contains(cabinetIdA, viewModel.SelectedCabinetIds);
+        Assert.Equal("Cabinet selected.", viewModel.StatusMessage);
+    }
+
+    [Fact]
     public void OnMouseMove_BelowThreshold_DoesNotStartDrag()
     {
         using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out var interactionService);
@@ -172,6 +249,22 @@ public sealed class EditorCanvasViewModelTests
             null,
             new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 
+    /// <summary>
+    /// Cabinet A at world (0,0)–(10,10), screen (0,0)–(100,100): hit at screen (5,5).
+    /// Cabinet B at world (20,0)–(30,10), screen (200,0)–(300,100): hit at screen (250,50).
+    /// Uses <see cref="ViewportTransform.Default"/> (10 px/inch, no offset).
+    /// </summary>
+    private static RenderSceneDto MakeTwoCabinetScene(Guid cabinetIdA, Guid cabinetIdB) =>
+        new RenderSceneDto(
+            [],
+            [],
+            [
+                new CabinetRenderDto(cabinetIdA, Guid.NewGuid(), new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab-a", "cab-a", CabinetRenderState.Normal, []),
+                new CabinetRenderDto(cabinetIdB, Guid.NewGuid(), new Rect2D(new Point2D(20m, 0m), Length.FromInches(10m), Length.FromInches(10m)), "cab-b", "cab-b", CabinetRenderState.Normal, [])
+            ],
+            null,
+            new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+
     private static EditorCanvasViewModel CreateViewModel(
         RecordingRunService runService,
         out RecordingSceneProjector projector,
@@ -230,7 +323,7 @@ public sealed class EditorCanvasViewModelTests
     {
         public object View => new();
 
-        public bool IsCtrlHeld => false;
+        public bool IsCtrlHeld { get; set; }
 
         public RenderSceneDto? Scene { get; private set; }
 
