@@ -186,6 +186,37 @@ public sealed class EditorSliceStageTests
         Assert.Equal(wall.Direction, placement.Direction);
     }
 
+    [Fact]
+    public void Interaction_MoveCabinet_PreservesNonStandardDepth()
+    {
+        var store = CreateStoreWithRun(out var sourceRun, out var wall);
+        var targetRun = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(96m));
+        store.AddRun(targetRun, new Point2D(0m, 24m), new Point2D(96m, 24m));
+        var cabinetId = CabinetId.New();
+        var sourceSlot = sourceRun.AppendCabinet(cabinetId, Length.FromInches(24m));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "deep-30", Length.FromInches(24m), Length.FromInches(30m), sourceRun.Id, sourceSlot.Id));
+
+        var command = new MoveCabinetCommand(
+            cabinetId,
+            sourceRun.Id,
+            targetRun.Id,
+            DomainRunPlacement.EndOfRun,
+            CommandOrigin.User,
+            "move",
+            DateTimeOffset.UnixEpoch);
+        var context = CreateContext(command);
+        Assert.True(new InputCaptureStage(store).Execute(context).Success);
+        var deltaTracker = new InMemoryDeltaTracker();
+        deltaTracker.Begin();
+
+        var result = new InteractionInterpretationStage(deltaTracker, store).Execute(context);
+
+        Assert.True(result.Success);
+        var movedCabinet = store.GetCabinet(cabinetId);
+        Assert.NotNull(movedCabinet);
+        Assert.Equal(Length.FromInches(30m), movedCabinet.NominalDepth);
+    }
+
     private static InMemoryDesignStateStore CreateStoreWithRun(out CabinetRun run, out Wall wall)
     {
         var store = new InMemoryDesignStateStore();

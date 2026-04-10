@@ -27,5 +27,6 @@ public sealed record CabinetSceneView(
     RunId RunId,
     int SlotIndex,
     Length Width,
+    Length Depth,
     Point2D LeftFaceWorld,
     Point2D RightFaceWorld);

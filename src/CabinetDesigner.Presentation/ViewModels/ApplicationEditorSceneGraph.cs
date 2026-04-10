@@ -30,6 +30,12 @@ public sealed class ApplicationEditorSceneGraph : IEditorSceneGraph
             var cabinetViews = new List<CabinetSceneView>();
             foreach (var slot in run.Slots.Where(slot => slot.CabinetId is not null).OrderBy(slot => slot.SlotIndex))
             {
+                var cabinetRecord = _stateStore.GetCabinet(slot.CabinetId!.Value);
+                if (cabinetRecord is null)
+                {
+                    continue;
+                }
+
                 var leftEdge = spatialInfo.StartWorld + wall.Direction * run.SlotOffset(slot.SlotIndex).Inches;
                 var rightEdge = leftEdge + wall.Direction * slot.OccupiedWidth.Inches;
                 cabinetViews.Add(new CabinetSceneView(
@@ -37,6 +43,7 @@ public sealed class ApplicationEditorSceneGraph : IEditorSceneGraph
                     run.Id,
                     slot.SlotIndex,
                     slot.OccupiedWidth,
+                    cabinetRecord.NominalDepth,
                     leftEdge,
                     rightEdge));
             }

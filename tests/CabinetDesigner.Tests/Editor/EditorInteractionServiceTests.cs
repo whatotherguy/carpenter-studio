@@ -30,6 +30,7 @@ public sealed class EditorInteractionServiceTests
                         runId,
                         0,
                         Length.FromInches(24m),
+                        Length.FromInches(24m),
                         Point2D.Origin,
                         new Point2D(24m, 0m))
                 ])
@@ -71,6 +72,138 @@ public sealed class EditorInteractionServiceTests
         var committedCommand = Assert.IsType<AddCabinetToRunCommand>(committed.CommittedCommand);
         Assert.Equal(previewCommand.RunId, committedCommand.RunId);
         Assert.Equal(previewCommand.InsertAtIndex, committedCommand.InsertAtIndex);
+    }
+
+    [Fact]
+    public void BeginMoveCabinet_WithNonStandardDepth_PreservesActualDepthInDragContext()
+    {
+        var runId = RunId.New();
+        var cabinetId = CabinetId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        cabinetId,
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(30m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            new RecordingPreviewCommandExecutor(),
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        service.BeginMoveCabinet(cabinetId, 12d, 0d);
+
+        Assert.Equal(Length.FromInches(30m), session.ActiveDrag!.NominalDepth);
+    }
+
+    [Fact]
+    public void BeginResizeCabinet_WithNonStandardDepth_PreservesActualDepthInDragContext()
+    {
+        var runId = RunId.New();
+        var cabinetId = CabinetId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        cabinetId,
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(30m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            new RecordingPreviewCommandExecutor(),
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        service.BeginResizeCabinet(cabinetId, 24d, 0d);
+
+        Assert.Equal(Length.FromInches(30m), session.ActiveDrag!.NominalDepth);
+    }
+
+    [Fact]
+    public void BeginMoveCabinet_WithStandardDepth_PreservesDepthInDragContext()
+    {
+        var runId = RunId.New();
+        var cabinetId = CabinetId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        cabinetId,
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(24m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            new RecordingPreviewCommandExecutor(),
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        service.BeginMoveCabinet(cabinetId, 12d, 0d);
+
+        Assert.Equal(Length.FromInches(24m), session.ActiveDrag!.NominalDepth);
     }
 
     private sealed class StubSceneGraph : IEditorSceneGraph
