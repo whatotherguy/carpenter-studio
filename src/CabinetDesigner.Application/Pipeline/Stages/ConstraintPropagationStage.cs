@@ -20,6 +20,6 @@ public sealed class ConstraintPropagationStage : IResolutionStage
             Violations = []
         };
 
-        return StageResult.Succeeded(StageNumber);
+        return StageResult.NotImplementedYet(StageNumber);
     }
 }

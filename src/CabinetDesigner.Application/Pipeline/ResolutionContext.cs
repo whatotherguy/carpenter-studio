@@ -6,6 +6,8 @@ namespace CabinetDesigner.Application.Pipeline;
 
 public sealed class ResolutionContext
 {
+    private readonly Dictionary<int, (string StageName, ResolutionMode Mode)> _skippedStages = [];
+
     private InputCaptureResult? _inputCapture;
     private InteractionInterpretationResult? _interpretation;
     private SpatialResolutionResult? _spatialResult;
@@ -24,67 +26,67 @@ public sealed class ResolutionContext
 
     public InputCaptureResult InputCapture
     {
-        get => _inputCapture ?? throw new InvalidOperationException("Stage 1 (Input Capture) has not executed.");
+        get => _inputCapture ?? ThrowNotExecuted<InputCaptureResult>(1, "Input Capture");
         set => _inputCapture = value;
     }
 
     public InteractionInterpretationResult Interpretation
     {
-        get => _interpretation ?? throw new InvalidOperationException("Stage 2 (Interaction Interpretation) has not executed.");
+        get => _interpretation ?? ThrowNotExecuted<InteractionInterpretationResult>(2, "Interaction Interpretation");
         set => _interpretation = value;
     }
 
     public SpatialResolutionResult SpatialResult
     {
-        get => _spatialResult ?? throw new InvalidOperationException("Stage 3 (Spatial Resolution) has not executed.");
+        get => _spatialResult ?? ThrowNotExecuted<SpatialResolutionResult>(3, "Spatial Resolution");
         set => _spatialResult = value;
     }
 
     public EngineeringResolutionResult EngineeringResult
     {
-        get => _engineeringResult ?? throw new InvalidOperationException("Stage 4 (Engineering Resolution) has not executed.");
+        get => _engineeringResult ?? ThrowNotExecuted<EngineeringResolutionResult>(4, "Engineering Resolution");
         set => _engineeringResult = value;
     }
 
     public ConstraintPropagationResult ConstraintResult
     {
-        get => _constraintResult ?? throw new InvalidOperationException("Stage 5 (Constraint Propagation) has not executed.");
+        get => _constraintResult ?? ThrowNotExecuted<ConstraintPropagationResult>(5, "Constraint Propagation");
         set => _constraintResult = value;
     }
 
     public PartGenerationResult PartResult
     {
-        get => _partResult ?? throw new InvalidOperationException("Stage 6 (Part Generation) has not executed.");
+        get => _partResult ?? ThrowNotExecuted<PartGenerationResult>(6, "Part Generation");
         set => _partResult = value;
     }
 
     public ManufacturingPlanResult ManufacturingResult
     {
-        get => _manufacturingResult ?? throw new InvalidOperationException("Stage 7 (Manufacturing Planning) has not executed.");
+        get => _manufacturingResult ?? ThrowNotExecuted<ManufacturingPlanResult>(7, "Manufacturing Planning");
         set => _manufacturingResult = value;
     }
 
     public InstallPlanResult InstallResult
     {
-        get => _installResult ?? throw new InvalidOperationException("Stage 8 (Install Planning) has not executed.");
+        get => _installResult ?? ThrowNotExecuted<InstallPlanResult>(8, "Install Planning");
         set => _installResult = value;
     }
 
     public CostingResult CostingResult
     {
-        get => _costingResult ?? throw new InvalidOperationException("Stage 9 (Costing) has not executed.");
+        get => _costingResult ?? ThrowNotExecuted<CostingResult>(9, "Costing");
         set => _costingResult = value;
     }
 
     public ValidationResult ValidationResult
     {
-        get => _validationResult ?? throw new InvalidOperationException("Stage 10 (Validation) has not executed.");
+        get => _validationResult ?? ThrowNotExecuted<ValidationResult>(10, "Validation");
         set => _validationResult = value;
     }
 
     public PackagingResult PackagingResult
     {
-        get => _packagingResult ?? throw new InvalidOperationException("Stage 11 (Packaging) has not executed.");
+        get => _packagingResult ?? ThrowNotExecuted<PackagingResult>(11, "Packaging");
         set => _packagingResult = value;
     }
 
@@ -93,4 +95,23 @@ public sealed class ResolutionContext
     public List<ExplanationNodeId> ExplanationNodeIds { get; } = [];
 
     public bool HasBlockingIssues => AccumulatedIssues.Any(issue => issue.Severity >= ValidationSeverity.Error);
+
+    /// <summary>
+    /// Records that <paramref name="stageName"/> (stage <paramref name="stageNumber"/>) was
+    /// deliberately skipped because <see cref="IResolutionStage.ShouldExecute"/> returned
+    /// <see langword="false"/> for the current pipeline mode.
+    /// </summary>
+    public void MarkStageSkipped(int stageNumber, string stageName, ResolutionMode mode) =>
+        _skippedStages[stageNumber] = (stageName, mode);
+
+    // Returns T only to satisfy the compiler's nullable-flow analysis; always throws.
+    private T ThrowNotExecuted<T>(int stageNumber, string stageName)
+    {
+        if (_skippedStages.TryGetValue(stageNumber, out var skipped))
+        {
+            throw PipelineStageNotExecutedException.Skipped(stageNumber, skipped.StageName, skipped.Mode);
+        }
+
+        throw PipelineStageNotExecutedException.NeverInvoked(stageNumber, stageName);
+    }
 }

@@ -18,6 +18,6 @@ public sealed class PartGenerationStage : IResolutionStage
             Parts = []
         };
 
-        return StageResult.Succeeded(StageNumber);
+        return StageResult.NotImplementedYet(StageNumber);
     }
 }
