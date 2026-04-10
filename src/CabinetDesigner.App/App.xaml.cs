@@ -5,7 +5,6 @@ using CabinetDesigner.Application;
 using CabinetDesigner.Persistence;
 using CabinetDesigner.Persistence.Migrations;
 using CabinetDesigner.Presentation;
-using CabinetDesigner.Presentation.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CabinetDesigner.App;
@@ -56,7 +55,6 @@ public partial class App : System.Windows.Application
         services.AddPersistence(GetDatabasePath());
         services.AddPresentationServices();
         services.AddScoped<IDialogService, WpfDialogService>();
-        services.AddScoped<IEditorCanvasHost, WpfEditorCanvasHost>();
         services.AddScoped<CabinetDesigner.Presentation.MainWindow>();
     }
 

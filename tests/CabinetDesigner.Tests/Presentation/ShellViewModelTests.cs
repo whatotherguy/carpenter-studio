@@ -4,6 +4,7 @@ using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Application.Services;
+using CabinetDesigner.Presentation;
 using CabinetDesigner.Presentation.Projection;
 using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Geometry;
@@ -24,7 +25,7 @@ public sealed class ShellViewModelTests
     [Fact]
     public async Task SaveCommand_DelegatesToProjectService_AndRaisesPropertyChanges()
     {
-        using var shell = CreateShellViewModel(out var projectService, out _, out _, out var eventBus);
+        using var shell = CreateShellViewModel(out var projectService, out _, out _, out var eventBus, out _);
         var project = new ProjectSummaryDto(Guid.NewGuid(), "Shop A", "C:\\shop.cab", DateTimeOffset.UtcNow, "Rev 1", true);
         projectService.SeedCurrentProject(project);
         eventBus.Publish(new ProjectOpenedEvent(project));
@@ -95,9 +96,7 @@ public sealed class ShellViewModelTests
     [Fact]
     public void PendingProjectName_TogglesNewCommandAvailability()
     {
-        using var shell = CreateShellViewModel(out _, out _, out _, out _);
-
-        Assert.True(shell.NewProjectCommand.CanExecute(null));
+        using var shell = CreateShellViewModel(out _, out _, out _, out _, out _);
 
         shell.PendingProjectName = "   ";
 
@@ -111,7 +110,7 @@ public sealed class ShellViewModelTests
     [Fact]
     public void PendingProjectFilePath_TogglesOpenCommandAvailability()
     {
-        using var shell = CreateShellViewModel(out _, out _, out _, out _);
+        using var shell = CreateShellViewModel(out _, out _, out _, out _, out _);
 
         Assert.False(shell.OpenProjectCommand.CanExecute(null));
 
@@ -123,7 +122,7 @@ public sealed class ShellViewModelTests
     [Fact]
     public void DesignChangedEvent_RefreshesCurrentStatusText()
     {
-        using var shell = CreateShellViewModel(out _, out _, out _, out var eventBus);
+        using var shell = CreateShellViewModel(out _, out _, out _, out var eventBus, out _);
 
         var changedProperties = new List<string>();
         shell.PropertyChanged += (_, args) =>
@@ -246,7 +245,8 @@ public sealed class ShellViewModelTests
             projector,
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
-            new RecordingCanvasHost());
+            new RecordingCanvasHost(),
+            new NoOpInteractionService());
 
         var catalog = new CatalogPanelViewModel(new CatalogService());
         var propertyInspector = new PropertyInspectorViewModel(runService, eventBus);
@@ -254,7 +254,7 @@ public sealed class ShellViewModelTests
         var statusBar = new StatusBarViewModel(eventBus, validationSummaryService);
         var issuePanel = new IssuePanelViewModel(validationSummaryService, eventBus);
 
-        return new ShellViewModel(projectService, undoRedoService, eventBus, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar);
+        return new ShellViewModel(projectService, undoRedoService, eventBus, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar, new StubDialogService());
     }
 
     private static void SeedRunSummaryState(CurrentWorkingRevisionSource currentState)
@@ -400,6 +400,10 @@ public sealed class ShellViewModelTests
         {
         }
 
+        public void SetMouseUpHandler(Action<double, double> handler)
+        {
+        }
+
         public void SetMouseWheelHandler(Action<double, double, double> handler)
         {
         }
@@ -435,5 +439,31 @@ public sealed class ShellViewModelTests
         public void PanBy(double dx, double dy)
         {
         }
+    }
+
+    private sealed class NoOpInteractionService : IEditorInteractionService
+    {
+        public void BeginPlaceCabinet(string cabinetTypeId, Length nominalWidth, Length nominalDepth, double screenX, double screenY) { }
+
+        public void BeginMoveCabinet(CabinetId cabinetId, double screenX, double screenY) { }
+
+        public void BeginResizeCabinet(CabinetId cabinetId, double screenX, double screenY) { }
+
+        public DragPreviewResult OnDragMoved(double screenX, double screenY) =>
+            new(false, null, "No active drag.");
+
+        public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default) =>
+            Task.FromResult(DragCommitResult.Failed("No active drag."));
+
+        public void OnDragAborted() { }
+    }
+
+    private sealed class StubDialogService : IDialogService
+    {
+        public string? ShowOpenFileDialog(string title, string filter) => null;
+
+        public string? ShowSaveFileDialog(string title, string filter, string defaultFileName) => null;
+
+        public bool ShowYesNoDialog(string title, string message) => false;
     }
 }

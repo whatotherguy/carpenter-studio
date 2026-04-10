@@ -1,3 +1,5 @@
+using CabinetDesigner.Application.DTOs;
+using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Application.Services;
 using CabinetDesigner.Application.State;

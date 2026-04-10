@@ -18,6 +18,8 @@ public interface IEditorCanvasHost
 
     void SetMouseMoveHandler(Action<double, double> handler);
 
+    void SetMouseUpHandler(Action<double, double> handler);
+
     void SetMouseWheelHandler(Action<double, double, double> handler);
 
     void SetMiddleButtonDragHandler(Action<double, double> onStart, Action<double, double> onMove, Action onEnd);

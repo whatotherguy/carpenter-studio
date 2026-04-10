@@ -1,3 +1,4 @@
+using System.Threading;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
@@ -18,7 +19,7 @@ public sealed class EditorCanvasViewModelTests
     public async Task AddCabinetToRunAsync_DelegatesToRunService()
     {
         var runService = new RecordingRunService();
-        using var viewModel = CreateViewModel(runService, out _, out _, out _);
+        using var viewModel = CreateViewModel(runService, out _, out _, out _, out _);
 
         await viewModel.AddCabinetToRunAsync(Guid.NewGuid(), "base-36", 36m);
 
@@ -30,7 +31,7 @@ public sealed class EditorCanvasViewModelTests
     [Fact]
     public void DesignChangedEvent_RefreshesProjectedScene()
     {
-        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost);
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
         projector.Scene = new RenderSceneDto(
             [],
             [],
@@ -48,7 +49,7 @@ public sealed class EditorCanvasViewModelTests
     [Fact]
     public void OnMouseDown_SelectsCabinetAndRaisesPropertyChanged()
     {
-        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _);
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out _);
         var selectedCabinetId = Guid.NewGuid();
         projector.Scene = new RenderSceneDto(
             [],
@@ -73,22 +74,123 @@ public sealed class EditorCanvasViewModelTests
         Assert.Equal("Cabinet selected.", viewModel.StatusMessage);
     }
 
+    [Fact]
+    public void OnMouseDown_OnEmptyArea_ClearsSelection()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
+
+        viewModel.OnMouseDown(9999d, 9999d);
+
+        Assert.Empty(viewModel.SelectedCabinetIds);
+        Assert.Equal("Selection cleared.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void OnMouseMove_BelowThreshold_DoesNotStartDrag()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out var interactionService);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // Mouse down on cabinet.
+        viewModel.OnMouseDown(5d, 5d);
+
+        // Move less than the 4 px drag threshold.
+        viewModel.OnMouseMove(6d, 5d);
+
+        Assert.Equal(0, interactionService.BeginMoveCabinetCallCount);
+        Assert.Equal(0, interactionService.BeginResizeCabinetCallCount);
+    }
+
+    [Fact]
+    public void OnMouseMove_ExceedsThreshold_StartsMoveOnCabinetBody()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out var interactionService);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.OnMouseDown(5d, 5d);
+        // Move more than the 4 px threshold.
+        viewModel.OnMouseMove(10d, 5d);
+
+        Assert.Equal(1, interactionService.BeginMoveCabinetCallCount);
+        Assert.Equal(new CabinetId(cabinetId), interactionService.LastMoveCabinetId);
+    }
+
+    [Fact]
+    public void OnMouseMove_WhileDragActive_CallsOnDragMoved()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out var interactionService);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d); // starts drag
+        viewModel.OnMouseMove(15d, 5d); // updates drag
+
+        Assert.True(interactionService.OnDragMovedCallCount >= 1);
+    }
+
+    [Fact]
+    public async Task OnMouseUp_WhenDragActive_CommitsDrag()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out var interactionService);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d); // starts drag
+        viewModel.OnMouseUp(10d, 5d);
+
+        // Give the async commit a chance to run.
+        await Task.Delay(50);
+
+        Assert.Equal(1, interactionService.CommitCallCount);
+    }
+
+    [Fact]
+    public void OnMouseUp_WithoutDrag_DoesNotCommit()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out var interactionService);
+
+        // Click without drag.
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseUp(5d, 5d);
+
+        Assert.Equal(0, interactionService.CommitCallCount);
+    }
+
+    private static RenderSceneDto MakeSingleCabinetScene(Guid cabinetId) =>
+        new RenderSceneDto(
+            [],
+            [],
+            [new CabinetRenderDto(cabinetId, Guid.NewGuid(), new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
+            null,
+            new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+
     private static EditorCanvasViewModel CreateViewModel(
         RecordingRunService runService,
         out RecordingSceneProjector projector,
         out ApplicationEventBus eventBus,
-        out RecordingCanvasHost canvasHost)
+        out RecordingCanvasHost canvasHost,
+        out RecordingInteractionService interactionService)
     {
         projector = new RecordingSceneProjector();
         eventBus = new ApplicationEventBus();
         canvasHost = new RecordingCanvasHost();
+        interactionService = new RecordingInteractionService();
         return new EditorCanvasViewModel(
             runService,
             eventBus,
             projector,
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
-            canvasHost);
+            canvasHost,
+            interactionService);
     }
 
     private sealed class RecordingSceneProjector : ISceneProjector
@@ -146,6 +248,10 @@ public sealed class EditorCanvasViewModelTests
         {
         }
 
+        public void SetMouseUpHandler(Action<double, double> handler)
+        {
+        }
+
         public void SetMouseWheelHandler(Action<double, double, double> handler)
         {
         }
@@ -181,6 +287,57 @@ public sealed class EditorCanvasViewModelTests
 
         public void PanBy(double dx, double dy)
         {
+        }
+    }
+
+    private sealed class RecordingInteractionService : IEditorInteractionService
+    {
+        public int BeginMoveCabinetCallCount { get; private set; }
+        public CabinetId? LastMoveCabinetId { get; private set; }
+
+        public int BeginResizeCabinetCallCount { get; private set; }
+
+        public int OnDragMovedCallCount { get; private set; }
+
+        public int CommitCallCount { get; private set; }
+
+        private EditorMode _mode = EditorMode.Idle;
+
+        public EditorMode CurrentMode => _mode;
+
+        public void BeginPlaceCabinet(string cabinetTypeId, Length nominalWidth, Length nominalDepth, double screenX, double screenY)
+        {
+            _mode = EditorMode.PlacingCabinet;
+        }
+
+        public void BeginMoveCabinet(CabinetId cabinetId, double screenX, double screenY)
+        {
+            BeginMoveCabinetCallCount++;
+            LastMoveCabinetId = cabinetId;
+            _mode = EditorMode.MovingCabinet;
+        }
+
+        public void BeginResizeCabinet(CabinetId cabinetId, double screenX, double screenY)
+        {
+            BeginResizeCabinetCallCount++;
+            _mode = EditorMode.ResizingCabinet;
+        }
+
+        public DragPreviewResult OnDragMoved(double screenX, double screenY)
+        {
+            OnDragMovedCallCount++;
+            return new DragPreviewResult(true, null, null);
+        }
+
+        public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default)
+        {
+            CommitCallCount++;
+            _mode = EditorMode.Idle;
+            return Task.FromResult(new DragCommitResult(true, null, null));
+        }
+        public void OnDragAborted()
+        {
+            _mode = EditorMode.Idle;
         }
     }
 }
