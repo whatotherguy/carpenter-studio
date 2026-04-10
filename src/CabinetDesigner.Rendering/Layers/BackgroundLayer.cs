@@ -42,6 +42,11 @@ public sealed class BackgroundLayer : IRenderLayer
             return;
         }
 
+        if (GridLinePlanner.ExceedsLimit(spacingInches, bounds.Min.X, bounds.Max.X, bounds.Min.Y, bounds.Max.Y))
+        {
+            return;
+        }
+
         var startX = Math.Floor(bounds.Min.X / spacingInches) * spacingInches;
         var endX = Math.Ceiling(bounds.Max.X / spacingInches) * spacingInches;
         for (var x = startX; x <= endX; x += spacingInches)

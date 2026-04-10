@@ -216,7 +216,7 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
-    public async Task OnMouseUp_WhenDragActive_CommitsDrag()
+    public void OnMouseUp_WhenDragActive_CommitsDrag()
     {
         using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out var interactionService);
         var cabinetId = Guid.NewGuid();
@@ -227,8 +227,9 @@ public sealed class EditorCanvasViewModelTests
         viewModel.OnMouseMove(10d, 5d); // starts drag
         viewModel.OnMouseUp(10d, 5d);
 
-        // Give the async commit a chance to run.
-        await Task.Delay(50);
+        // CommitDragAsync fires synchronously (RecordingInteractionService uses Task.FromResult)
+        // but is launched fire-and-forget; spin until the counter increments.
+        SpinWait.SpinUntil(() => interactionService.CommitCallCount == 1, TimeSpan.FromSeconds(1));
 
         Assert.Equal(1, interactionService.CommitCallCount);
     }
@@ -432,9 +433,287 @@ public sealed class EditorCanvasViewModelTests
             _mode = EditorMode.Idle;
             return Task.FromResult(new DragCommitResult(true, null, null));
         }
+
         public void OnDragAborted()
         {
             _mode = EditorMode.Idle;
         }
+    }
+}
+
+/// <summary>
+/// Tests that exercise the full host-forwarding path:
+/// host.Simulate* → registered handler → EditorCanvasViewModel logic.
+/// Uses <see cref="ForwardingCanvasHost"/> so no WPF infrastructure is required.
+/// </summary>
+public sealed class EditorCanvasViewModelForwardingTests
+{
+    [Fact]
+    public void HostMouseDown_OnCabinet_SelectsCabinet()
+    {
+        var host = new ForwardingCanvasHost();
+        var cabinetId = Guid.NewGuid();
+        using var viewModel = CreateViewModelWithForwardingHost(host, out var projector, out var eventBus, out _);
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        host.SimulateMouseDown(5d, 5d);
+
+        Assert.Contains(cabinetId, viewModel.SelectedCabinetIds);
+        Assert.Equal("Cabinet selected.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void HostMouseDown_OnEmptyArea_ClearsSelection()
+    {
+        var host = new ForwardingCanvasHost();
+        var cabinetId = Guid.NewGuid();
+        using var viewModel = CreateViewModelWithForwardingHost(host, out var projector, out var eventBus, out _);
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+        host.SimulateMouseDown(5d, 5d);
+        Assert.Single(viewModel.SelectedCabinetIds);
+
+        host.SimulateMouseDown(9999d, 9999d);
+
+        Assert.Empty(viewModel.SelectedCabinetIds);
+        Assert.Equal("Selection cleared.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void HostMouseMove_BelowThreshold_DoesNotStartDrag()
+    {
+        var host = new ForwardingCanvasHost();
+        var cabinetId = Guid.NewGuid();
+        using var viewModel = CreateViewModelWithForwardingHost(host, out var projector, out var eventBus, out var interactionService);
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        host.SimulateMouseDown(5d, 5d);
+        host.SimulateMouseMove(6d, 5d); // 1 px — below the 4 px threshold
+
+        Assert.Equal(0, interactionService.BeginMoveCabinetCallCount);
+    }
+
+    [Fact]
+    public void HostMouseMove_ExceedsThreshold_StartsDrag()
+    {
+        var host = new ForwardingCanvasHost();
+        var cabinetId = Guid.NewGuid();
+        using var viewModel = CreateViewModelWithForwardingHost(host, out var projector, out var eventBus, out var interactionService);
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        host.SimulateMouseDown(5d, 5d);
+        host.SimulateMouseMove(10d, 5d); // 5 px — exceeds the 4 px threshold
+
+        Assert.Equal(1, interactionService.BeginMoveCabinetCallCount);
+    }
+
+    [Fact]
+    public void HostMouseMove_WhileDragActive_UpdatesDragPreview()
+    {
+        var host = new ForwardingCanvasHost();
+        var cabinetId = Guid.NewGuid();
+        using var viewModel = CreateViewModelWithForwardingHost(host, out var projector, out var eventBus, out var interactionService);
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        host.SimulateMouseDown(5d, 5d);
+        host.SimulateMouseMove(10d, 5d); // start drag
+        host.SimulateMouseMove(15d, 5d); // update drag
+
+        Assert.True(interactionService.OnDragMovedCallCount >= 1);
+    }
+
+    [Fact]
+    public void HostMouseUp_AfterDrag_CommitsDrag()
+    {
+        var host = new ForwardingCanvasHost();
+        var cabinetId = Guid.NewGuid();
+        using var viewModel = CreateViewModelWithForwardingHost(host, out var projector, out var eventBus, out var interactionService);
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        host.SimulateMouseDown(5d, 5d);
+        host.SimulateMouseMove(10d, 5d); // start drag
+        host.SimulateMouseUp(10d, 5d);
+
+        SpinWait.SpinUntil(() => interactionService.CommitCallCount == 1, TimeSpan.FromSeconds(1));
+
+        Assert.Equal(1, interactionService.CommitCallCount);
+    }
+
+    [Fact]
+    public void HostMouseUp_WithoutDrag_DoesNotCommit()
+    {
+        var host = new ForwardingCanvasHost();
+        using var viewModel = CreateViewModelWithForwardingHost(host, out _, out _, out var interactionService);
+
+        host.SimulateMouseDown(5d, 5d);
+        host.SimulateMouseUp(5d, 5d);
+
+        Assert.Equal(0, interactionService.CommitCallCount);
+    }
+
+    private static RenderSceneDto MakeSingleCabinetScene(Guid cabinetId) =>
+        new RenderSceneDto(
+            [],
+            [],
+            [new CabinetRenderDto(cabinetId, Guid.NewGuid(), new Rect2D(Point2D.Origin, Length.FromInches(10m), Length.FromInches(10m)), "cab", "cab", CabinetRenderState.Normal, [])],
+            null,
+            new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+
+    private static EditorCanvasViewModel CreateViewModelWithForwardingHost(
+        ForwardingCanvasHost host,
+        out RecordingSceneProjector projector,
+        out ApplicationEventBus eventBus,
+        out RecordingInteractionService interactionService)
+    {
+        projector = new RecordingSceneProjector();
+        eventBus = new ApplicationEventBus();
+        interactionService = new RecordingInteractionService();
+        return new EditorCanvasViewModel(
+            new RecordingRunService(),
+            eventBus,
+            projector,
+            new TestEditorCanvasSession(),
+            new DefaultHitTester(),
+            host,
+            interactionService);
+    }
+
+    private sealed class RecordingSceneProjector : ISceneProjector
+    {
+        public RenderSceneDto Scene { get; set; } = new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+
+        public RenderSceneDto Project() => Scene;
+    }
+
+    private sealed class RecordingRunService : IRunService
+    {
+        public Task<CommandResultDto> CreateRunAsync(CreateRunRequestDto request) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> DeleteRunAsync(RunId runId) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> AddCabinetAsync(AddCabinetRequestDto request) =>
+            Task.FromResult(new CommandResultDto(Guid.NewGuid(), "layout.add_cabinet_to_run", true, [], [request.RunId.ToString()], []));
+
+        public Task<CommandResultDto> InsertCabinetAsync(InsertCabinetRequestDto request) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> MoveCabinetAsync(MoveCabinetRequestDto request) =>
+            Task.FromResult(new CommandResultDto(Guid.NewGuid(), "layout.move_cabinet", true, [], [request.CabinetId.ToString()], []));
+
+        public Task<CommandResultDto> ResizeCabinetAsync(ResizeCabinetRequestDto request) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> SetCabinetOverrideAsync(SetCabinetOverrideRequestDto request) => throw new NotImplementedException();
+
+        public RunSummaryDto GetRunSummary(RunId runId) => throw new NotImplementedException();
+    }
+
+    private sealed class TestEditorCanvasSession : IEditorCanvasSession
+    {
+        public EditorMode CurrentMode { get; private set; } = EditorMode.Idle;
+
+        public IReadOnlyList<Guid> SelectedCabinetIds { get; private set; } = [];
+
+        public Guid? HoveredCabinetId { get; private set; }
+
+        public ViewportTransform Viewport { get; } = ViewportTransform.Default;
+
+        public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds) => SelectedCabinetIds = cabinetIds.ToArray();
+
+        public void SetHoveredCabinetId(Guid? cabinetId) => HoveredCabinetId = cabinetId;
+
+        public void ZoomAt(double screenX, double screenY, double scaleFactor) { }
+
+        public void PanBy(double dx, double dy) { }
+    }
+
+    private sealed class RecordingInteractionService : IEditorInteractionService
+    {
+        public int BeginMoveCabinetCallCount { get; private set; }
+
+        public int BeginResizeCabinetCallCount { get; private set; }
+
+        public int OnDragMovedCallCount { get; private set; }
+
+        public int CommitCallCount { get; private set; }
+
+        public void BeginPlaceCabinet(string cabinetTypeId, Length nominalWidth, Length nominalDepth, double screenX, double screenY) { }
+
+        public void BeginMoveCabinet(CabinetId cabinetId, double screenX, double screenY) => BeginMoveCabinetCallCount++;
+
+        public void BeginResizeCabinet(CabinetId cabinetId, double screenX, double screenY) => BeginResizeCabinetCallCount++;
+
+        public DragPreviewResult OnDragMoved(double screenX, double screenY)
+        {
+            OnDragMovedCallCount++;
+            return new DragPreviewResult(true, null, null);
+        }
+
+        public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default)
+        {
+            CommitCallCount++;
+            return Task.FromResult(new DragCommitResult(true, null, null));
+        }
+
+        public void OnDragAborted() { }
+    }
+
+    private sealed class ForwardingCanvasHost : IEditorCanvasHost
+    {
+        private readonly object _view = new();
+        private Action<double, double>? _mouseDownHandler;
+        private Action<double, double>? _mouseMoveHandler;
+        private Action<double, double>? _mouseUpHandler;
+        private Action<double, double, double>? _mouseWheelHandler;
+        private Action<double, double>? _panStartHandler;
+        private Action<double, double>? _panMoveHandler;
+        private Action? _panEndHandler;
+
+        public object View => _view;
+
+        public bool IsCtrlHeld { get; set; }
+
+        public RenderSceneDto? Scene { get; private set; }
+
+        public ViewportTransform Viewport { get; private set; } = ViewportTransform.Default;
+
+        public void UpdateScene(RenderSceneDto scene) => Scene = scene;
+
+        public void UpdateViewport(ViewportTransform viewport) => Viewport = viewport;
+
+        public void SetMouseDownHandler(Action<double, double> handler) => _mouseDownHandler = handler;
+
+        public void SetMouseMoveHandler(Action<double, double> handler) => _mouseMoveHandler = handler;
+
+        public void SetMouseUpHandler(Action<double, double> handler) => _mouseUpHandler = handler;
+
+        public void SetMouseWheelHandler(Action<double, double, double> handler) => _mouseWheelHandler = handler;
+
+        public void SetMiddleButtonDragHandler(
+            Action<double, double> onStart,
+            Action<double, double> onMove,
+            Action onEnd)
+        {
+            _panStartHandler = onStart;
+            _panMoveHandler = onMove;
+            _panEndHandler = onEnd;
+        }
+
+        public void SimulateMouseDown(double x, double y) => _mouseDownHandler?.Invoke(x, y);
+
+        public void SimulateMouseMove(double x, double y) => _mouseMoveHandler?.Invoke(x, y);
+
+        public void SimulateMouseUp(double x, double y) => _mouseUpHandler?.Invoke(x, y);
+
+        public void SimulateMouseWheel(double x, double y, double delta) => _mouseWheelHandler?.Invoke(x, y, delta);
+
+        public void SimulatePanStart(double x, double y) => _panStartHandler?.Invoke(x, y);
+
+        public void SimulatePanMove(double x, double y) => _panMoveHandler?.Invoke(x, y);
+
+        public void SimulatePanEnd() => _panEndHandler?.Invoke();
     }
 }
