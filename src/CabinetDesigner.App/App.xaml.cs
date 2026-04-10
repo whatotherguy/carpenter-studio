@@ -25,7 +25,8 @@ public partial class App : System.Windows.Application
             _serviceProvider = services.BuildServiceProvider(validateScopes: true);
             _appScope = _serviceProvider.CreateScope();
 
-            await _appScope.ServiceProvider.GetRequiredService<MigrationRunner>().RunAsync().ConfigureAwait(true);
+            var orchestrator = _appScope.ServiceProvider.GetRequiredService<StartupOrchestrator>();
+            await Task.Run(() => orchestrator.RunAsync()).ConfigureAwait(true);
 
             var window = _appScope.ServiceProvider.GetRequiredService<CabinetDesigner.Presentation.MainWindow>();
             MainWindow = window;
