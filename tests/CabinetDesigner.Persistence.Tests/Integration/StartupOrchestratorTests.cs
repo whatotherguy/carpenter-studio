@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Persistence.Migrations;
 using CabinetDesigner.Persistence.Tests.Fixtures;
@@ -20,7 +21,7 @@ public sealed class StartupOrchestratorTests
         await using var connection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM schema_migrations;";
-        var count = Convert.ToInt32(await cmd.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
+        var count = Convert.ToInt32(await cmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
         Assert.Equal(2, count);
     }
 
