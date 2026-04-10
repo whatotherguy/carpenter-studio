@@ -854,7 +854,11 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
         public int StageNumber => stageNumber;
         public string StageName => $"Stage {stageNumber}";
         public bool ShouldExecute(ResolutionMode mode) => true;
-        public StageResult Execute(ResolutionContext context) { log.Add(stageNumber); return StageResult.Succeeded(stageNumber); }
+        public StageResult Execute(ResolutionContext context)
+        {
+            log.Add(stageNumber);
+            return StageResult.Succeeded(stageNumber);
+        }
     }
 
     private sealed class SpatialHelper(int stageNumber, List<int> log) : IResolutionStage
@@ -882,7 +886,11 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
         public int StageNumber => stageNumber;
         public string StageName => $"Stage {stageNumber}";
         public bool ShouldExecute(ResolutionMode mode) => mode == ResolutionMode.Full;
-        public StageResult Execute(ResolutionContext context) { log.Add(stageNumber); return StageResult.Succeeded(stageNumber); }
+        public StageResult Execute(ResolutionContext context)
+        {
+            log.Add(stageNumber);
+            return StageResult.Succeeded(stageNumber);
+        }
     }
 
     private sealed class SimpleRecordingDeltaTracker : IDeltaTracker
