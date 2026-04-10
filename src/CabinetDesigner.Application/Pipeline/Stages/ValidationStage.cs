@@ -8,15 +8,17 @@ namespace CabinetDesigner.Application.Pipeline.Stages;
 public sealed class ValidationStage : IResolutionStage
 {
     private readonly IValidationEngine _engine;
+    private readonly IValidationResultStore? _resultStore;
 
-    public ValidationStage()
-        : this(CreateDefaultEngine())
+    public ValidationStage(IValidationResultStore? resultStore = null)
+        : this(CreateDefaultEngine(), resultStore)
     {
     }
 
-    public ValidationStage(IValidationEngine engine)
+    public ValidationStage(IValidationEngine engine, IValidationResultStore? resultStore = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+        _resultStore = resultStore;
     }
 
     public int StageNumber => 10;
@@ -38,6 +40,8 @@ public sealed class ValidationStage : IResolutionStage
         {
             Result = result
         };
+
+        _resultStore?.Update(result);
 
         if (!result.IsValid)
         {
