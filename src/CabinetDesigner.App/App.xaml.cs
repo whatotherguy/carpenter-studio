@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using CabinetDesigner.Application;
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Persistence;
 using CabinetDesigner.Persistence.Migrations;
 using CabinetDesigner.Presentation;
@@ -35,8 +36,25 @@ public partial class App : System.Windows.Application
         }
         catch (Exception exception)
         {
+            // Log through a bare logger since the DI container may not be available.
+            try
+            {
+                new TextFileAppLogger().Log(new LogEntry
+                {
+                    Level = LogLevel.Fatal,
+                    Category = "App",
+                    Message = "Unhandled exception during startup.",
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Exception = exception
+                });
+            }
+            catch
+            {
+                // Best-effort; logging must not mask the real failure path.
+            }
+
             MessageBox.Show(
-                exception.ToString(),
+                "Carpenter Studio could not start due to an unexpected error.\n\nPlease check the application log for details.",
                 "Carpenter Studio Startup Failed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

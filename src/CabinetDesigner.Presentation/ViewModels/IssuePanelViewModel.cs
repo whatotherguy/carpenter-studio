@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
@@ -9,6 +10,7 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
 {
     private readonly IValidationSummaryService _validationSummaryService;
     private readonly IApplicationEventBus _eventBus;
+    private readonly IAppLogger? _logger;
     private Action<IReadOnlyList<Guid>> _selectEntities = _ => { };
     private IReadOnlyList<IssueRowViewModel> _allIssues = [];
     private IReadOnlyList<IssueRowViewModel> _filteredIssues = [];
@@ -23,10 +25,12 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
 
     public IssuePanelViewModel(
         IValidationSummaryService validationSummaryService,
-        IApplicationEventBus eventBus)
+        IApplicationEventBus eventBus,
+        IAppLogger? logger = null)
     {
         _validationSummaryService = validationSummaryService ?? throw new ArgumentNullException(nameof(validationSummaryService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _logger = logger;
 
         GoToEntityCommand = new RelayCommand<IssueRowViewModel>(GoToEntity, CanGoToEntity);
 
@@ -159,8 +163,16 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
                 ? "No validation issues."
                 : "Validation issues loaded from the service.";
         }
-        catch (NotImplementedException)
+        catch (NotImplementedException notImplemented)
         {
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Warning,
+                Category = "IssuePanelViewModel",
+                Message = "Validation summary service is not yet implemented; issue panel will show placeholder state.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Exception = notImplemented
+            });
             ResetToPlaceholderState("Validation issues are not available yet.");
             return;
         }

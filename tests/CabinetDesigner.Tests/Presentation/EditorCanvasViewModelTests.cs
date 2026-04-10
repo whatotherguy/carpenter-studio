@@ -1,4 +1,5 @@
 using System.Threading;
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
@@ -337,6 +338,125 @@ public sealed class EditorCanvasViewModelTests
 
         Assert.Equal(ViewportTransform.Default, canvasHost.Viewport);
         Assert.Equal("Zoom reset.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void BeginDrag_WhenServiceThrowsInvalidOperationException_LogsWarning()
+    {
+        var logger = new CapturingAppLogger();
+        var throwingInteraction = new ThrowingOnBeginInteractionService();
+        using var viewModel = CreateViewModelWithLogger(new RecordingRunService(), throwingInteraction, logger, out var projector, out var eventBus);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // Mouse down then move past the 4 px drag threshold to trigger BeginDrag.
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d);
+
+        Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, logger.Entries[0].Level);
+        Assert.Equal("EditorCanvasViewModel", logger.Entries[0].Category);
+        Assert.NotNull(logger.Entries[0].Exception);
+        Assert.IsType<InvalidOperationException>(logger.Entries[0].Exception);
+    }
+
+    [Fact]
+    public async Task CommitDrag_WhenServiceThrows_LogsErrorAndSetsFailedStatus()
+    {
+        var logger = new CapturingAppLogger();
+        var throwingInteraction = new ThrowingOnCommitInteractionService();
+        using var viewModel = CreateViewModelWithLogger(new RecordingRunService(), throwingInteraction, logger, out var projector, out var eventBus);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // Start a drag then commit it; the commit will throw.
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d); // start drag
+        viewModel.OnMouseUp(10d, 5d);   // triggers CommitDragAsync
+
+        // CommitDragAsync is fire-and-forget; wait for the logger to capture the entry.
+        await Task.Delay(100);
+
+        Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, logger.Entries[0].Level);
+        Assert.Equal("EditorCanvasViewModel", logger.Entries[0].Category);
+        Assert.NotNull(logger.Entries[0].Exception);
+        Assert.Equal("Drag failed.", viewModel.StatusMessage);
+    }
+
+    private static EditorCanvasViewModel CreateViewModelWithLogger(
+        RecordingRunService runService,
+        IEditorInteractionService interactionService,
+        IAppLogger logger,
+        out RecordingSceneProjector projector,
+        out ApplicationEventBus eventBus)
+    {
+        projector = new RecordingSceneProjector();
+        eventBus = new ApplicationEventBus();
+        return new EditorCanvasViewModel(
+            runService,
+            eventBus,
+            projector,
+            new TestEditorCanvasSession(),
+            new DefaultHitTester(),
+            new RecordingCanvasHost(),
+            interactionService,
+            logger);
+    }
+
+    private sealed class CapturingAppLogger : IAppLogger
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public void Log(LogEntry entry) => Entries.Add(entry);
+    }
+
+    private sealed class ThrowingOnBeginInteractionService : IEditorInteractionService
+    {
+        private EditorMode _mode = EditorMode.Idle;
+
+        public EditorMode CurrentMode => _mode;
+
+        public void BeginPlaceCabinet(string cabinetTypeId, Length nominalWidth, Length nominalDepth, double screenX, double screenY) { }
+
+        public void BeginMoveCabinet(CabinetId cabinetId, double screenX, double screenY) =>
+            throw new InvalidOperationException("Cabinet no longer exists.");
+
+        public void BeginResizeCabinet(CabinetId cabinetId, double screenX, double screenY) =>
+            throw new InvalidOperationException("Cabinet no longer exists.");
+
+        public DragPreviewResult OnDragMoved(double screenX, double screenY) =>
+            new DragPreviewResult(true, null, null);
+
+        public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default) =>
+            Task.FromResult(new DragCommitResult(true, null, null));
+
+        public void OnDragAborted() => _mode = EditorMode.Idle;
+    }
+
+    private sealed class ThrowingOnCommitInteractionService : IEditorInteractionService
+    {
+        private EditorMode _mode = EditorMode.Idle;
+
+        public EditorMode CurrentMode => _mode;
+
+        public void BeginPlaceCabinet(string cabinetTypeId, Length nominalWidth, Length nominalDepth, double screenX, double screenY) { }
+
+        public void BeginMoveCabinet(CabinetId cabinetId, double screenX, double screenY) =>
+            _mode = EditorMode.MovingCabinet;
+
+        public void BeginResizeCabinet(CabinetId cabinetId, double screenX, double screenY) =>
+            _mode = EditorMode.ResizingCabinet;
+
+        public DragPreviewResult OnDragMoved(double screenX, double screenY) =>
+            new DragPreviewResult(true, null, null);
+
+        public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default) =>
+            Task.FromException<DragCommitResult>(new InvalidOperationException("Simulated commit failure."));
+
+        public void OnDragAborted() => _mode = EditorMode.Idle;
     }
 
     private static RenderSceneDto MakeSingleCabinetScene(Guid cabinetId) =>

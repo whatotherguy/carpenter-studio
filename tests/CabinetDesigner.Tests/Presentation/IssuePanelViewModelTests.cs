@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
@@ -106,6 +107,44 @@ public sealed class IssuePanelViewModelTests
         Assert.Null(viewModel.SeverityFilter);
         Assert.Empty(viewModel.FilteredIssues);
         Assert.Equal("Validation issues are not available while no project is open.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void RefreshIssues_WhenServiceThrowsNotImplementedException_LogsWarningAndShowsPlaceholder()
+    {
+        var logger = new CapturingAppLogger();
+        var eventBus = new ApplicationEventBus();
+        using var viewModel = new IssuePanelViewModel(new ThrowingValidationSummaryService(), eventBus, logger);
+
+        Assert.True(viewModel.IsPlaceholderData);
+        Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, logger.Entries[0].Level);
+        Assert.Equal("IssuePanelViewModel", logger.Entries[0].Category);
+        Assert.NotNull(logger.Entries[0].Exception);
+        Assert.IsType<NotImplementedException>(logger.Entries[0].Exception);
+    }
+
+    [Fact]
+    public void DesignChangedEvent_WhenServiceThrowsNotImplementedException_LogsWarningOnEachRefresh()
+    {
+        var logger = new CapturingAppLogger();
+        var eventBus = new ApplicationEventBus();
+        using var viewModel = new IssuePanelViewModel(new ThrowingValidationSummaryService(), eventBus, logger);
+
+        // Initial construction already triggers one refresh (one log entry already recorded).
+        var countAfterConstruct = logger.Entries.Count;
+
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        Assert.Equal(countAfterConstruct + 1, logger.Entries.Count);
+        Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
+    }
+
+    private sealed class CapturingAppLogger : IAppLogger
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public void Log(LogEntry entry) => Entries.Add(entry);
     }
 
     private sealed class ThrowingValidationSummaryService : IValidationSummaryService

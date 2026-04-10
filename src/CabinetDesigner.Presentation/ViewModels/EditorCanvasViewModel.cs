@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
@@ -21,6 +22,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     private readonly IHitTester _hitTester;
     private readonly IEditorCanvasHost _canvasHost;
     private readonly IEditorInteractionService _interactionService;
+    private readonly IAppLogger? _logger;
     private RenderSceneDto? _scene;
     private IReadOnlyList<Guid> _selectedCabinetIds = [];
     private Guid? _hoveredCabinetId;
@@ -41,7 +43,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         IEditorCanvasSession editorSession,
         IHitTester hitTester,
         IEditorCanvasHost canvasHost,
-        IEditorInteractionService interactionService)
+        IEditorInteractionService interactionService,
+        IAppLogger? logger = null)
     {
         _runService = runService ?? throw new ArgumentNullException(nameof(runService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
@@ -50,6 +53,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         _hitTester = hitTester ?? throw new ArgumentNullException(nameof(hitTester));
         _canvasHost = canvasHost ?? throw new ArgumentNullException(nameof(canvasHost));
         _interactionService = interactionService ?? throw new ArgumentNullException(nameof(interactionService));
+        _logger = logger;
 
         ResetZoomCommand = new RelayCommand(ExecuteResetZoom);
 
@@ -342,9 +346,17 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
             _isDragActive = true;
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException invalidOp)
         {
             // Cabinet may have been removed between mouse-down and the drag threshold being reached.
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Warning,
+                Category = "EditorCanvasViewModel",
+                Message = "Could not begin drag; cabinet may have been removed before the drag threshold was reached.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Exception = invalidOp
+            });
             _pendingDragCabinetId = null;
         }
     }
@@ -362,8 +374,16 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             _interactionService.OnDragAborted();
             StatusMessage = "Drag cancelled.";
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Error,
+                Category = "EditorCanvasViewModel",
+                Message = "An unexpected error occurred while committing a drag operation.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Exception = exception
+            });
             _interactionService.OnDragAborted();
             StatusMessage = "Drag failed.";
         }
