@@ -61,6 +61,7 @@ public sealed class EditorCanvasHost : IEditorCanvasHost
         if (e.ChangedButton == MouseButton.Left)
         {
             var pos = e.GetPosition(_canvas);
+            _canvas.CaptureMouse();
             _mouseDownHandler?.Invoke(pos.X, pos.Y);
         }
         else if (e.ChangedButton == MouseButton.Middle)
@@ -88,6 +89,7 @@ public sealed class EditorCanvasHost : IEditorCanvasHost
         if (e.ChangedButton == MouseButton.Left)
         {
             var pos = e.GetPosition(_canvas);
+            _canvas.ReleaseMouseCapture();
             _mouseUpHandler?.Invoke(pos.X, pos.Y);
         }
         else if (e.ChangedButton == MouseButton.Middle && _middleDragOrigin.HasValue)
