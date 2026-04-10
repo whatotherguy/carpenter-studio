@@ -1,6 +1,7 @@
 #if WINDOWS
 using System.ComponentModel;
 using System.Windows;
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Presentation.ViewModels;
 
 namespace CabinetDesigner.Presentation;
@@ -8,11 +9,13 @@ namespace CabinetDesigner.Presentation;
 public partial class MainWindow : Window
 {
     private readonly ShellViewModel _viewModel;
+    private readonly IAppLogger? _logger;
     private bool _closeAfterSavePending;
 
-    public MainWindow(ShellViewModel viewModel)
+    public MainWindow(ShellViewModel viewModel, IAppLogger? logger = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _logger = logger;
         InitializeComponent();
         DataContext = _viewModel;
     }
@@ -69,8 +72,16 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Error,
+                Category = "MainWindow",
+                Message = "Save failed during close-after-save flow.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Exception = exception
+            });
             MessageBox.Show(
-                exception.ToString(),
+                "The project could not be saved. Your changes may not be persisted.\n\nPlease check the application log for details.",
                 "Save Failed",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

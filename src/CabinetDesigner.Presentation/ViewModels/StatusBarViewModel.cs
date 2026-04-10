@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
@@ -8,6 +9,7 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
 {
     private readonly IApplicationEventBus _eventBus;
     private readonly IValidationSummaryService _validationSummaryService;
+    private readonly IAppLogger? _logger;
     private string _revisionLabel = "No revision";
     private bool _hasUnsavedChanges;
     private string _statusMessage = "Ready";
@@ -18,10 +20,12 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
 
     public StatusBarViewModel(
         IApplicationEventBus eventBus,
-        IValidationSummaryService validationSummaryService)
+        IValidationSummaryService validationSummaryService,
+        IAppLogger? logger = null)
     {
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _validationSummaryService = validationSummaryService ?? throw new ArgumentNullException(nameof(validationSummaryService));
+        _logger = logger;
 
         _eventBus.Subscribe<ProjectOpenedEvent>(OnProjectOpened);
         _eventBus.Subscribe<ProjectClosedEvent>(OnProjectClosed);
@@ -154,8 +158,16 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
             InfoCount = issues.Count(issue => string.Equals(issue.Severity, "Info", StringComparison.OrdinalIgnoreCase));
             HasManufactureBlockers = _validationSummaryService.HasManufactureBlockers;
         }
-        catch (NotImplementedException)
+        catch (NotImplementedException notImplemented)
         {
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Warning,
+                Category = "StatusBarViewModel",
+                Message = "Validation summary service is not yet implemented; issue counts will be suppressed.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Exception = notImplemented
+            });
             ErrorCount = 0;
             WarningCount = 0;
             InfoCount = 0;

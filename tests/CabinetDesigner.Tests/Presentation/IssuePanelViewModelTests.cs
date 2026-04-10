@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
@@ -108,13 +109,35 @@ public sealed class IssuePanelViewModelTests
         Assert.Equal("Validation issues are not available while no project is open.", viewModel.StatusMessage);
     }
 
-    private sealed class ThrowingValidationSummaryService : IValidationSummaryService
+    [Fact]
+    public void RefreshIssues_WhenServiceThrowsNotImplementedException_LogsWarningAndShowsPlaceholder()
     {
-        public IReadOnlyList<ValidationIssueSummaryDto> GetAllIssues() => throw new NotImplementedException();
+        var logger = new CapturingAppLogger();
+        var eventBus = new ApplicationEventBus();
+        using var viewModel = new IssuePanelViewModel(new ThrowingValidationSummaryService(), eventBus, logger);
 
-        public IReadOnlyList<ValidationIssueSummaryDto> GetIssuesFor(string entityId) => throw new NotImplementedException();
+        Assert.True(viewModel.IsPlaceholderData);
+        Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, logger.Entries[0].Level);
+        Assert.Equal("IssuePanelViewModel", logger.Entries[0].Category);
+        Assert.NotNull(logger.Entries[0].Exception);
+        Assert.IsType<NotImplementedException>(logger.Entries[0].Exception);
+    }
 
-        public bool HasManufactureBlockers => throw new NotImplementedException();
+    [Fact]
+    public void DesignChangedEvent_WhenServiceThrowsNotImplementedException_LogsWarningOnEachRefresh()
+    {
+        var logger = new CapturingAppLogger();
+        var eventBus = new ApplicationEventBus();
+        using var viewModel = new IssuePanelViewModel(new ThrowingValidationSummaryService(), eventBus, logger);
+
+        // Initial construction already triggers one refresh (one log entry already recorded).
+        var countAfterConstruct = logger.Entries.Count;
+
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        Assert.Equal(countAfterConstruct + 1, logger.Entries.Count);
+        Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
     }
 
     private sealed class EmptyValidationSummaryService : IValidationSummaryService
