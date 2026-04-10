@@ -406,13 +406,6 @@ public sealed class EditorCanvasViewModelTests
             logger);
     }
 
-    private sealed class CapturingAppLogger : IAppLogger
-    {
-        public List<LogEntry> Entries { get; } = [];
-
-        public void Log(LogEntry entry) => Entries.Add(entry);
-    }
-
     private sealed class ThrowingOnBeginInteractionService : IEditorInteractionService
     {
         private EditorMode _mode = EditorMode.Idle;

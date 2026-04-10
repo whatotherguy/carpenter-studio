@@ -140,22 +140,6 @@ public sealed class IssuePanelViewModelTests
         Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
     }
 
-    private sealed class CapturingAppLogger : IAppLogger
-    {
-        public List<LogEntry> Entries { get; } = [];
-
-        public void Log(LogEntry entry) => Entries.Add(entry);
-    }
-
-    private sealed class ThrowingValidationSummaryService : IValidationSummaryService
-    {
-        public IReadOnlyList<ValidationIssueSummaryDto> GetAllIssues() => throw new NotImplementedException();
-
-        public IReadOnlyList<ValidationIssueSummaryDto> GetIssuesFor(string entityId) => throw new NotImplementedException();
-
-        public bool HasManufactureBlockers => throw new NotImplementedException();
-    }
-
     private sealed class EmptyValidationSummaryService : IValidationSummaryService
     {
         public IReadOnlyList<ValidationIssueSummaryDto> GetAllIssues() => [];
