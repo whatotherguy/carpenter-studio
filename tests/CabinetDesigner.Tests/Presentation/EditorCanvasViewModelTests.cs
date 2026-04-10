@@ -376,13 +376,12 @@ public sealed class EditorCanvasViewModelTests
         viewModel.OnMouseMove(10d, 5d); // start drag
         viewModel.OnMouseUp(10d, 5d);   // triggers CommitDragAsync
 
-        // CommitDragAsync is fire-and-forget; wait for the logger to capture the entry.
-        await Task.Delay(100);
+        // CommitDragAsync is fire-and-forget; wait deterministically for the log entry.
+        var entry = await logger.WaitForEntryAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Error, logger.Entries[0].Level);
-        Assert.Equal("EditorCanvasViewModel", logger.Entries[0].Category);
-        Assert.NotNull(logger.Entries[0].Exception);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Equal("EditorCanvasViewModel", entry.Category);
+        Assert.NotNull(entry.Exception);
         Assert.Equal("Drag failed.", viewModel.StatusMessage);
     }
 
