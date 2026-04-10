@@ -27,12 +27,15 @@ public sealed class PersistenceHardeningTests
         await using var fixture = new SqliteTestFixture();
         await fixture.InitializeAsync();
 
-        // Open two connections in quick succession to exercise the pool.
+        // Open two connections and verify the configured connection string enables pooling.
         await using var c1 = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
         await using var c2 = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
 
-        Assert.Equal(System.Data.ConnectionState.Open, c1.State);
-        Assert.Equal(System.Data.ConnectionState.Open, c2.State);
+        var csb1 = new SqliteConnectionStringBuilder(c1.ConnectionString);
+        var csb2 = new SqliteConnectionStringBuilder(c2.ConnectionString);
+
+        Assert.True(csb1.Pooling, "Expected first connection to have pooling enabled.");
+        Assert.True(csb2.Pooling, "Expected second connection to have pooling enabled.");
     }
 
     [Fact]
@@ -41,13 +44,28 @@ public sealed class PersistenceHardeningTests
         await using var fixture = new SqliteTestFixture();
         await fixture.InitializeAsync();
 
-        // Verify busy_timeout is set to a non-zero value (5000 ms) on every open.
-        await using var connection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "PRAGMA busy_timeout;";
-        var value = Convert.ToInt32(await cmd.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
+        const int expectedBusyTimeoutMs = 5000;
 
-        Assert.True(value > 0, $"Expected busy_timeout > 0, got {value}.");
+        static async Task<int> GetBusyTimeoutAsync(SqliteConnection connection)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA busy_timeout;";
+            return Convert.ToInt32(
+                await cmd.ExecuteScalarAsync(),
+                System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        // First open — must have the correct timeout.
+        await using (var firstConnection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync())
+        {
+            Assert.Equal(expectedBusyTimeoutMs, await GetBusyTimeoutAsync(firstConnection));
+        }
+
+        // Second open (may be a pooled borrow) — timeout must still be applied.
+        await using (var secondConnection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync())
+        {
+            Assert.Equal(expectedBusyTimeoutMs, await GetBusyTimeoutAsync(secondConnection));
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -131,12 +149,11 @@ public sealed class PersistenceHardeningTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void SessionAccessor_TwoSeparateInstances_DoNotShareState()
+    public async Task SessionAccessor_TwoSeparateInstances_DoNotShareState()
     {
-        // Simulate two concurrent DI scopes (each owns its own SqliteSessionAccessor)
-        // without needing real database connections.  The goal is to confirm that
-        // the volatile backing field is instance-level — writing to one accessor
-        // has zero effect on a distinct accessor instance.
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
         var accessor1 = new SqliteSessionAccessor();
         var accessor2 = new SqliteSessionAccessor();
 
@@ -144,18 +161,17 @@ public sealed class PersistenceHardeningTests
         Assert.Null(accessor1.GetForTest());
         Assert.Null(accessor2.GetForTest());
 
-        // Use a sentinel object to represent a "session" without a real connection.
-        // We exploit the fact that SqliteSession is an internal record; here we just
-        // verify the property-level isolation using direct null/non-null states.
-        // (Setting a real SqliteSession requires a live connection, which is tested
-        // separately in SessionAccessor_NullByDefault_AfterUnitOfWorkDisposed.)
+        // Open a real connection and transaction to create a genuine non-null session.
+        await using var conn = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync();
+        var session = new SqliteSession(conn, tx);
 
-        // Simulate scope 1 setting a non-null session marker by assigning the same
-        // backing store; the key invariant is that accessor2 remains unaffected.
-        // We use the SqliteUnitOfWork lifecycle test below for live-session coverage.
+        // Setting a session on accessor1 must not bleed into accessor2.
+        accessor1.SetForTest(session);
+        Assert.Same(session, accessor1.GetForTest());
+        Assert.Null(accessor2.GetForTest());
 
-        // Manually verify that clearing accessor1 does not touch accessor2.
-        // (accessor2 is still null at this point.)
+        // Clearing accessor1 must not affect accessor2 (still null).
         accessor1.SetForTest(null);
         Assert.Null(accessor1.GetForTest());
         Assert.Null(accessor2.GetForTest());
