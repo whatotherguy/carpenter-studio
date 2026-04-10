@@ -10,10 +10,23 @@ namespace CabinetDesigner.App;
 public sealed class WpfEditorCanvasHost : IEditorCanvasHost
 {
     private readonly EditorCanvas _canvas;
+    private Action<double, double>? _mouseDownHandler;
+    private Action<double, double>? _mouseMoveHandler;
+    private Action<double, double>? _mouseUpHandler;
+    private Action<double, double, double>? _mouseWheelHandler;
+    private Action<double, double>? _panStartHandler;
+    private Action<double, double>? _panMoveHandler;
+    private Action? _panEndHandler;
+    private System.Windows.Point? _middleDragOrigin;
 
     public WpfEditorCanvasHost(EditorCanvas canvas)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
+
+        _canvas.MouseDown += OnCanvasMouseDown;
+        _canvas.MouseMove += OnCanvasMouseMove;
+        _canvas.MouseUp += OnCanvasMouseUp;
+        _canvas.MouseWheel += OnCanvasMouseWheel;
     }
 
     public object View => _canvas;
@@ -26,88 +39,70 @@ public sealed class WpfEditorCanvasHost : IEditorCanvasHost
 
     public void UpdateViewport(ViewportTransform viewport) => _canvas.UpdateViewport(viewport);
 
-    public void SetMouseDownHandler(Action<double, double> handler)
-    {
-        _canvas.MouseDown += (_, e) =>
-        {
-            if (e.ChangedButton != MouseButton.Left)
-            {
-                return;
-            }
+    public void SetMouseDownHandler(Action<double, double> handler) => _mouseDownHandler = handler;
 
-            var pos = e.GetPosition(_canvas);
-            handler(pos.X, pos.Y);
-        };
-    }
+    public void SetMouseMoveHandler(Action<double, double> handler) => _mouseMoveHandler = handler;
 
-    public void SetMouseMoveHandler(Action<double, double> handler)
-    {
-        _canvas.MouseMove += (_, e) =>
-        {
-            var pos = e.GetPosition(_canvas);
-            handler(pos.X, pos.Y);
-        };
-    }
+    public void SetMouseUpHandler(Action<double, double> handler) => _mouseUpHandler = handler;
 
-    public void SetMouseUpHandler(Action<double, double> handler)
-    {
-        _canvas.MouseUp += (_, e) =>
-        {
-            if (e.ChangedButton != MouseButton.Left)
-            {
-                return;
-            }
-
-            var pos = e.GetPosition(_canvas);
-            handler(pos.X, pos.Y);
-        };
-    }
-
-    public void SetMouseWheelHandler(Action<double, double, double> handler)
-    {
-        _canvas.MouseWheel += (_, e) =>
-        {
-            var pos = e.GetPosition(_canvas);
-            handler(pos.X, pos.Y, e.Delta);
-            e.Handled = true;
-        };
-    }
+    public void SetMouseWheelHandler(Action<double, double, double> handler) => _mouseWheelHandler = handler;
 
     public void SetMiddleButtonDragHandler(
         Action<double, double> onStart,
         Action<double, double> onMove,
         Action onEnd)
     {
-        System.Windows.Point? dragOrigin = null;
+        _panStartHandler = onStart;
+        _panMoveHandler = onMove;
+        _panEndHandler = onEnd;
+    }
 
-        _canvas.MouseDown += (_, e) =>
+    private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Left)
         {
-            if (e.ChangedButton == MouseButton.Middle)
-            {
-                dragOrigin = e.GetPosition(_canvas);
-                _canvas.CaptureMouse();
-                var pos = dragOrigin.Value;
-                onStart(pos.X, pos.Y);
-            }
-        };
+            var pos = e.GetPosition(_canvas);
+            _mouseDownHandler?.Invoke(pos.X, pos.Y);
+        }
+        else if (e.ChangedButton == MouseButton.Middle)
+        {
+            _middleDragOrigin = e.GetPosition(_canvas);
+            _canvas.CaptureMouse();
+            var pos = _middleDragOrigin.Value;
+            _panStartHandler?.Invoke(pos.X, pos.Y);
+        }
+    }
 
-        _canvas.MouseMove += (_, e) =>
-        {
-            if (dragOrigin.HasValue && e.MiddleButton == MouseButtonState.Pressed)
-            {
-                var pos = e.GetPosition(_canvas);
-                onMove(pos.X, pos.Y);
-            }
-        };
+    private void OnCanvasMouseMove(object sender, MouseEventArgs e)
+    {
+        var pos = e.GetPosition(_canvas);
+        _mouseMoveHandler?.Invoke(pos.X, pos.Y);
 
-        _canvas.MouseUp += (_, e) =>
+        if (_middleDragOrigin.HasValue && e.MiddleButton == MouseButtonState.Pressed)
         {
-            if (dragOrigin.HasValue && e.ChangedButton == MouseButton.Middle)
-            {
-                dragOrigin = null;
-                _canvas.ReleaseMouseCapture();
-                onEnd();
-            }
-        };
+            _panMoveHandler?.Invoke(pos.X, pos.Y);
+        }
+    }
+
+    private void OnCanvasMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Left)
+        {
+            var pos = e.GetPosition(_canvas);
+            _mouseUpHandler?.Invoke(pos.X, pos.Y);
+        }
+        else if (e.ChangedButton == MouseButton.Middle && _middleDragOrigin.HasValue)
+        {
+            _middleDragOrigin = null;
+            _canvas.ReleaseMouseCapture();
+            _panEndHandler?.Invoke();
+        }
+    }
+
+    private void OnCanvasMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        var pos = e.GetPosition(_canvas);
+        _mouseWheelHandler?.Invoke(pos.X, pos.Y, e.Delta);
+        e.Handled = true;
     }
 }
