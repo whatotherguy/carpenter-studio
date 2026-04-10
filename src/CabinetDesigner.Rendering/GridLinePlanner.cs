@@ -24,7 +24,7 @@ public static class GridLinePlanner
     /// </remarks>
     public static int EstimateLineCount(decimal spacingInches, decimal rangeMin, decimal rangeMax)
     {
-        if (spacingInches <= 0m || rangeMax <= rangeMin)
+        if (spacingInches <= 0m || rangeMax < rangeMin)
         {
             return 0;
         }

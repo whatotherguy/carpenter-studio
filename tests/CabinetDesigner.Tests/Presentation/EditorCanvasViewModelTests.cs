@@ -216,7 +216,7 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
-    public async Task OnMouseUp_WhenDragActive_CommitsDrag()
+    public void OnMouseUp_WhenDragActive_CommitsDrag()
     {
         using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out var interactionService);
         var cabinetId = Guid.NewGuid();
@@ -227,8 +227,9 @@ public sealed class EditorCanvasViewModelTests
         viewModel.OnMouseMove(10d, 5d); // starts drag
         viewModel.OnMouseUp(10d, 5d);
 
-        // Give the async commit a chance to run.
-        await Task.Delay(50);
+        // CommitDragAsync fires synchronously (RecordingInteractionService uses Task.FromResult)
+        // but is launched fire-and-forget; spin until the counter increments.
+        SpinWait.SpinUntil(() => interactionService.CommitCallCount == 1, TimeSpan.FromSeconds(1));
 
         Assert.Equal(1, interactionService.CommitCallCount);
     }
@@ -526,7 +527,7 @@ public sealed class EditorCanvasViewModelForwardingTests
     }
 
     [Fact]
-    public async Task HostMouseUp_AfterDrag_CommitsDrag()
+    public void HostMouseUp_AfterDrag_CommitsDrag()
     {
         var host = new ForwardingCanvasHost();
         var cabinetId = Guid.NewGuid();
@@ -538,7 +539,7 @@ public sealed class EditorCanvasViewModelForwardingTests
         host.SimulateMouseMove(10d, 5d); // start drag
         host.SimulateMouseUp(10d, 5d);
 
-        await Task.Delay(50);
+        SpinWait.SpinUntil(() => interactionService.CommitCallCount == 1, TimeSpan.FromSeconds(1));
 
         Assert.Equal(1, interactionService.CommitCallCount);
     }
@@ -662,6 +663,7 @@ public sealed class EditorCanvasViewModelForwardingTests
 
     private sealed class ForwardingCanvasHost : IEditorCanvasHost
     {
+        private readonly object _view = new();
         private Action<double, double>? _mouseDownHandler;
         private Action<double, double>? _mouseMoveHandler;
         private Action<double, double>? _mouseUpHandler;
@@ -670,7 +672,7 @@ public sealed class EditorCanvasViewModelForwardingTests
         private Action<double, double>? _panMoveHandler;
         private Action? _panEndHandler;
 
-        public object View => new();
+        public object View => _view;
 
         public bool IsCtrlHeld { get; set; }
 

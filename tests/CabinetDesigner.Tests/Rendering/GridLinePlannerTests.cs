@@ -70,11 +70,13 @@ public sealed class GridLinePlannerTests
     }
 
     [Fact]
-    public void EstimateLineCount_EqualBounds_ReturnsZero()
+    public void EstimateLineCount_EqualBounds_IncludesOuterGridLines()
     {
-        // Degenerate range (point) — no lines to draw
+        // Degenerate range (point) expands to surrounding grid boundaries:
+        // start = floor(10/3)*3 = 9, end = ceil(10/3)*3 = 12
+        // lines at 9" and 12" → 2 lines, matching BackgroundLayer.DrawGrid's floor/ceil bounds
         var count = GridLinePlanner.EstimateLineCount(3m, 10m, 10m);
-        Assert.Equal(0, count);
+        Assert.Equal(2, count);
     }
 
     // -----------------------------------------------------------------------
