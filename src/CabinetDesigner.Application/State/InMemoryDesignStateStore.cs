@@ -12,85 +12,121 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
     private const string SnapshotKey = "Snapshot";
     private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
 
+    // Protects all four dictionaries.  Acquired for every read and write so that
+    // compound operations such as LoadWorkingRevision (ClearAll + multiple Adds) and
+    // AddRun (two-dictionary write) are atomic from the perspective of any concurrent
+    // reader running on a thread-pool continuation.
+    private readonly object _sync = new();
+
     private readonly Dictionary<RunId, CabinetRun> _runs = [];
     private readonly Dictionary<WallId, Wall> _walls = [];
     private readonly Dictionary<CabinetId, CabinetStateRecord> _cabinets = [];
     private readonly Dictionary<RunId, RunSpatialInfo> _runSpatialInfo = [];
 
-    public CabinetRun? GetRun(RunId id) => _runs.TryGetValue(id, out var run) ? run : null;
+    public CabinetRun? GetRun(RunId id) { lock (_sync) return _runs.TryGetValue(id, out var run) ? run : null; }
 
-    public Wall? GetWall(WallId id) => _walls.TryGetValue(id, out var wall) ? wall : null;
+    public Wall? GetWall(WallId id) { lock (_sync) return _walls.TryGetValue(id, out var wall) ? wall : null; }
 
-    public CabinetStateRecord? GetCabinet(CabinetId id) => _cabinets.TryGetValue(id, out var cabinet) ? cabinet : null;
+    public CabinetStateRecord? GetCabinet(CabinetId id) { lock (_sync) return _cabinets.TryGetValue(id, out var cabinet) ? cabinet : null; }
 
-    public RunSlot? FindCabinetSlot(RunId runId, CabinetId cabinetId) =>
-        _runs.TryGetValue(runId, out var run)
-            ? run.Slots.FirstOrDefault(slot => slot.CabinetId == cabinetId)
-            : null;
+    public RunSlot? FindCabinetSlot(RunId runId, CabinetId cabinetId)
+    {
+        lock (_sync)
+        {
+            return _runs.TryGetValue(runId, out var run)
+                ? run.Slots.FirstOrDefault(slot => slot.CabinetId == cabinetId)
+                : null;
+        }
+    }
 
-    public IReadOnlyList<CabinetRun> GetAllRuns() => _runs.Values.OrderBy(run => run.Id.Value).ToArray();
+    public IReadOnlyList<CabinetRun> GetAllRuns() { lock (_sync) return _runs.Values.OrderBy(run => run.Id.Value).ToArray(); }
 
-    public IReadOnlyList<Wall> GetAllWalls() => _walls.Values.OrderBy(wall => wall.Id.Value).ToArray();
+    public IReadOnlyList<Wall> GetAllWalls() { lock (_sync) return _walls.Values.OrderBy(wall => wall.Id.Value).ToArray(); }
 
-    public IReadOnlyList<CabinetStateRecord> GetAllCabinets() => _cabinets.Values.OrderBy(cabinet => cabinet.CabinetId.Value).ToArray();
+    public IReadOnlyList<CabinetStateRecord> GetAllCabinets() { lock (_sync) return _cabinets.Values.OrderBy(cabinet => cabinet.CabinetId.Value).ToArray(); }
 
-    public RunSpatialInfo? GetRunSpatialInfo(RunId runId) =>
-        _runSpatialInfo.TryGetValue(runId, out var spatialInfo) ? spatialInfo : null;
+    public RunSpatialInfo? GetRunSpatialInfo(RunId runId)
+    {
+        lock (_sync)
+        {
+            return _runSpatialInfo.TryGetValue(runId, out var spatialInfo) ? spatialInfo : null;
+        }
+    }
 
     public void AddWall(Wall wall)
     {
         ArgumentNullException.ThrowIfNull(wall);
-        _walls[wall.Id] = wall;
+        lock (_sync)
+        {
+            _walls[wall.Id] = wall;
+        }
     }
 
     public void AddRun(CabinetRun run, Point2D startWorld, Point2D endWorld)
     {
         ArgumentNullException.ThrowIfNull(run);
-        _runs[run.Id] = run;
-        _runSpatialInfo[run.Id] = new RunSpatialInfo(startWorld, endWorld);
+        lock (_sync)
+        {
+            _runs[run.Id] = run;
+            _runSpatialInfo[run.Id] = new RunSpatialInfo(startWorld, endWorld);
+        }
     }
 
     public void UpdateRunSpatialInfo(RunId runId, Point2D startWorld, Point2D endWorld)
     {
-        _runSpatialInfo[runId] = new RunSpatialInfo(startWorld, endWorld);
+        lock (_sync)
+        {
+            _runSpatialInfo[runId] = new RunSpatialInfo(startWorld, endWorld);
+        }
     }
 
     public void AddCabinet(CabinetStateRecord cabinet)
     {
         ArgumentNullException.ThrowIfNull(cabinet);
-        _cabinets[cabinet.CabinetId] = cabinet;
+        lock (_sync)
+        {
+            _cabinets[cabinet.CabinetId] = cabinet;
+        }
     }
 
     public void UpdateCabinet(CabinetStateRecord cabinet)
     {
         ArgumentNullException.ThrowIfNull(cabinet);
-        _cabinets[cabinet.CabinetId] = cabinet;
+        lock (_sync)
+        {
+            _cabinets[cabinet.CabinetId] = cabinet;
+        }
     }
 
     public void LoadWorkingRevision(WorkingRevision revision)
     {
         ArgumentNullException.ThrowIfNull(revision);
-        ClearAll();
 
-        foreach (var wall in revision.Walls.OrderBy(wall => wall.Id.Value))
+        // Resolve all data outside the lock to minimise the critical section.
+        var walls = revision.Walls.OrderBy(wall => wall.Id.Value).ToArray();
+        var runs = revision.Runs.OrderBy(run => run.Id.Value).ToArray();
+
+        var wallLookup = walls.ToDictionary(w => w.Id);
+
+        var runSpatialInfos = new List<(RunId, RunSpatialInfo)>();
+        foreach (var run in runs)
         {
-            AddWall(wall);
+            if (!wallLookup.TryGetValue(run.WallId, out var wall))
+            {
+                throw new InvalidOperationException($"Wall {run.WallId} was not found while loading working revision.");
+            }
+
+            runSpatialInfos.Add((run.Id, new RunSpatialInfo(wall.StartPoint, wall.StartPoint + wall.Direction * run.Capacity.Inches)));
         }
 
-        foreach (var run in revision.Runs.OrderBy(run => run.Id.Value))
-        {
-            var wall = GetWall(run.WallId)
-                ?? throw new InvalidOperationException($"Wall {run.WallId} was not found while loading working revision.");
-            AddRun(run, wall.StartPoint, wall.StartPoint + wall.Direction * run.Capacity.Inches);
-        }
+        var allSlots = revision.Runs.SelectMany(run => run.Slots).ToArray();
 
+        var cabinetRecords = new List<CabinetStateRecord>();
         foreach (var cabinet in revision.Cabinets.OrderBy(cabinet => cabinet.Id.Value))
         {
-            var slot = revision.Runs
-                .SelectMany(run => run.Slots)
-                .FirstOrDefault(candidate => candidate.CabinetId == cabinet.Id)
+            var slot = allSlots.FirstOrDefault(candidate => candidate.CabinetId == cabinet.Id)
                 ?? throw new InvalidOperationException($"Cabinet {cabinet.Id} was not assigned to a run slot.");
-            AddCabinet(new CabinetStateRecord(
+            cabinetRecords.Add(new CabinetStateRecord(
                 cabinet.Id,
                 cabinet.CabinetTypeId,
                 cabinet.NominalWidth,
@@ -98,32 +134,66 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 slot.RunId,
                 slot.Id));
         }
+
+        lock (_sync)
+        {
+            _runs.Clear();
+            _walls.Clear();
+            _cabinets.Clear();
+            _runSpatialInfo.Clear();
+
+            foreach (var wall in walls)
+            {
+                _walls[wall.Id] = wall;
+            }
+
+            foreach (var run in runs)
+            {
+                _runs[run.Id] = run;
+            }
+
+            foreach (var (runId, spatialInfo) in runSpatialInfos)
+            {
+                _runSpatialInfo[runId] = spatialInfo;
+            }
+
+            foreach (var cabinet in cabinetRecords)
+            {
+                _cabinets[cabinet.CabinetId] = cabinet;
+            }
+        }
     }
 
     public void ClearAll()
     {
-        _runs.Clear();
-        _walls.Clear();
-        _cabinets.Clear();
-        _runSpatialInfo.Clear();
+        lock (_sync)
+        {
+            _runs.Clear();
+            _walls.Clear();
+            _cabinets.Clear();
+            _runSpatialInfo.Clear();
+        }
     }
 
     public void RemoveEntity(string entityId, string entityType)
     {
-        switch (entityType)
+        lock (_sync)
         {
-            case "CabinetRun":
-                _runs.Remove(new RunId(Guid.Parse(entityId)));
-                _runSpatialInfo.Remove(new RunId(Guid.Parse(entityId)));
-                break;
-            case "Cabinet":
-                _cabinets.Remove(new CabinetId(Guid.Parse(entityId)));
-                break;
-            case "Wall":
-                _walls.Remove(new WallId(Guid.Parse(entityId)));
-                break;
-            default:
-                throw new InvalidOperationException($"Unsupported entity type '{entityType}'.");
+            switch (entityType)
+            {
+                case "CabinetRun":
+                    _runs.Remove(new RunId(Guid.Parse(entityId)));
+                    _runSpatialInfo.Remove(new RunId(Guid.Parse(entityId)));
+                    break;
+                case "Cabinet":
+                    _cabinets.Remove(new CabinetId(Guid.Parse(entityId)));
+                    break;
+                case "Wall":
+                    _walls.Remove(new WallId(Guid.Parse(entityId)));
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported entity type '{entityType}'.");
+            }
         }
     }
 
@@ -158,9 +228,14 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
     public IReadOnlyDictionary<string, DeltaValue> CaptureRunValues(CabinetRun run)
     {
         ArgumentNullException.ThrowIfNull(run);
-        var spatialInfo = _runSpatialInfo.TryGetValue(run.Id, out var value)
-            ? value
-            : throw new InvalidOperationException($"Run {run.Id} is missing spatial info.");
+        RunSpatialInfo spatialInfo;
+        lock (_sync)
+        {
+            spatialInfo = _runSpatialInfo.TryGetValue(run.Id, out var value)
+                ? value
+                : throw new InvalidOperationException($"Run {run.Id} is missing spatial info.");
+        }
+
         return CreateSnapshotValues(JsonSerializer.Serialize(RunSnapshot.From(run, spatialInfo), SnapshotJsonOptions));
     }
 
@@ -207,10 +282,16 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                         Length.FromInches(snapshotSlot.OccupiedWidthInches),
                         snapshotSlot.SlotIndex))
                 .ToArray());
-        _runs[runId] = run;
-        _runSpatialInfo[runId] = new RunSpatialInfo(
+
+        var spatialInfo = new RunSpatialInfo(
             new Point2D(runSnapshot.StartXInches, runSnapshot.StartYInches),
             new Point2D(runSnapshot.EndXInches, runSnapshot.EndYInches));
+
+        lock (_sync)
+        {
+            _runs[runId] = run;
+            _runSpatialInfo[runId] = spatialInfo;
+        }
     }
 
     private void RestoreCabinet(string snapshot)
@@ -224,7 +305,11 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
             Length.FromInches(cabinetSnapshot.NominalDepthInches),
             new RunId(cabinetSnapshot.RunId),
             new RunSlotId(cabinetSnapshot.SlotId));
-        _cabinets[cabinet.CabinetId] = cabinet;
+
+        lock (_sync)
+        {
+            _cabinets[cabinet.CabinetId] = cabinet;
+        }
     }
 
     private void RestoreWall(string snapshot)
@@ -237,7 +322,11 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
             new Point2D(wallSnapshot.StartXInches, wallSnapshot.StartYInches),
             new Point2D(wallSnapshot.EndXInches, wallSnapshot.EndYInches),
             Thickness.Exact(Length.FromInches(wallSnapshot.ThicknessInches)));
-        _walls[wall.Id] = wall;
+
+        lock (_sync)
+        {
+            _walls[wall.Id] = wall;
+        }
     }
 
     private sealed record RunSnapshot(
