@@ -4,6 +4,7 @@ namespace CabinetDesigner.Application.Events;
 
 public sealed class ApplicationEventBus : IApplicationEventBus
 {
+    private readonly object _sync = new();
     private readonly Dictionary<Type, List<Delegate>> _handlers = [];
     private readonly IAppLogger? _logger;
 
@@ -16,12 +17,18 @@ public sealed class ApplicationEventBus : IApplicationEventBus
     {
         ArgumentNullException.ThrowIfNull(@event);
 
-        if (!_handlers.TryGetValue(typeof(TEvent), out var handlers))
+        Delegate[] snapshot;
+        lock (_sync)
         {
-            return;
+            if (!_handlers.TryGetValue(typeof(TEvent), out var handlers))
+            {
+                return;
+            }
+
+            snapshot = handlers.ToArray();
         }
 
-        foreach (var handler in handlers.ToArray())
+        foreach (var handler in snapshot)
         {
             try
             {
@@ -50,22 +57,28 @@ public sealed class ApplicationEventBus : IApplicationEventBus
     {
         ArgumentNullException.ThrowIfNull(handler);
 
-        if (!_handlers.TryGetValue(typeof(TEvent), out var handlers))
+        lock (_sync)
         {
-            handlers = [];
-            _handlers[typeof(TEvent)] = handlers;
-        }
+            if (!_handlers.TryGetValue(typeof(TEvent), out var handlers))
+            {
+                handlers = [];
+                _handlers[typeof(TEvent)] = handlers;
+            }
 
-        handlers.Add(handler);
+            handlers.Add(handler);
+        }
     }
 
     public void Unsubscribe<TEvent>(Action<TEvent> handler) where TEvent : IApplicationEvent
     {
         ArgumentNullException.ThrowIfNull(handler);
 
-        if (_handlers.TryGetValue(typeof(TEvent), out var handlers))
+        lock (_sync)
         {
-            handlers.Remove(handler);
+            if (_handlers.TryGetValue(typeof(TEvent), out var handlers))
+            {
+                handlers.Remove(handler);
+            }
         }
     }
 }

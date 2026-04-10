@@ -5,20 +5,33 @@ namespace CabinetDesigner.Application.State;
 
 public sealed class InMemoryDeltaTracker : IDeltaTracker
 {
+    private readonly object _sync = new();
     private readonly List<StateDelta> _pending = [];
 
-    public void Begin() => _pending.Clear();
+    public void Begin()
+    {
+        lock (_sync)
+        {
+            _pending.Clear();
+        }
+    }
 
     public void RecordDelta(StateDelta delta)
     {
         ArgumentNullException.ThrowIfNull(delta);
-        _pending.Add(delta);
+        lock (_sync)
+        {
+            _pending.Add(delta);
+        }
     }
 
     public IReadOnlyList<StateDelta> Finalize()
     {
-        var deltas = _pending.ToArray();
-        _pending.Clear();
-        return deltas;
+        lock (_sync)
+        {
+            var deltas = _pending.ToArray();
+            _pending.Clear();
+            return deltas;
+        }
     }
 }

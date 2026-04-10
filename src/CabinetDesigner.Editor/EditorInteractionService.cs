@@ -120,6 +120,15 @@ public sealed class EditorInteractionService : IEditorInteractionService
         return _previewCommandExecutor.Preview(command);
     }
 
+    /// <summary>
+    /// Commits the active drag as a design command and then ends the drag session.
+    /// </summary>
+    /// <remarks>
+    /// Uses <c>ConfigureAwait(true)</c> so that <see cref="EditorSession.EndDrag"/> in the
+    /// <c>finally</c> block always executes on the caller's <see cref="System.Threading.SynchronizationContext"/>
+    /// (the WPF UI thread in production).  This preserves the UI-thread-affine contract of
+    /// <see cref="EditorSession"/>.
+    /// </remarks>
     public async Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default)
     {
         if (_session.ActiveDrag is null)
@@ -137,7 +146,9 @@ public sealed class EditorInteractionService : IEditorInteractionService
                 return DragCommitResult.Failed("Drag is not currently over a valid target.");
             }
 
-            return await _commitCommandExecutor.ExecuteAsync(command, ct).ConfigureAwait(false);
+            // ConfigureAwait(true) ensures the finally block (EndDrag) runs on the
+            // caller's SynchronizationContext, keeping EditorSession UI-thread-affine.
+            return await _commitCommandExecutor.ExecuteAsync(command, ct).ConfigureAwait(true);
         }
         finally
         {
