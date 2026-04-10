@@ -18,6 +18,7 @@ public static class PersistenceServiceRegistration
         services.AddSingleton<ISchemaMigration, V1_InitialSchema>();
         services.AddSingleton<ISchemaMigration, V2_RepairSchemaDrift>();
         services.AddSingleton<MigrationRunner>();
+        services.AddSingleton<StartupOrchestrator>();
         services.AddSingleton<ISnapshotSerializer, V1SnapshotSerializer>();
         services.AddSingleton<ISnapshotDeserializer, V1SnapshotDeserializer>();
         services.AddSingleton<SnapshotBlobReader>();
