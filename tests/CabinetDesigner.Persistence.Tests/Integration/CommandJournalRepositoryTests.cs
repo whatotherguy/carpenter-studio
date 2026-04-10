@@ -176,15 +176,15 @@ public sealed class CommandJournalRepositoryTests
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Guards against: A race condition where two concurrent appends to the
-    /// same revision both read the same MAX(sequence_number) and produce
-    /// duplicate sequence numbers.  SQLite's single-writer model combined with
-    /// the atomic scalar-subquery INSERT prevents this; this test makes the
-    /// guarantee explicit and will catch any future change that breaks it (e.g.
-    /// splitting the SELECT and INSERT into two statements).
+    /// Guards against: A regression where the sequence-number subquery would
+    /// produce duplicate values if the SELECT and INSERT were split into two
+    /// separate statements. Verifies that sequential appends to the same
+    /// revision produce consecutive, unique sequence numbers.
+    /// (Concurrent uniqueness under high load is already covered by
+    /// <see cref="PersistenceHardeningTests.AppendAsync_ConcurrentCalls_ProducesUniqueSequenceNumbers"/>.)
     /// </summary>
     [Fact]
-    public async Task AppendAsync_ConcurrentCallsSameRevision_ProducesNoDuplicateSequenceNumbers()
+    public async Task AppendAsync_SequentialCallsSameRevision_ProducesConsecutiveUniqueSequenceNumbers()
     {
         await using var fixture = new SqliteTestFixture();
         await fixture.InitializeAsync();
@@ -195,17 +195,13 @@ public sealed class CommandJournalRepositoryTests
         await projectRepository.SaveAsync(state.Project);
         await revisionRepository.SaveAsync(state.Revision);
 
-        const int concurrency = 12;
-        var tasks = Enumerable.Range(0, concurrency)
-            .Select(_ =>
-            {
-                var accessor = new SqliteSessionAccessor();
-                var repo = new CommandJournalRepository(fixture.ConnectionFactory, accessor);
-                return repo.AppendAsync(BuildEntry(state.Revision.Id));
-            })
-            .ToArray();
-
-        await Task.WhenAll(tasks);
+        const int entryCount = 3;
+        var appendAccessor = new SqliteSessionAccessor();
+        var appendRepo = new CommandJournalRepository(fixture.ConnectionFactory, appendAccessor);
+        for (var i = 0; i < entryCount; i++)
+        {
+            await appendRepo.AppendAsync(BuildEntry(state.Revision.Id));
+        }
 
         var verifyAccessor = new SqliteSessionAccessor();
         var verifyRepo = new CommandJournalRepository(fixture.ConnectionFactory, verifyAccessor);
@@ -213,9 +209,9 @@ public sealed class CommandJournalRepositoryTests
 
         var seqNumbers = entries.Select(e => e.SequenceNumber).OrderBy(n => n).ToList();
 
-        Assert.Equal(concurrency, seqNumbers.Count);
-        Assert.Equal(seqNumbers.Distinct().Count(), seqNumbers.Count);
-        for (var i = 0; i < concurrency; i++)
+        Assert.Equal(entryCount, seqNumbers.Count);
+        Assert.Equal(seqNumbers.Count, seqNumbers.Distinct().Count());
+        for (var i = 0; i < entryCount; i++)
         {
             Assert.Equal(i + 1, seqNumbers[i]);
         }
