@@ -167,9 +167,9 @@ public sealed class PropertyInspectorViewModelTests
         await viewModel.CommitNominalWidthEditCommand.ExecuteAsync();
 
         Assert.True(runService.LastResizeRequest is not null);
-        Assert.Equal(cabinetId, runService.LastResizeRequest!.Value.CabinetId);
-        Assert.Equal(36m, runService.LastResizeRequest.Value.CurrentNominalWidthInches);
-        Assert.Equal(42m, runService.LastResizeRequest.Value.NewNominalWidthInches);
+        Assert.Equal(cabinetId, runService.LastResizeRequest!.CabinetId);
+        Assert.Equal(36m, runService.LastResizeRequest.CurrentNominalWidthInches);
+        Assert.Equal(42m, runService.LastResizeRequest.NewNominalWidthInches);
         Assert.False(viewModel.IsEditingNominalWidth);
         Assert.Equal("42\"", viewModel.NominalWidthDisplay);
         Assert.Equal("42", viewModel.NominalWidthEditValue);

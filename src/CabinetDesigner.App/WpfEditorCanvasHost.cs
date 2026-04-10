@@ -49,6 +49,20 @@ public sealed class WpfEditorCanvasHost : IEditorCanvasHost
         };
     }
 
+    public void SetMouseUpHandler(Action<double, double> handler)
+    {
+        _canvas.MouseUp += (_, e) =>
+        {
+            if (e.ChangedButton != MouseButton.Left)
+            {
+                return;
+            }
+
+            var pos = e.GetPosition(_canvas);
+            handler(pos.X, pos.Y);
+        };
+    }
+
     public void SetMouseWheelHandler(Action<double, double, double> handler)
     {
         _canvas.MouseWheel += (_, e) =>
