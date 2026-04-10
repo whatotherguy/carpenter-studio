@@ -36,10 +36,10 @@ public static class ApplicationServiceRegistration
             provider.GetRequiredService<IWhyEngine>(),
             provider.GetRequiredService<IUndoStack>(),
             provider.GetRequiredService<IStateManager>(),
-            provider.GetRequiredService<IDesignStateStore>(),
-            provider.GetRequiredService<IResolutionOrchestratorLogger>(),
+            stateStore: provider.GetRequiredService<IDesignStateStore>(),
+            logger: provider.GetRequiredService<IResolutionOrchestratorLogger>(),
             stages: null,
-            provider.GetRequiredService<IValidationResultStore>()));
+            validationResultStore: provider.GetRequiredService<IValidationResultStore>()));
 
         services.AddScoped<IDesignCommandHandler, DesignCommandHandler>();
         services.AddScoped<IPreviewCommandHandler, PreviewCommandHandler>();

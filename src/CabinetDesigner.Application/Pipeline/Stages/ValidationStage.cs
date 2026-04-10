@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.StageResults;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Validation;
