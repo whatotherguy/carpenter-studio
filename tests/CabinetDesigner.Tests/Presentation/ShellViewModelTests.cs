@@ -439,6 +439,12 @@ public sealed class ShellViewModelTests
         public void PanBy(double dx, double dy)
         {
         }
+
+        public void BeginPan() { }
+
+        public void EndPan() { }
+
+        public void ResetViewport() { }
     }
 
     private sealed class NoOpInteractionService : IEditorInteractionService

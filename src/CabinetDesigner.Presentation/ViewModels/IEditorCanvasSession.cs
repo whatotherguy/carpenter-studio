@@ -19,4 +19,10 @@ public interface IEditorCanvasSession
     void ZoomAt(double screenX, double screenY, double scaleFactor);
 
     void PanBy(double dx, double dy);
+
+    void BeginPan();
+
+    void EndPan();
+
+    void ResetViewport();
 }

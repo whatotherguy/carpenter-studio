@@ -195,6 +195,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
 
     public RelayCommand RedoCommand { get; }
 
+    public RelayCommand ResetZoomCommand => Canvas.ResetZoomCommand;
+
     public void Dispose()
     {
         Canvas.PropertyChanged -= OnCanvasPropertyChanged;

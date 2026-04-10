@@ -26,6 +26,7 @@
         <KeyBinding Key="W" Modifiers="Ctrl" Command="{Binding CloseProjectCommand}" />
         <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
         <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
+        <KeyBinding Key="D0" Modifiers="Ctrl" Command="{Binding ResetZoomCommand}" />
     </Window.InputBindings>
 
     <DockPanel LastChildFill="True">
@@ -61,6 +62,10 @@
                           InputGestureText="Ctrl+Y" />
             </MenuItem>
             <MenuItem Header="_View">
+                <MenuItem Header="_Reset Zoom"
+                          Command="{Binding ResetZoomCommand}"
+                          InputGestureText="Ctrl+0" />
+                <Separator />
                 <MenuItem Header="Workspace Layout" IsEnabled="False" />
                 <MenuItem Header="Canvas Grid" IsEnabled="False" />
             </MenuItem>

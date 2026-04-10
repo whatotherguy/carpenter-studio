@@ -1,5 +1,6 @@
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
+using CabinetDesigner.Editor;
 using CabinetDesigner.Editor.Snap;
 using Xunit;
 
@@ -207,6 +208,62 @@ public sealed class EditorSessionTests
 
         Assert.Equal(CabinetDesigner.Editor.EditorMode.Idle, session.Mode);
         Assert.Null(session.ActiveDrag);
+    }
+
+    // -----------------------------------------------------------------
+    // Pan mode tests
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void BeginPan_FromIdle_SetsPanningViewportMode()
+    {
+        var session = new CabinetDesigner.Editor.EditorSession();
+
+        session.BeginPan();
+
+        Assert.Equal(CabinetDesigner.Editor.EditorMode.PanningViewport, session.Mode);
+    }
+
+    [Fact]
+    public void EndPan_AfterBeginPan_RestoresIdleMode()
+    {
+        var session = new CabinetDesigner.Editor.EditorSession();
+        session.BeginPan();
+
+        session.EndPan();
+
+        Assert.Equal(CabinetDesigner.Editor.EditorMode.Idle, session.Mode);
+    }
+
+    [Fact]
+    public void BeginPan_FromNonIdle_Throws()
+    {
+        var session = new CabinetDesigner.Editor.EditorSession();
+        session.BeginMoveDrag(CreateDragContext(CabinetDesigner.Editor.DragType.MoveCabinet));
+
+        Assert.Throws<InvalidOperationException>(() => session.BeginPan());
+    }
+
+    [Fact]
+    public void ResetViewport_ResetsToDefault()
+    {
+        var session = new CabinetDesigner.Editor.EditorSession();
+        session.SetViewport(new ViewportTransform(50m, 100m, 200m));
+
+        session.ResetViewport();
+
+        Assert.Equal(ViewportTransform.Default, session.Viewport);
+    }
+
+    [Fact]
+    public void PanBy_UpdatesViewportOffset()
+    {
+        var session = new CabinetDesigner.Editor.EditorSession();
+
+        session.SetViewport(session.Viewport.Panned(30m, 50m));
+
+        Assert.Equal(30m, session.Viewport.OffsetXPixels);
+        Assert.Equal(50m, session.Viewport.OffsetYPixels);
     }
 
     private static CabinetDesigner.Editor.DragContext CreateDragContext(CabinetDesigner.Editor.DragType dragType) =>
