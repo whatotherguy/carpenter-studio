@@ -175,9 +175,12 @@ public sealed class EditorSession
 
     public void SetSelection(IReadOnlyList<CabinetId> ids)
     {
+        // Copy to an immutable array so callers cannot mutate the backing list from
+        // outside the lock after this method returns.
+        var snapshot = ids.ToArray();
         lock (_sync)
         {
-            _selectedCabinetIds = ids;
+            _selectedCabinetIds = snapshot;
         }
     }
 

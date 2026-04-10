@@ -213,19 +213,24 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
 
     public void RemoveEntity(string entityId, string entityType)
     {
+        // Parse outside the lock so that invalid input throws before acquiring _sync
+        // and so Guid.Parse is not called twice for the CabinetRun case.
+        var parsed = Guid.Parse(entityId);
+
         lock (_sync)
         {
             switch (entityType)
             {
                 case "CabinetRun":
-                    _runs.Remove(new RunId(Guid.Parse(entityId)));
-                    _runSpatialInfo.Remove(new RunId(Guid.Parse(entityId)));
+                    var runId = new RunId(parsed);
+                    _runs.Remove(runId);
+                    _runSpatialInfo.Remove(runId);
                     break;
                 case "Cabinet":
-                    _cabinets.Remove(new CabinetId(Guid.Parse(entityId)));
+                    _cabinets.Remove(new CabinetId(parsed));
                     break;
                 case "Wall":
-                    _walls.Remove(new WallId(Guid.Parse(entityId)));
+                    _walls.Remove(new WallId(parsed));
                     break;
                 default:
                     throw new InvalidOperationException($"Unsupported entity type '{entityType}'.");

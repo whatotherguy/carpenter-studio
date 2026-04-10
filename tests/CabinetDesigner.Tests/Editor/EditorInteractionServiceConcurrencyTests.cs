@@ -23,8 +23,10 @@ public sealed class EditorInteractionServiceConcurrencyTests
     /// <summary>
     /// Verifies that after <see cref="EditorInteractionService.OnDragCommittedAsync"/> returns,
     /// the session is always back in Idle state — even when the commit executor itself yields
-    /// asynchronously — because the <c>finally</c> block is guaranteed to run before the
-    /// awaitable completes (ConfigureAwait(true) preserves the call-site context).
+    /// asynchronously.  The <c>finally</c> block runs before the awaitable completes as a
+    /// fundamental C# language guarantee; <c>ConfigureAwait(true)</c> separately ensures that
+    /// the continuation (including <c>finally</c>) resumes on the caller's
+    /// <see cref="System.Threading.SynchronizationContext"/> rather than a thread-pool thread.
     /// </summary>
     [Fact]
     public async Task OnDragCommittedAsync_AlwaysEndsInIdle_WhenCommitSucceeds()

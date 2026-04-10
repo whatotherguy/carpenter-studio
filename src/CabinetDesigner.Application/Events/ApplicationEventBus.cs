@@ -17,7 +17,7 @@ public sealed class ApplicationEventBus : IApplicationEventBus
     {
         ArgumentNullException.ThrowIfNull(@event);
 
-        Delegate[]? snapshot;
+        Delegate[] snapshot;
         lock (_sync)
         {
             if (!_handlers.TryGetValue(typeof(TEvent), out var handlers))
