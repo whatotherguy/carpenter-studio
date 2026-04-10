@@ -271,7 +271,7 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
-    public void OnPanStart_SetsModeToThenPanMoveUpdatesOffset()
+    public void OnPanStart_SetsPanningMode_AndPanMoveUpdatesOffset()
     {
         using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out _, out var canvasHost, out _);
         projector.Scene = new RenderSceneDto([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
