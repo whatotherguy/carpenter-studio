@@ -41,7 +41,7 @@ public sealed class PersistenceHardeningTests
         await using var fixture = new SqliteTestFixture();
         await fixture.InitializeAsync();
 
-        // Verify busy_timeout is set to a non-zero value (5 000 ms) on every open.
+        // Verify busy_timeout is set to a non-zero value (5000 ms) on every open.
         await using var connection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "PRAGMA busy_timeout;";
@@ -185,7 +185,7 @@ public sealed class PersistenceHardeningTests
     private static CommandJournalEntry BuildEntry(RevisionId revisionId) => new(
         CommandId.New(),
         revisionId,
-        0,
+        0,   // SequenceNumber=0 is a placeholder; the INSERT subquery overwrites it atomically
         "test.command",
         CommandOrigin.User,
         "Test intent",
