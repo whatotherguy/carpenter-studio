@@ -43,9 +43,11 @@ public sealed class EditorCanvas : FrameworkElement
             return;
         }
 
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var viewportWithDpi = _viewport with { PixelsPerDip = dpi.PixelsPerDip };
         foreach (var layer in _layers)
         {
-            layer.Draw(drawingContext, _scene, _viewport);
+            layer.Draw(drawingContext, _scene, viewportWithDpi);
         }
     }
 }

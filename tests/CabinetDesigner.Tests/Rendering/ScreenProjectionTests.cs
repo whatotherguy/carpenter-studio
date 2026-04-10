@@ -43,4 +43,45 @@ public sealed class ScreenProjectionTests
         Assert.Equal(0d, distance, 6);
         Assert.Equal(10d, ScreenProjection.PixelsPerInch(viewport));
     }
+
+    [Fact]
+    public void ViewportTransform_DefaultPixelsPerDip_IsOne()
+    {
+        var viewport = new ViewportTransform(10m, 0m, 0m);
+
+        Assert.Equal(1.0, viewport.PixelsPerDip);
+    }
+
+    [Theory]
+    [InlineData(1.25)]
+    [InlineData(1.5)]
+    [InlineData(2.0)]
+    public void ViewportTransform_PixelsPerDip_RoundTrips(double dpi)
+    {
+        var viewport = new ViewportTransform(10m, 0m, 0m) with { PixelsPerDip = dpi };
+
+        Assert.Equal(dpi, viewport.PixelsPerDip);
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(1.25)]
+    [InlineData(1.5)]
+    [InlineData(2.0)]
+    public void ScreenProjection_PixelsPerDip_ReturnsViewportValue(double dpi)
+    {
+        var viewport = new ViewportTransform(10m, 0m, 0m) with { PixelsPerDip = dpi };
+
+        Assert.Equal(dpi, ScreenProjection.PixelsPerDip(viewport));
+    }
+
+    [Fact]
+    public void ViewportTransform_With_PreservesPixelsPerDip()
+    {
+        var original = new ViewportTransform(10m, 0m, 0m) with { PixelsPerDip = 1.5 };
+
+        var panned = original.Panned(5m, 3m);
+
+        Assert.Equal(1.5, panned.PixelsPerDip);
+    }
 }

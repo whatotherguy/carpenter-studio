@@ -22,6 +22,8 @@ public static class ScreenProjection
         new(ToScreen(segment.Start, viewport), ToScreen(segment.End, viewport));
 
     public static double PixelsPerInch(ViewportTransform viewport) => (double)viewport.ScalePixelsPerInch;
+
+    public static double PixelsPerDip(ViewportTransform viewport) => viewport.PixelsPerDip;
 }
 
 public readonly record struct ScreenPoint(double X, double Y);
