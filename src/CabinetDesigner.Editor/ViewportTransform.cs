@@ -9,6 +9,8 @@ public sealed record ViewportTransform(
 {
     public static readonly ViewportTransform Default = new(10m, 0m, 0m);
 
+    public double PixelsPerDip { get; init; } = 1.0;
+
     public Point2D ToWorld(double screenX, double screenY) =>
         new(((decimal)screenX - OffsetXPixels) / ScalePixelsPerInch,
             ((decimal)screenY - OffsetYPixels) / ScalePixelsPerInch);

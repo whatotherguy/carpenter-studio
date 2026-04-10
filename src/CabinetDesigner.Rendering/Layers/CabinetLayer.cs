@@ -54,7 +54,6 @@ public sealed class CabinetLayer : IRenderLayer
                 7.0,
                 24.0);
             var textBrush = cabinet.State == CabinetRenderState.Ghost ? GhostLabelBrush : LabelBrush;
-            // pixelsPerDip = 1.0 assumes 96 DPI; revisit if high-DPI scaling is needed.
             var formattedText = new FormattedText(
                 displayLabel,
                 System.Globalization.CultureInfo.InvariantCulture,
@@ -62,7 +61,7 @@ public sealed class CabinetLayer : IRenderLayer
                 LabelTypeface,
                 scaledFontSize,
                 textBrush,
-                1.0);
+                viewport.PixelsPerDip);
 
             if (formattedText.Height <= rect.Height - 4d && formattedText.Width <= rect.Width - 4d)
             {
