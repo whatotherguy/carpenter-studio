@@ -37,14 +37,15 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         IStateManager stateManager,
         IDesignStateStore? stateStore = null,
         IResolutionOrchestratorLogger? logger = null,
-        IEnumerable<IResolutionStage>? stages = null)
+        IEnumerable<IResolutionStage>? stages = null,
+        IValidationResultStore? validationResultStore = null)
     {
         _deltaTracker = deltaTracker ?? throw new ArgumentNullException(nameof(deltaTracker));
         _whyEngine = whyEngine ?? throw new ArgumentNullException(nameof(whyEngine));
         _undoStack = undoStack ?? throw new ArgumentNullException(nameof(undoStack));
         _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
         _logger = logger ?? new NullResolutionOrchestratorLogger();
-        _stages = BuildStageList(stages ?? CreateDefaultStages(deltaTracker, stateStore));
+        _stages = BuildStageList(stages ?? CreateDefaultStages(deltaTracker, stateStore, validationResultStore));
     }
 
     public CommandResult Execute(IDesignCommand command)
@@ -189,7 +190,8 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
 
     private static IEnumerable<IResolutionStage> CreateDefaultStages(
         IDeltaTracker deltaTracker,
-        IDesignStateStore? stateStore)
+        IDesignStateStore? stateStore,
+        IValidationResultStore? validationResultStore = null)
     {
         if (stateStore is null)
         {
@@ -205,7 +207,7 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         yield return new ManufacturingPlanningStage();
         yield return new InstallPlanningStage();
         yield return new CostingStage();
-        yield return new ValidationStage();
+        yield return new ValidationStage(resultStore: validationResultStore);
         yield return new PackagingStage();
     }
 

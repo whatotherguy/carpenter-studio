@@ -30,13 +30,16 @@ public static class ApplicationServiceRegistration
         services.AddSingleton<IResolutionOrchestratorLogger, ResolutionOrchestratorLogger>();
         services.AddSingleton<IManufacturingProjector, ManufacturingProjector>();
         services.AddSingleton<IInstallProjector, InstallProjector>();
+        services.AddSingleton<IValidationResultStore, InMemoryValidationResultStore>();
         services.AddSingleton<IResolutionOrchestrator>(provider => new ResolutionOrchestrator(
             provider.GetRequiredService<IDeltaTracker>(),
             provider.GetRequiredService<IWhyEngine>(),
             provider.GetRequiredService<IUndoStack>(),
             provider.GetRequiredService<IStateManager>(),
-            provider.GetRequiredService<IDesignStateStore>(),
-            provider.GetRequiredService<IResolutionOrchestratorLogger>()));
+            stateStore: provider.GetRequiredService<IDesignStateStore>(),
+            logger: provider.GetRequiredService<IResolutionOrchestratorLogger>(),
+            stages: null,
+            validationResultStore: provider.GetRequiredService<IValidationResultStore>()));
 
         services.AddScoped<IDesignCommandHandler, DesignCommandHandler>();
         services.AddScoped<IPreviewCommandHandler, PreviewCommandHandler>();
@@ -48,6 +51,7 @@ public static class ApplicationServiceRegistration
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<ISnapshotService, SnapshotService>();
         services.AddSingleton<ICatalogService, CatalogService>();
+        services.AddSingleton<IValidationSummaryService, ValidationSummaryService>();
 
         return services;
     }
