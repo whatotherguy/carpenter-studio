@@ -14,7 +14,7 @@ public static class PersistenceServiceRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         services.AddSingleton<IDbConnectionFactory>(_ => new SqliteConnectionFactory(filePath));
-        services.AddSingleton<SqliteSessionAccessor>();
+        services.AddScoped<SqliteSessionAccessor>();
         services.AddSingleton<ISchemaMigration, V1_InitialSchema>();
         services.AddSingleton<ISchemaMigration, V2_RepairSchemaDrift>();
         services.AddSingleton<MigrationRunner>();

@@ -1,0 +1,227 @@
+using CabinetDesigner.Persistence.Repositories;
+using CabinetDesigner.Persistence.Tests.Fixtures;
+using CabinetDesigner.Persistence.UnitOfWork;
+using Microsoft.Data.Sqlite;
+using Xunit;
+
+namespace CabinetDesigner.Persistence.Tests.Integration;
+
+/// <summary>
+/// Regression tests for the persistence hardening pass:
+///   1. Connection pooling enabled.
+///   2. busy_timeout applied on every connection open.
+///   3. Journal sequence numbers are unique and ordered under sequential calls.
+///   4. Concurrent sequence-number allocation produces no duplicates.
+///   5. SqliteSessionAccessor (volatile backing field + Scoped DI lifetime) is
+///      isolated between independent instances that represent separate DI scopes.
+/// </summary>
+public sealed class PersistenceHardeningTests
+{
+    // -------------------------------------------------------------------------
+    // 1. Connection pooling + busy_timeout
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task OpenConnectionAsync_ReturnsWorkingConnection_WithPoolingEnabled()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        // Open two connections and verify the configured connection string enables pooling.
+        await using var c1 = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
+        await using var c2 = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
+
+        var csb1 = new SqliteConnectionStringBuilder(c1.ConnectionString);
+        var csb2 = new SqliteConnectionStringBuilder(c2.ConnectionString);
+
+        Assert.True(csb1.Pooling, "Expected first connection to have pooling enabled.");
+        Assert.True(csb2.Pooling, "Expected second connection to have pooling enabled.");
+    }
+
+    [Fact]
+    public async Task OpenConnectionAsync_AppliesBusyTimeout_OnEveryOpen()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        const int expectedBusyTimeoutMs = 5000;
+
+        static async Task<int> GetBusyTimeoutAsync(SqliteConnection connection)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA busy_timeout;";
+            return Convert.ToInt32(
+                await cmd.ExecuteScalarAsync(),
+                System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        // First open — must have the correct timeout.
+        await using (var firstConnection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync())
+        {
+            Assert.Equal(expectedBusyTimeoutMs, await GetBusyTimeoutAsync(firstConnection));
+        }
+
+        // Second open (may be a pooled borrow) — timeout must still be applied.
+        await using (var secondConnection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync())
+        {
+            Assert.Equal(expectedBusyTimeoutMs, await GetBusyTimeoutAsync(secondConnection));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 2. Atomic sequence number allocation (no duplicates, consecutive values)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task AppendAsync_SequentialCalls_ProducesConsecutiveSequenceNumbers()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        var state = TestData.CreatePersistedState();
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var journalRepository = new CommandJournalRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+
+        await projectRepository.SaveAsync(state.Project);
+        await revisionRepository.SaveAsync(state.Revision);
+
+        const int count = 10;
+        for (var i = 0; i < count; i++)
+        {
+            await journalRepository.AppendAsync(BuildEntry(state.Revision.Id));
+        }
+
+        var entries = await journalRepository.LoadForRevisionAsync(state.Revision.Id);
+
+        Assert.Equal(count, entries.Count);
+        var seqNumbers = entries.Select(e => e.SequenceNumber).OrderBy(n => n).ToList();
+        for (var i = 0; i < count; i++)
+        {
+            Assert.Equal(i + 1, seqNumbers[i]);
+        }
+    }
+
+    [Fact]
+    public async Task AppendAsync_ConcurrentCalls_ProducesUniqueSequenceNumbers()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        var state = TestData.CreatePersistedState();
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+
+        await projectRepository.SaveAsync(state.Project);
+        await revisionRepository.SaveAsync(state.Revision);
+
+        // Fire concurrent appends. SQLite's single-writer model serializes the
+        // writes, and the scalar-subquery INSERT allocates each sequence number
+        // atomically inside a single SQL statement, preventing duplicates.
+        const int concurrency = 8;
+        var tasks = Enumerable.Range(0, concurrency)
+            .Select(_ =>
+            {
+                // Each task gets its own accessor+repository to avoid session sharing.
+                var accessor = new SqliteSessionAccessor();
+                var repo = new CommandJournalRepository(fixture.ConnectionFactory, accessor);
+                return repo.AppendAsync(BuildEntry(state.Revision.Id));
+            })
+            .ToArray();
+
+        await Task.WhenAll(tasks);
+
+        var verifyAccessor = new SqliteSessionAccessor();
+        var verifyRepo = new CommandJournalRepository(fixture.ConnectionFactory, verifyAccessor);
+        var entries = await verifyRepo.LoadForRevisionAsync(state.Revision.Id);
+
+        Assert.Equal(concurrency, entries.Count);
+        var seqNumbers = entries.Select(e => e.SequenceNumber).OrderBy(n => n).ToList();
+        for (var i = 0; i < concurrency; i++)
+        {
+            Assert.Equal(i + 1, seqNumbers[i]);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 3. SqliteSessionAccessor — isolation between independent instances
+    //    (modelling the Scoped DI lifetime: each DI scope owns its own accessor)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task SessionAccessor_TwoSeparateInstances_DoNotShareState()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        var accessor1 = new SqliteSessionAccessor();
+        var accessor2 = new SqliteSessionAccessor();
+
+        // Both start null.
+        Assert.Null(accessor1.GetForTest());
+        Assert.Null(accessor2.GetForTest());
+
+        // Open a real connection and transaction to create a genuine non-null session.
+        await using var conn = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
+        await using var tx = (SqliteTransaction)await conn.BeginTransactionAsync();
+        var session = new SqliteSession(conn, tx);
+
+        // Setting a session on accessor1 must not bleed into accessor2.
+        accessor1.SetForTest(session);
+        Assert.Same(session, accessor1.GetForTest());
+        Assert.Null(accessor2.GetForTest());
+
+        // Clearing accessor1 must not affect accessor2 (still null).
+        accessor1.SetForTest(null);
+        Assert.Null(accessor1.GetForTest());
+        Assert.Null(accessor2.GetForTest());
+    }
+
+    [Fact]
+    public async Task SessionAccessor_NullByDefault_AfterUnitOfWorkDisposed()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        // Before any UoW, Current should be null.
+        Assert.Null(fixture.SessionAccessor.GetForTest());
+
+        await using var uow = new SqliteUnitOfWork(fixture.ConnectionFactory, fixture.SessionAccessor);
+        await uow.BeginAsync();
+        Assert.NotNull(fixture.SessionAccessor.GetForTest());
+
+        await uow.CommitAsync();
+        Assert.Null(fixture.SessionAccessor.GetForTest());
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static CommandJournalEntry BuildEntry(RevisionId revisionId) => new(
+        CommandId.New(),
+        revisionId,
+        0,   // SequenceNumber=0 is a placeholder; the INSERT subquery overwrites it atomically
+        "test.command",
+        CommandOrigin.User,
+        "Test intent",
+        [],
+        null,
+        DateTimeOffset.UtcNow,
+        "{}",
+        [],
+        true);
+}
+
+/// <summary>
+/// Test-only extension that exposes <see cref="SqliteSessionAccessor"/> internals
+/// without widening the production API surface.
+/// </summary>
+internal static class SqliteSessionAccessorTestExtensions
+{
+    internal static void SetForTest(this SqliteSessionAccessor accessor, SqliteSession? session) =>
+        accessor.Current = session;
+
+    internal static SqliteSession? GetForTest(this SqliteSessionAccessor accessor) =>
+        accessor.Current;
+}

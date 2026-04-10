@@ -14,15 +14,13 @@ internal sealed class CommandJournalRepository : SqliteRepositoryBase, ICommandJ
     public Task AppendAsync(CommandJournalEntry entry, CancellationToken ct = default) =>
         WithConnectionAsync(async (connection, transaction) =>
         {
-            var sequenceNumber = await NextSequenceNumberAsync(connection, transaction, entry.RevisionId, ct).ConfigureAwait(false);
-            var row = CommandJournalMapper.ToRow(entry with { SequenceNumber = sequenceNumber });
+            var row = CommandJournalMapper.ToRow(entry);
             using var command = CreateCommand(connection, transaction, """
                 INSERT INTO command_journal(id, revision_id, sequence_number, command_type, origin, intent_description, affected_entity_ids, parent_command_id, timestamp, command_json, deltas_json, succeeded)
-                VALUES(@id, @revisionId, @sequenceNumber, @commandType, @origin, @intentDescription, @affectedEntityIds, @parentCommandId, @timestamp, @commandJson, @deltasJson, @succeeded);
+                VALUES(@id, @revisionId, (SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM command_journal WHERE revision_id = @revisionId), @commandType, @origin, @intentDescription, @affectedEntityIds, @parentCommandId, @timestamp, @commandJson, @deltasJson, @succeeded);
                 """);
             command.Parameters.AddWithValue("@id", row.Id);
             command.Parameters.AddWithValue("@revisionId", row.RevisionId);
-            command.Parameters.AddWithValue("@sequenceNumber", row.SequenceNumber);
             command.Parameters.AddWithValue("@commandType", row.CommandType);
             command.Parameters.AddWithValue("@origin", row.Origin);
             command.Parameters.AddWithValue("@intentDescription", row.IntentDescription);
@@ -69,10 +67,4 @@ internal sealed class CommandJournalRepository : SqliteRepositoryBase, ICommandJ
             return entries;
         }, ct);
 
-    private static async Task<int> NextSequenceNumberAsync(Microsoft.Data.Sqlite.SqliteConnection connection, Microsoft.Data.Sqlite.SqliteTransaction? transaction, RevisionId revisionId, CancellationToken ct)
-    {
-        using var command = CreateCommand(connection, transaction, "SELECT COALESCE(MAX(sequence_number), 0) + 1 FROM command_journal WHERE revision_id = @revisionId;");
-        command.Parameters.AddWithValue("@revisionId", revisionId.Value.ToString());
-        return Convert.ToInt32(await command.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
-    }
 }

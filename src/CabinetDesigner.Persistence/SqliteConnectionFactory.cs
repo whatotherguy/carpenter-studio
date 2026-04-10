@@ -15,7 +15,7 @@ public sealed class SqliteConnectionFactory : IDbConnectionFactory
             DataSource = filePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Cache = SqliteCacheMode.Default,
-            Pooling = false
+            Pooling = true
         }.ToString();
     }
 
