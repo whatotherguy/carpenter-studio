@@ -272,6 +272,11 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     public void OnPanStart(double screenX, double screenY)
     {
+        if (Scene is null)
+        {
+            return;
+        }
+
         _editorSession.BeginPan();
         _lastPanX = screenX;
         _lastPanY = screenY;
@@ -308,7 +313,15 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     private void ExecuteResetZoom()
     {
         _editorSession.ResetViewport();
-        RefreshScene();
+        if (Scene is null)
+        {
+            RefreshInteractionState();
+        }
+        else
+        {
+            RefreshScene();
+        }
+
         StatusMessage = "Zoom reset.";
     }
 

@@ -245,6 +245,14 @@ public sealed class EditorSessionTests
     }
 
     [Fact]
+    public void EndPan_WithoutBeginPan_Throws()
+    {
+        var session = new CabinetDesigner.Editor.EditorSession();
+
+        Assert.Throws<InvalidOperationException>(() => session.EndPan());
+    }
+
+    [Fact]
     public void ResetViewport_ResetsToDefault()
     {
         var session = new CabinetDesigner.Editor.EditorSession();

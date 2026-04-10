@@ -286,6 +286,31 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
+    public void OnPanStart_WhenSceneIsNull_DoesNotEnterPanningMode()
+    {
+        // Scene is null when no project is open. BeginPan must not be called to avoid
+        // corrupting the session mode (e.g. PanningViewport with no active content).
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
+
+        viewModel.OnPanStart(0d, 0d);
+
+        Assert.Equal(EditorMode.Idle.ToString(), viewModel.CurrentMode);
+    }
+
+    [Fact]
+    public void ResetZoomCommand_WhenSceneIsNull_DoesNotRepopulateScene()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out var canvasHost, out _);
+        // Deliberately leave Scene null (no project open).
+
+        viewModel.ResetZoomCommand.Execute(null);
+
+        Assert.Null(viewModel.Scene);
+        Assert.Equal(ViewportTransform.Default, canvasHost.Viewport);
+        Assert.Equal("Zoom reset.", viewModel.StatusMessage);
+    }
+
+    [Fact]
     public void OnPanEnd_RestoresIdleMode()
     {
         using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out _, out _, out _);

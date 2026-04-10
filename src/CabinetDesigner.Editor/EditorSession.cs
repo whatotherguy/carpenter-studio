@@ -186,6 +186,7 @@ public sealed class EditorSession
     {
         lock (_sync)
         {
+            AssertMode(EditorMode.PanningViewport);
             _mode = EditorMode.Idle;
         }
     }
