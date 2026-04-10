@@ -38,23 +38,77 @@ public sealed class EditorSession
     private DrawRunDragContext? _activeRunDraw;
     private SnapCandidate? _previousSnapWinner;
 
-    public EditorMode Mode { get { lock (_sync) return _mode; } }
+    public EditorMode Mode
+    {
+        get
+        {
+            lock (_sync) return _mode;
+        }
+    }
 
-    public IReadOnlyList<CabinetId> SelectedCabinetIds { get { lock (_sync) return _selectedCabinetIds; } }
+    public IReadOnlyList<CabinetId> SelectedCabinetIds
+    {
+        get
+        {
+            lock (_sync) return _selectedCabinetIds;
+        }
+    }
 
-    public RunId? ActiveRunId { get { lock (_sync) return _activeRunId; } }
+    public RunId? ActiveRunId
+    {
+        get
+        {
+            lock (_sync) return _activeRunId;
+        }
+    }
 
-    public CabinetId? HoveredCabinetId { get { lock (_sync) return _hoveredCabinetId; } }
+    public CabinetId? HoveredCabinetId
+    {
+        get
+        {
+            lock (_sync) return _hoveredCabinetId;
+        }
+    }
 
-    public ViewportTransform Viewport { get { lock (_sync) return _viewport; } }
+    public ViewportTransform Viewport
+    {
+        get
+        {
+            lock (_sync) return _viewport;
+        }
+    }
 
-    public SnapSettings SnapSettings { get { lock (_sync) return _snapSettings; } }
+    public SnapSettings SnapSettings
+    {
+        get
+        {
+            lock (_sync) return _snapSettings;
+        }
+    }
 
-    public DragContext? ActiveDrag { get { lock (_sync) return _activeDrag; } }
+    public DragContext? ActiveDrag
+    {
+        get
+        {
+            lock (_sync) return _activeDrag;
+        }
+    }
 
-    public DrawRunDragContext? ActiveRunDraw { get { lock (_sync) return _activeRunDraw; } }
+    public DrawRunDragContext? ActiveRunDraw
+    {
+        get
+        {
+            lock (_sync) return _activeRunDraw;
+        }
+    }
 
-    public SnapCandidate? PreviousSnapWinner { get { lock (_sync) return _previousSnapWinner; } }
+    public SnapCandidate? PreviousSnapWinner
+    {
+        get
+        {
+            lock (_sync) return _previousSnapWinner;
+        }
+    }
 
     public void BeginMoveDrag(DragContext context)
     {
@@ -119,19 +173,61 @@ public sealed class EditorSession
 
     public void AbortDrag() => EndDrag();
 
-    public void SetSelection(IReadOnlyList<CabinetId> ids) { lock (_sync) _selectedCabinetIds = ids; }
+    public void SetSelection(IReadOnlyList<CabinetId> ids)
+    {
+        lock (_sync)
+        {
+            _selectedCabinetIds = ids;
+        }
+    }
 
-    public void SetSelection(IReadOnlyList<Guid> ids) { lock (_sync) _selectedCabinetIds = ids.Select(id => new CabinetId(id)).ToArray(); }
+    public void SetSelection(IReadOnlyList<Guid> ids)
+    {
+        lock (_sync)
+        {
+            _selectedCabinetIds = ids.Select(id => new CabinetId(id)).ToArray();
+        }
+    }
 
-    public void SetActiveRun(RunId? runId) { lock (_sync) _activeRunId = runId; }
+    public void SetActiveRun(RunId? runId)
+    {
+        lock (_sync)
+        {
+            _activeRunId = runId;
+        }
+    }
 
-    public void SetHover(CabinetId? cabinetId) { lock (_sync) _hoveredCabinetId = cabinetId; }
+    public void SetHover(CabinetId? cabinetId)
+    {
+        lock (_sync)
+        {
+            _hoveredCabinetId = cabinetId;
+        }
+    }
 
-    public void ApplySnapSettings(SnapSettings snapSettings) { lock (_sync) _snapSettings = snapSettings; }
+    public void ApplySnapSettings(SnapSettings snapSettings)
+    {
+        lock (_sync)
+        {
+            _snapSettings = snapSettings;
+        }
+    }
 
-    public void RecordSnapWinner(SnapCandidate? winner) { lock (_sync) _previousSnapWinner = winner; }
+    public void RecordSnapWinner(SnapCandidate? winner)
+    {
+        lock (_sync)
+        {
+            _previousSnapWinner = winner;
+        }
+    }
 
-    public void SetViewport(ViewportTransform viewport) { lock (_sync) _viewport = viewport; }
+    public void SetViewport(ViewportTransform viewport)
+    {
+        lock (_sync)
+        {
+            _viewport = viewport;
+        }
+    }
 
     public void UpdateViewport(ViewportTransform viewport) => SetViewport(viewport);
 

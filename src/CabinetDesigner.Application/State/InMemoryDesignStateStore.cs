@@ -23,11 +23,29 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
     private readonly Dictionary<CabinetId, CabinetStateRecord> _cabinets = [];
     private readonly Dictionary<RunId, RunSpatialInfo> _runSpatialInfo = [];
 
-    public CabinetRun? GetRun(RunId id) { lock (_sync) return _runs.TryGetValue(id, out var run) ? run : null; }
+    public CabinetRun? GetRun(RunId id)
+    {
+        lock (_sync)
+        {
+            return _runs.TryGetValue(id, out var run) ? run : null;
+        }
+    }
 
-    public Wall? GetWall(WallId id) { lock (_sync) return _walls.TryGetValue(id, out var wall) ? wall : null; }
+    public Wall? GetWall(WallId id)
+    {
+        lock (_sync)
+        {
+            return _walls.TryGetValue(id, out var wall) ? wall : null;
+        }
+    }
 
-    public CabinetStateRecord? GetCabinet(CabinetId id) { lock (_sync) return _cabinets.TryGetValue(id, out var cabinet) ? cabinet : null; }
+    public CabinetStateRecord? GetCabinet(CabinetId id)
+    {
+        lock (_sync)
+        {
+            return _cabinets.TryGetValue(id, out var cabinet) ? cabinet : null;
+        }
+    }
 
     public RunSlot? FindCabinetSlot(RunId runId, CabinetId cabinetId)
     {
@@ -39,11 +57,29 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         }
     }
 
-    public IReadOnlyList<CabinetRun> GetAllRuns() { lock (_sync) return _runs.Values.OrderBy(run => run.Id.Value).ToArray(); }
+    public IReadOnlyList<CabinetRun> GetAllRuns()
+    {
+        lock (_sync)
+        {
+            return _runs.Values.OrderBy(run => run.Id.Value).ToArray();
+        }
+    }
 
-    public IReadOnlyList<Wall> GetAllWalls() { lock (_sync) return _walls.Values.OrderBy(wall => wall.Id.Value).ToArray(); }
+    public IReadOnlyList<Wall> GetAllWalls()
+    {
+        lock (_sync)
+        {
+            return _walls.Values.OrderBy(wall => wall.Id.Value).ToArray();
+        }
+    }
 
-    public IReadOnlyList<CabinetStateRecord> GetAllCabinets() { lock (_sync) return _cabinets.Values.OrderBy(cabinet => cabinet.CabinetId.Value).ToArray(); }
+    public IReadOnlyList<CabinetStateRecord> GetAllCabinets()
+    {
+        lock (_sync)
+        {
+            return _cabinets.Values.OrderBy(cabinet => cabinet.CabinetId.Value).ToArray();
+        }
+    }
 
     public RunSpatialInfo? GetRunSpatialInfo(RunId runId)
     {
