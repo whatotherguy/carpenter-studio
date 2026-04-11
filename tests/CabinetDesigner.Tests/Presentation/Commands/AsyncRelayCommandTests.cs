@@ -53,7 +53,6 @@ public sealed class AsyncRelayCommandTests
 
         Assert.False(handlerCalled);
     }
-
     [Fact]
     public async Task ExecuteAsync_WhenNoExceptionHandler_ResetsIsExecutingToFalse()
     {
