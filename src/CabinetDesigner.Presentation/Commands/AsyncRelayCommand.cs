@@ -8,13 +8,15 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 {
     private readonly Func<Task> _executeAsync;
     private readonly Func<bool>? _canExecute;
+    private readonly Action<Exception>? _onException;
     private readonly SynchronizationContext? _synchronizationContext;
     private bool _isExecuting;
 
-    public AsyncRelayCommand(Func<Task> executeAsync, Func<bool>? canExecute = null)
+    public AsyncRelayCommand(Func<Task> executeAsync, Func<bool>? canExecute = null, Action<Exception>? onException = null)
     {
         _executeAsync = executeAsync ?? throw new ArgumentNullException(nameof(executeAsync));
         _canExecute = canExecute;
+        _onException = onException;
         _synchronizationContext = SynchronizationContext.Current;
     }
 
@@ -45,6 +47,20 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
         try
         {
             await _executeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            PostToUiThread(() =>
+            {
+                try
+                {
+                    _onException?.Invoke(ex);
+                }
+                catch
+                {
+                    // Prevent a faulty exception handler from crashing the dispatcher.
+                }
+            });
         }
         finally
         {

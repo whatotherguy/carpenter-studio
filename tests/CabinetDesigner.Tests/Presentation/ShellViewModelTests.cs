@@ -108,14 +108,12 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
-    public void PendingProjectFilePath_TogglesOpenCommandAvailability()
+    public void OpenProjectCommand_IsAlwaysAvailable()
     {
         using var shell = CreateShellViewModel(out _, out _, out _, out _, out _);
 
-        Assert.False(shell.OpenProjectCommand.CanExecute(null));
-
-        shell.PendingProjectFilePath = "C:\\project.cab";
-
+        // The Open command launches a file dialog internally and is always enabled
+        // so the user can browse even before a file path is pre-populated.
         Assert.True(shell.OpenProjectCommand.CanExecute(null));
     }
 
@@ -222,6 +220,22 @@ public sealed class ShellViewModelTests
         Assert.Equal("Project closed.", shell.StatusBar.StatusMessage);
     }
 
+    [Fact]
+    public async Task SaveCommand_WhenProjectServiceThrows_RoutesExceptionToStatusBar()
+    {
+        using var shell = CreateShellViewModel(out var projectService, out _, out _, out var eventBus, out _);
+        var project = new ProjectSummaryDto(Guid.NewGuid(), "Shop A", "C:\\shop.cab", DateTimeOffset.UtcNow, "Rev 1", false);
+        projectService.SeedCurrentProject(project);
+        eventBus.Publish(new ProjectOpenedEvent(project));
+
+        projectService.ThrowOnSave = true;
+
+        await shell.SaveCommand.ExecuteAsync();
+
+        Assert.StartsWith("Error:", shell.StatusBar.StatusMessage);
+        Assert.False(shell.SaveCommand.IsExecuting);
+    }
+
     private static ShellViewModel CreateShellViewModel(
         out RecordingProjectService projectService,
         out RecordingUndoRedoService undoRedoService,
@@ -290,6 +304,8 @@ public sealed class ShellViewModelTests
 
         public bool SaveCalled { get; private set; }
 
+        public bool ThrowOnSave { get; set; }
+
         public Task<ProjectSummaryDto> OpenProjectAsync(string filePath, CancellationToken ct = default) =>
             Task.FromResult(CurrentProject = new ProjectSummaryDto(Guid.NewGuid(), "Opened", filePath, DateTimeOffset.UtcNow, "Rev 1", false));
 
@@ -298,6 +314,11 @@ public sealed class ShellViewModelTests
 
         public Task SaveAsync(CancellationToken ct = default)
         {
+            if (ThrowOnSave)
+            {
+                throw new InvalidOperationException("Save failed.");
+            }
+
             SaveCalled = true;
             if (CurrentProject is not null)
             {
