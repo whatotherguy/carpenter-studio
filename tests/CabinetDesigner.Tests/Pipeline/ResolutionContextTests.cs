@@ -262,7 +262,11 @@ public sealed class ResolutionContextTests
     public void AccessingResult_AfterSet_ReturnValue_NotSkippedExceptionEvenIfMarkedSkipped()
     {
         // If a result is explicitly set, it takes precedence over the skipped marker.
-        var context = CreateContext();
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand([]),
+            Mode = ResolutionMode.Full
+        };
         context.MarkStageSkipped(6, "Part Generation");
         var partResult = new PartGenerationResult { Parts = [] };
         context.PartResult = partResult;
