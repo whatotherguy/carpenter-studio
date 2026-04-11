@@ -1,3 +1,4 @@
+using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Editor;
 
@@ -48,6 +49,36 @@ public sealed class EditorCanvasSessionAdapter : IEditorCanvasSession
     public void BeginPan() => _session.BeginPan();
 
     public void EndPan() => _session.EndPan();
+
+    public void FitViewport(Rect2D contentBounds, double canvasWidth, double canvasHeight)
+    {
+        if (canvasWidth <= 0 || canvasHeight <= 0)
+        {
+            return;
+        }
+
+        var contentWidthInches = (double)(contentBounds.Max.X - contentBounds.Min.X);
+        var contentHeightInches = (double)(contentBounds.Max.Y - contentBounds.Min.Y);
+
+        if (contentWidthInches <= 0 || contentHeightInches <= 0)
+        {
+            return;
+        }
+
+        // Leave a 10 % margin on each side (i.e. use 80 % of the canvas for the content).
+        const double marginFactor = 0.8;
+        var scaleX = canvasWidth * marginFactor / contentWidthInches;
+        var scaleY = canvasHeight * marginFactor / contentHeightInches;
+        var scale = Math.Clamp(Math.Min(scaleX, scaleY), 2.0, 200.0);
+
+        // Centre the content in the canvas.
+        var contentCentreWorldX = (double)((contentBounds.Min.X + contentBounds.Max.X) / 2);
+        var contentCentreWorldY = (double)((contentBounds.Min.Y + contentBounds.Max.Y) / 2);
+        var offsetX = (canvasWidth / 2) - (contentCentreWorldX * scale);
+        var offsetY = (canvasHeight / 2) - (contentCentreWorldY * scale);
+
+        _session.SetViewport(new ViewportTransform((decimal)scale, (decimal)offsetX, (decimal)offsetY));
+    }
 
     public void ResetViewport() => _session.ResetViewport();
 }

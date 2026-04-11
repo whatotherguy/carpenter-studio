@@ -341,6 +341,135 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
+    public void FitToViewCommand_WhenSceneHasCabinets_UpdatesViewportToFrameContent()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.FitToViewCommand.Execute(null);
+
+        // Viewport must have changed from default so content is framed.
+        Assert.NotEqual(ViewportTransform.Default, canvasHost.Viewport);
+        Assert.Equal("Fit to view.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void FitToViewCommand_WhenSceneIsNull_DoesNothing()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out var canvasHost, out _);
+        // Scene is null — no project open.
+
+        viewModel.FitToViewCommand.Execute(null);
+
+        Assert.Null(viewModel.Scene);
+        Assert.Equal(ViewportTransform.Default, canvasHost.Viewport);
+    }
+
+    [Fact]
+    public void FitToViewCommand_WhenSceneIsEmpty_SetsEmptyStatusMessage()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
+        projector.Scene = new RenderSceneDto([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.FitToViewCommand.Execute(null);
+
+        // No content bounds — viewport should remain at default and a status message is set.
+        Assert.Equal(ViewportTransform.Default, canvasHost.Viewport);
+        Assert.Equal("Nothing to fit — canvas is empty.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void SelectAllCommand_SelectsAllCabinetsInScene()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out _);
+        var cabinetIdA = Guid.NewGuid();
+        var cabinetIdB = Guid.NewGuid();
+        projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.SelectAllCommand.Execute(null);
+
+        Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
+        Assert.Contains(cabinetIdA, viewModel.SelectedCabinetIds);
+        Assert.Contains(cabinetIdB, viewModel.SelectedCabinetIds);
+        Assert.Equal("2 cabinets selected.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void SelectAllCommand_WithSingleCabinet_ReportsCorrectStatusMessage()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out _);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.SelectAllCommand.Execute(null);
+
+        Assert.Single(viewModel.SelectedCabinetIds);
+        Assert.Equal("1 cabinet selected.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void SelectAllCommand_WhenSceneIsNull_CannotExecute()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
+        // Scene is null — no project open.
+
+        Assert.False(viewModel.SelectAllCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SelectAllCommand_WhenSceneIsLoaded_CanExecute()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out _);
+        projector.Scene = MakeSingleCabinetScene(Guid.NewGuid());
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        Assert.True(viewModel.SelectAllCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SelectNoneCommand_ClearsExistingSelection()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out _);
+        var cabinetIdA = Guid.NewGuid();
+        var cabinetIdB = Guid.NewGuid();
+        projector.Scene = MakeTwoCabinetScene(cabinetIdA, cabinetIdB);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+        viewModel.SelectAllCommand.Execute(null);
+        Assert.Equal(2, viewModel.SelectedCabinetIds.Count);
+
+        viewModel.SelectNoneCommand.Execute(null);
+
+        Assert.Empty(viewModel.SelectedCabinetIds);
+        Assert.Equal("Selection cleared.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void SelectNoneCommand_WhenNothingSelected_SetsStatusMessage()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out _);
+        projector.Scene = MakeSingleCabinetScene(Guid.NewGuid());
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.SelectNoneCommand.Execute(null);
+
+        Assert.Empty(viewModel.SelectedCabinetIds);
+        Assert.Equal("Selection cleared.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void SelectNoneCommand_WhenSceneIsNull_CannotExecute()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
+
+        Assert.False(viewModel.SelectNoneCommand.CanExecute(null));
+    }
+
+    [Fact]
     public void BeginDrag_WhenServiceThrowsInvalidOperationException_LogsWarning()
     {
         var logger = new CapturingAppLogger();
@@ -605,6 +734,10 @@ public sealed class EditorCanvasViewModelTests
 
         public bool IsCtrlHeld { get; set; }
 
+        public double CanvasWidth { get; set; } = 800.0;
+
+        public double CanvasHeight { get; set; } = 600.0;
+
         public RenderSceneDto? Scene { get; private set; }
 
         public ViewportTransform Viewport { get; private set; } = ViewportTransform.Default;
@@ -674,6 +807,29 @@ public sealed class EditorCanvasViewModelTests
         public void EndPan() => CurrentMode = EditorMode.Idle;
 
         public void ResetViewport() => Viewport = ViewportTransform.Default;
+
+        public void FitViewport(CabinetDesigner.Domain.Geometry.Rect2D contentBounds, double canvasWidth, double canvasHeight)
+        {
+            if (canvasWidth <= 0 || canvasHeight <= 0)
+            {
+                return;
+            }
+
+            var contentWidthInches = (double)(contentBounds.Max.X - contentBounds.Min.X);
+            var contentHeightInches = (double)(contentBounds.Max.Y - contentBounds.Min.Y);
+            if (contentWidthInches <= 0 || contentHeightInches <= 0)
+            {
+                return;
+            }
+
+            const double marginFactor = 0.8;
+            var scaleX = canvasWidth * marginFactor / contentWidthInches;
+            var scaleY = canvasHeight * marginFactor / contentHeightInches;
+            var scale = Math.Clamp(Math.Min(scaleX, scaleY), 2.0, 200.0);
+            var centreWorldX = (double)((contentBounds.Min.X + contentBounds.Max.X) / 2);
+            var centreWorldY = (double)((contentBounds.Min.Y + contentBounds.Max.Y) / 2);
+            Viewport = new ViewportTransform((decimal)scale, (decimal)((canvasWidth / 2) - (centreWorldX * scale)), (decimal)((canvasHeight / 2) - (centreWorldY * scale)));
+        }
     }
 
     private sealed class RecordingInteractionService : IEditorInteractionService
@@ -922,6 +1078,8 @@ public sealed class EditorCanvasViewModelForwardingTests
         public void EndPan() => CurrentMode = EditorMode.Idle;
 
         public void ResetViewport() { }
+
+        public void FitViewport(CabinetDesigner.Domain.Geometry.Rect2D contentBounds, double canvasWidth, double canvasHeight) { }
     }
 
     private sealed class RecordingInteractionService : IEditorInteractionService
@@ -969,6 +1127,10 @@ public sealed class EditorCanvasViewModelForwardingTests
         public object View => _view;
 
         public bool IsCtrlHeld { get; set; }
+
+        public double CanvasWidth { get; set; } = 800.0;
+
+        public double CanvasHeight { get; set; } = 600.0;
 
         public RenderSceneDto? Scene { get; private set; }
 

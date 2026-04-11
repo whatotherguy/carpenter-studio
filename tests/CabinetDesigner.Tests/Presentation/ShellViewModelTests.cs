@@ -384,6 +384,10 @@ public sealed class ShellViewModelTests
 
         public bool IsCtrlHeld => false;
 
+        public double CanvasWidth => 800.0;
+
+        public double CanvasHeight => 600.0;
+
         public void UpdateScene(RenderSceneDto scene)
         {
         }
@@ -445,6 +449,8 @@ public sealed class ShellViewModelTests
         public void EndPan() { }
 
         public void ResetViewport() { }
+
+        public void FitViewport(CabinetDesigner.Domain.Geometry.Rect2D contentBounds, double canvasWidth, double canvasHeight) { }
     }
 
     private sealed class NoOpInteractionService : IEditorInteractionService

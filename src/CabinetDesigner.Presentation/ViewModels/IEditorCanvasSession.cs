@@ -1,3 +1,4 @@
+using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Editor;
 
 namespace CabinetDesigner.Presentation.ViewModels;
@@ -25,4 +26,6 @@ public interface IEditorCanvasSession
     void EndPan();
 
     void ResetViewport();
+
+    void FitViewport(Rect2D contentBounds, double canvasWidth, double canvasHeight);
 }

@@ -34,6 +34,10 @@ public sealed class EditorCanvasHost : IEditorCanvasHost
         Keyboard.IsKeyDown(Key.LeftCtrl) ||
         Keyboard.IsKeyDown(Key.RightCtrl);
 
+    public double CanvasWidth => _canvas.ActualWidth;
+
+    public double CanvasHeight => _canvas.ActualHeight;
+
     public void UpdateScene(RenderSceneDto scene) => _canvas.UpdateScene(scene);
 
     public void UpdateViewport(ViewportTransform viewport) => _canvas.UpdateViewport(viewport);
