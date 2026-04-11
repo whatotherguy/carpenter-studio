@@ -84,7 +84,6 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         _canvas.MouseMove -= OnCanvasMouseMove;
         _canvas.MouseUp -= OnCanvasMouseUp;
         _canvas.MouseWheel -= OnCanvasMouseWheel;
-        GC.SuppressFinalize(this);
     }
 
     private void OnCanvasMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)

@@ -108,14 +108,12 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
-    public void PendingProjectFilePath_TogglesOpenCommandAvailability()
+    public void OpenProjectCommand_IsAlwaysAvailable()
     {
         using var shell = CreateShellViewModel(out _, out _, out _, out _, out _);
 
-        Assert.False(shell.OpenProjectCommand.CanExecute(null));
-
-        shell.PendingProjectFilePath = "C:\\project.cab";
-
+        // The Open command launches a file dialog internally and is always enabled
+        // so the user can browse even before a file path is pre-populated.
         Assert.True(shell.OpenProjectCommand.CanExecute(null));
     }
 

@@ -44,7 +44,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         IssuePanel.SetSelectionCallback(SelectEntities);
 
         NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, () => !string.IsNullOrWhiteSpace(PendingProjectName), HandleCommandException);
-        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, () => !string.IsNullOrWhiteSpace(PendingProjectFilePath), HandleCommandException);
+        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, () => true, HandleCommandException);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => HasActiveProject, HandleCommandException);
         CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync, () => HasActiveProject, HandleCommandException);
         UndoCommand = new RelayCommand(() => _ = _undoRedoService.Undo(), () => _undoRedoService.CanUndo);
