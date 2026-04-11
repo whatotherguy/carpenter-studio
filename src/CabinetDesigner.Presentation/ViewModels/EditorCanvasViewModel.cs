@@ -367,9 +367,16 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         try
         {
             var result = await _interactionService.OnDragCommittedAsync().ConfigureAwait(true);
-            StatusMessage = result.Success
-                ? "Drag committed."
-                : !string.IsNullOrEmpty(result.FailureReason) ? result.FailureReason : "Placement rejected — check validation issues.";
+            if (result.Success)
+            {
+                StatusMessage = "Drag committed.";
+            }
+            else
+            {
+                StatusMessage = !string.IsNullOrEmpty(result.FailureReason)
+                    ? result.FailureReason
+                    : "Placement rejected — check validation issues.";
+            }
         }
         catch (OperationCanceledException)
         {
