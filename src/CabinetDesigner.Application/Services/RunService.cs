@@ -46,11 +46,18 @@ public sealed class RunService : IRunService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        if (!Enum.TryParse<RunPlacement>(request.Placement, ignoreCase: true, out var placement))
+        {
+            throw new ArgumentException(
+                $"'{request.Placement}' is not a valid RunPlacement value. Expected one of: {string.Join(", ", Enum.GetNames<RunPlacement>())}.",
+                nameof(request));
+        }
+
         var command = new AddCabinetToRunCommand(
             new RunId(request.RunId),
             request.CabinetTypeId,
             Length.FromInches(request.NominalWidthInches),
-            Enum.Parse<RunPlacement>(request.Placement, ignoreCase: true),
+            placement,
             CommandOrigin.User,
             $"Add {request.NominalWidthInches}\" {request.CabinetTypeId} to run",
             _clock.Now);
@@ -80,11 +87,18 @@ public sealed class RunService : IRunService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        if (!Enum.TryParse<RunPlacement>(request.TargetPlacement, ignoreCase: true, out var targetPlacement))
+        {
+            throw new ArgumentException(
+                $"'{request.TargetPlacement}' is not a valid RunPlacement value. Expected one of: {string.Join(", ", Enum.GetNames<RunPlacement>())}.",
+                nameof(request));
+        }
+
         var command = new MoveCabinetCommand(
             new CabinetId(request.CabinetId),
             new RunId(request.SourceRunId),
             new RunId(request.TargetRunId),
-            Enum.Parse<RunPlacement>(request.TargetPlacement, ignoreCase: true),
+            targetPlacement,
             CommandOrigin.User,
             $"Move cabinet {request.CabinetId} to run {request.TargetRunId}",
             _clock.Now,

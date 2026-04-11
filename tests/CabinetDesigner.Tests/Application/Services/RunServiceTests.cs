@@ -153,6 +153,28 @@ public sealed class RunServiceTests
         Assert.Throws<KeyNotFoundException>(() => service.GetRunSummary(RunId.New()));
     }
 
+    [Fact]
+    public async Task AddCabinetAsync_WithInvalidPlacementString_ThrowsArgumentException()
+    {
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.AddCabinetAsync(new AddCabinetRequestDto(Guid.NewGuid(), "base-36", 36m, "NotAPlacement")));
+
+        Assert.Contains("NotAPlacement", ex.Message);
+    }
+
+    [Fact]
+    public async Task MoveCabinetAsync_WithInvalidTargetPlacementString_ThrowsArgumentException()
+    {
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.MoveCabinetAsync(new MoveCabinetRequestDto(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "BadValue", null)));
+
+        Assert.Contains("BadValue", ex.Message);
+    }
+
     private sealed class RecordingDesignCommandHandler : IDesignCommandHandler
     {
         public int ExecuteCalls { get; private set; }
