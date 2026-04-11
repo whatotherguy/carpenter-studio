@@ -15,6 +15,8 @@ public sealed record AddCabinetToRunCommand : DesignCommandBase
 
     public Length NominalWidth { get; }
 
+    public Length NominalDepth { get; }
+
     public RunPlacement Placement { get; }
 
     public int? InsertAtIndex { get; }
@@ -27,7 +29,8 @@ public sealed record AddCabinetToRunCommand : DesignCommandBase
         CommandOrigin origin,
         string intentDescription,
         DateTimeOffset timestamp,
-        int? insertAtIndex = null)
+        int? insertAtIndex = null,
+        Length? nominalDepth = null)
         : base(CommandMetadata.Create(
             timestamp,
             origin,
@@ -37,6 +40,7 @@ public sealed record AddCabinetToRunCommand : DesignCommandBase
         RunId = runId;
         CabinetTypeId = cabinetTypeId;
         NominalWidth = nominalWidth;
+        NominalDepth = nominalDepth ?? Length.FromInches(24m);
         Placement = placement;
         InsertAtIndex = insertAtIndex;
     }
@@ -51,6 +55,14 @@ public sealed record AddCabinetToRunCommand : DesignCommandBase
                 ValidationSeverity.Error,
                 "INVALID_WIDTH",
                 "Cabinet width must be greater than zero."));
+        }
+
+        if (NominalDepth <= Length.Zero)
+        {
+            issues.Add(new ValidationIssue(
+                ValidationSeverity.Error,
+                "INVALID_DEPTH",
+                "Cabinet depth must be greater than zero."));
         }
 
         if (string.IsNullOrWhiteSpace(CabinetTypeId))

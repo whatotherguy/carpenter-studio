@@ -4,6 +4,7 @@ using CabinetDesigner.Application.Pipeline.Stages;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
+using CabinetDesigner.Domain.Commands.Modification;
 using CabinetDesigner.Domain.Commands.Structural;
 using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.Geometry;
@@ -215,6 +216,108 @@ public sealed class EditorSliceStageTests
         var movedCabinet = store.GetCabinet(cabinetId);
         Assert.NotNull(movedCabinet);
         Assert.Equal(Length.FromInches(30m), movedCabinet.NominalDepth);
+    }
+
+    [Fact]
+    public void Interaction_AddCabinet_UsesDepthFromCommand()
+    {
+        // Guards against the DefaultCabinetDepth = 24" hardcoding: the depth must come
+        // from AddCabinetToRunCommand.NominalDepth, not from a static fallback.
+        var store = CreateStoreWithRun(out var run, out _);
+        var deltaTracker = new InMemoryDeltaTracker();
+        var command = new AddCabinetToRunCommand(
+            run.Id,
+            "base-36",
+            Length.FromInches(36m),
+            DomainRunPlacement.EndOfRun,
+            CommandOrigin.User,
+            "add",
+            DateTimeOffset.UnixEpoch,
+            nominalDepth: Length.FromInches(30m));
+        var context = CreateContext(command);
+        Assert.True(new InputCaptureStage(store).Execute(context).Success);
+        deltaTracker.Begin();
+
+        Assert.True(new InteractionInterpretationStage(deltaTracker, store).Execute(context).Success);
+
+        var allCabinets = store.GetAllCabinets();
+        Assert.Single(allCabinets);
+        Assert.Equal(Length.FromInches(30m), allCabinets[0].NominalDepth);
+    }
+
+    [Fact]
+    public void InputCapture_ResizeCabinet_ResolvesCabinetIntoContext()
+    {
+        var store = CreateStoreWithRun(out var run, out _);
+        var cabinetId = CabinetId.New();
+        var slot = run.AppendCabinet(cabinetId, Length.FromInches(24m));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(24m), run.Id, slot.Id));
+
+        var command = new ResizeCabinetCommand(
+            cabinetId,
+            Length.FromInches(24m),
+            Length.FromInches(30m),
+            CommandOrigin.User,
+            "resize",
+            DateTimeOffset.UnixEpoch);
+        var context = CreateContext(command);
+
+        var result = new InputCaptureStage(store).Execute(context);
+
+        Assert.True(result.Success);
+        Assert.True(context.InputCapture.ResolvedEntities.ContainsKey("cabinet"));
+        var resolved = Assert.IsType<ResolvedCabinetEntity>(context.InputCapture.ResolvedEntities["cabinet"]);
+        Assert.Equal(cabinetId, resolved.Cabinet.CabinetId);
+    }
+
+    [Fact]
+    public void Interaction_ResizeCabinet_UpdatesWidthAndPreservesDepth()
+    {
+        var store = CreateStoreWithRun(out var run, out _);
+        var cabinetId = CabinetId.New();
+        var slot = run.AppendCabinet(cabinetId, Length.FromInches(24m));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(30m), run.Id, slot.Id));
+
+        var command = new ResizeCabinetCommand(
+            cabinetId,
+            Length.FromInches(24m),
+            Length.FromInches(36m),
+            CommandOrigin.User,
+            "resize",
+            DateTimeOffset.UnixEpoch);
+        var context = CreateContext(command);
+        Assert.True(new InputCaptureStage(store).Execute(context).Success);
+        var deltaTracker = new InMemoryDeltaTracker();
+        deltaTracker.Begin();
+
+        var result = new InteractionInterpretationStage(deltaTracker, store).Execute(context);
+
+        Assert.True(result.Success);
+        var updatedCabinet = store.GetCabinet(cabinetId);
+        Assert.NotNull(updatedCabinet);
+        Assert.Equal(Length.FromInches(36m), updatedCabinet!.NominalWidth);
+        Assert.Equal(Length.FromInches(30m), updatedCabinet.NominalDepth);
+        Assert.Single(run.Slots);
+        Assert.Equal(Length.FromInches(36m), run.Slots[0].OccupiedWidth);
+    }
+
+    [Fact]
+    public void InputCapture_ResizeCabinet_WhenCabinetNotFound_ReturnsFailed()
+    {
+        var store = CreateStoreWithRun(out _, out _);
+        var command = new ResizeCabinetCommand(
+            CabinetId.New(),
+            Length.FromInches(24m),
+            Length.FromInches(30m),
+            CommandOrigin.User,
+            "resize",
+            DateTimeOffset.UnixEpoch);
+        var context = CreateContext(command);
+
+        var result = new InputCaptureStage(store).Execute(context);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Issues, issue => issue.Code == "CABINET_NOT_FOUND");
     }
 
     private static InMemoryDesignStateStore CreateStoreWithRun(out CabinetRun run, out Wall wall)

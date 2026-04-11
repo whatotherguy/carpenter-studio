@@ -3,6 +3,7 @@ using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
+using CabinetDesigner.Domain.Commands.Modification;
 using CabinetDesigner.Domain.Commands.Structural;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
@@ -13,7 +14,6 @@ namespace CabinetDesigner.Application.Pipeline.Stages;
 
 public sealed class InteractionInterpretationStage : IResolutionStage
 {
-    private static readonly Length DefaultCabinetDepth = Length.FromInches(24m);
     private readonly IDeltaTracker _deltaTracker;
     private readonly IDesignStateStore _stateStore;
 
@@ -43,6 +43,7 @@ public sealed class InteractionInterpretationStage : IResolutionStage
                 CreateRunCommand createRun => ExecuteCreateRun(createRun, context),
                 AddCabinetToRunCommand addCabinet => ExecuteAddCabinet(addCabinet, context),
                 MoveCabinetCommand moveCabinet => ExecuteMoveCabinet(moveCabinet, context),
+                ResizeCabinetCommand resizeCabinet => ExecuteResizeCabinet(resizeCabinet, context),
                 _ => [new DomainOperation.None()]
             };
 
@@ -92,7 +93,7 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             cabinetId,
             command.CabinetTypeId,
             command.NominalWidth,
-            DefaultCabinetDepth,
+            command.NominalDepth,
             run.Id,
             slot.Id);
         _stateStore.AddCabinet(cabinet);
@@ -156,6 +157,36 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             _stateStore.CaptureCabinetValues(updatedCabinet)));
 
         return [new DomainOperation.MoveSlot(sourceRun.Id, targetRun.Id, insertedSlot.Id, insertedSlot.SlotIndex)];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteResizeCabinet(ResizeCabinetCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var run = _stateStore.GetRun(cabinet.RunId)
+            ?? throw new InvalidOperationException($"Run {cabinet.RunId} for cabinet {cabinet.CabinetId} was not found.");
+
+        var existingSlot = run.Slots.FirstOrDefault(slot => slot.CabinetId == command.CabinetId)
+            ?? throw new InvalidOperationException($"Cabinet {command.CabinetId} has no slot in run {cabinet.RunId}.");
+
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+
+        // Remove the old slot and re-insert at the same index with the new width.
+        var slotIndex = existingSlot.SlotIndex;
+        run.RemoveSlot(existingSlot.Id);
+        var newSlot = run.InsertCabinetAt(slotIndex, command.CabinetId, command.NewNominalWidth);
+
+        // Preserve depth: only update NominalWidth.
+        var updatedCabinet = cabinet with { NominalWidth = command.NewNominalWidth };
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.ResizeCabinet(command.CabinetId, command.NewNominalWidth)];
     }
 
     private static int ResolveTargetIndex(MoveCabinetCommand command, CabinetRun targetRun, bool isSameRunMove, int sourceIndex)
