@@ -287,6 +287,9 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
 
     private static async Task DeleteExistingRowsAsync(SqliteConnection connection, SqliteTransaction? transaction, RevisionId revisionId, CancellationToken ct)
     {
+        // Table names are compile-time string constants drawn from this hardcoded array.
+        // String interpolation here is intentionally safe: there is no user input involved
+        // and no SQL-injection vector exists.
         foreach (var table in new[] { "parts", "cabinets", "runs", "walls", "rooms" })
         {
             using var command = CreateCommand(connection, transaction, $"DELETE FROM {table} WHERE revision_id = @revisionId;");
