@@ -55,12 +55,12 @@
                         Command="{Binding SelectAllCommand}"
                         Content="Select All"
                         Margin="0"
-                        ToolTip="Select all cabinets (Ctrl+A)" />
+                        ToolTip="Select all cabinets" />
                 <Button Style="{StaticResource ShellToolbarButtonStyle}"
                         Command="{Binding SelectNoneCommand}"
                         Content="Select None"
                         Margin="0"
-                        ToolTip="Clear selection (Ctrl+D)" />
+                        ToolTip="Clear selection" />
             </StackPanel>
 
             <StackPanel Grid.Column="2"

@@ -382,6 +382,22 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
+    public void FitToViewCommand_WhenCanvasNotReady_SetsNotReadyStatusMessage()
+    {
+        using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out var canvasHost, out _);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+        canvasHost.CanvasWidth = 0;
+        canvasHost.CanvasHeight = 0;
+
+        viewModel.FitToViewCommand.Execute(null);
+
+        Assert.Equal(ViewportTransform.Default, canvasHost.Viewport);
+        Assert.Equal("Unable to fit to view — canvas is not ready.", viewModel.StatusMessage);
+    }
+
+    [Fact]
     public void SelectAllCommand_SelectsAllCabinetsInScene()
     {
         using var viewModel = CreateViewModel(new RecordingRunService(), out var projector, out var eventBus, out _, out _);

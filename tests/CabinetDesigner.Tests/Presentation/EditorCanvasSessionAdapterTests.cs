@@ -248,4 +248,36 @@ public sealed class EditorCanvasSessionAdapterTests
 
         Assert.Equal(viewport, adapter.Viewport);
     }
+
+    [Fact]
+    public void FitViewport_WithZeroWidthContent_FitsUsingHeightAxis()
+    {
+        // A vertical wall segment collapses to zero width — the fit should still work by
+        // treating width as near-zero rather than aborting.
+        var adapter = CreateAdapter();
+        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
+            new CabinetDesigner.Domain.Geometry.Point2D(5m, 0m),
+            new CabinetDesigner.Domain.Geometry.Point2D(5m, 20m)); // zero-width line
+
+        adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
+
+        // Scale must not remain at default; the viewport should have changed.
+        Assert.NotEqual(ViewportTransform.Default, adapter.Viewport);
+        // And still be within bounds.
+        Assert.InRange((double)adapter.Viewport.ScalePixelsPerInch, 2.0, 200.0);
+    }
+
+    [Fact]
+    public void ZoomAt_UsesSharedMinMax_MatchesFitViewportClampBounds()
+    {
+        // Regression guard: ZoomAt and FitViewport must both respect the same [2, 200] range.
+        var adapter = CreateAdapter();
+
+        for (var i = 0; i < 50; i++) adapter.ZoomAt(0, 0, 0.1); // force to minimum
+        Assert.Equal(2.0, (double)adapter.Viewport.ScalePixelsPerInch, precision: 5);
+
+        adapter.ResetViewport();
+        for (var i = 0; i < 50; i++) adapter.ZoomAt(0, 0, 10.0); // force to maximum
+        Assert.Equal(200.0, (double)adapter.Viewport.ScalePixelsPerInch, precision: 5);
+    }
 }

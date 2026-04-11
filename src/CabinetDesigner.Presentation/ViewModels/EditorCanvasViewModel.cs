@@ -359,7 +359,15 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _editorSession.FitViewport(bounds.Value, _canvasHost.CanvasWidth, _canvasHost.CanvasHeight);
+        var canvasWidth = _canvasHost.CanvasWidth;
+        var canvasHeight = _canvasHost.CanvasHeight;
+        if (canvasWidth <= 0 || canvasHeight <= 0)
+        {
+            StatusMessage = "Unable to fit to view — canvas is not ready.";
+            return;
+        }
+
+        _editorSession.FitViewport(bounds.Value, canvasWidth, canvasHeight);
         RefreshScene();
         StatusMessage = "Fit to view.";
     }

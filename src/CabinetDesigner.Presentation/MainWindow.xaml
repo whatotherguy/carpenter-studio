@@ -28,8 +28,6 @@
         <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
         <KeyBinding Key="D0" Modifiers="Ctrl" Command="{Binding ResetZoomCommand}" />
         <KeyBinding Key="F" Modifiers="Ctrl+Shift" Command="{Binding FitToViewCommand}" />
-        <KeyBinding Key="A" Modifiers="Ctrl" Command="{Binding SelectAllCommand}" />
-        <KeyBinding Key="D" Modifiers="Ctrl" Command="{Binding SelectNoneCommand}" />
     </Window.InputBindings>
 
     <DockPanel LastChildFill="True">
@@ -65,11 +63,9 @@
                           InputGestureText="Ctrl+Y" />
                 <Separator />
                 <MenuItem Header="Select _All"
-                          Command="{Binding SelectAllCommand}"
-                          InputGestureText="Ctrl+A" />
+                          Command="{Binding SelectAllCommand}" />
                 <MenuItem Header="Select _None"
-                          Command="{Binding SelectNoneCommand}"
-                          InputGestureText="Ctrl+D" />
+                          Command="{Binding SelectNoneCommand}" />
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Header="_Fit to View"
