@@ -78,7 +78,6 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         {
             return;
         }
-
         _disposed = true;
         _canvas.MouseDown -= OnCanvasMouseDown;
         _canvas.MouseMove -= OnCanvasMouseMove;
@@ -92,7 +91,6 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         {
             return;
         }
-
         if (e.ChangedButton == MouseButton.Left)
         {
             var pos = e.GetPosition(_canvas);
@@ -115,7 +113,6 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         {
             return;
         }
-
         var pos = e.GetPosition(_canvas);
         _mouseMoveHandler?.Invoke(pos.X, pos.Y);
 
@@ -131,7 +128,6 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         {
             return;
         }
-
         if (e.ChangedButton == MouseButton.Left)
         {
             var pos = e.GetPosition(_canvas);
@@ -156,7 +152,6 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         {
             return;
         }
-
         if (_mouseWheelHandler is null)
         {
             return;

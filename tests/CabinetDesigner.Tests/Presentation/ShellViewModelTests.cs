@@ -5,6 +5,7 @@ using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Application.Services;
 using CabinetDesigner.Presentation;
+using CabinetDesigner.Presentation.Commands;
 using CabinetDesigner.Presentation.Projection;
 using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Geometry;
@@ -180,6 +181,27 @@ public sealed class ShellViewModelTests
         Assert.Equal(2, shell.RunSummary.Slots.Count);
         Assert.False(shell.RunSummary.Slots[0].IsSelected);
         Assert.True(shell.RunSummary.Slots[1].IsSelected);
+    }
+
+    [Fact]
+    public async Task AsyncRelayCommand_WhenDelegateThrows_RoutesExceptionToStatusBar()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out _, out _);
+
+        var exceptionRouted = false;
+        shell.StatusBar.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(StatusBarViewModel.StatusMessage))
+                exceptionRouted = true;
+        };
+
+        var thrower = new AsyncRelayCommand(
+            () => throw new InvalidOperationException("test error"),
+            onException: ex => shell.StatusBar.SetStatusMessage($"Error: {ex.Message}"));
+        await thrower.ExecuteAsync();
+
+        Assert.True(exceptionRouted);
+        Assert.StartsWith("Error:", shell.StatusBar.StatusMessage);
     }
 
     [Fact]

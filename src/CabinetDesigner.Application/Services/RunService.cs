@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
@@ -6,6 +7,7 @@ using CabinetDesigner.Domain.Commands.Modification;
 using CabinetDesigner.Domain.Commands.Structural;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
+using CabinetDesigner.Domain.RunContext;
 
 namespace CabinetDesigner.Application.Services;
 
@@ -13,11 +15,13 @@ public sealed class RunService : IRunService
 {
     private readonly IDesignCommandHandler _handler;
     private readonly IClock _clock;
+    private readonly IDesignStateStore _stateStore;
 
-    public RunService(IDesignCommandHandler handler, IClock clock)
+    public RunService(IDesignCommandHandler handler, IClock clock, IDesignStateStore stateStore)
     {
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
     }
 
     public Task<CommandResultDto> CreateRunAsync(CreateRunRequestDto request)
@@ -107,6 +111,31 @@ public sealed class RunService : IRunService
     public Task<CommandResultDto> SetCabinetOverrideAsync(SetCabinetOverrideRequestDto request) =>
         throw new NotImplementedException("NOT IMPLEMENTED YET: SetCabinetOverrideCommand has not been introduced in the domain layer.");
 
-    public RunSummaryDto GetRunSummary(RunId runId) =>
-        throw new NotImplementedException("NOT IMPLEMENTED YET: run summary requires a read-side projection from application state.");
+    public RunSummaryDto GetRunSummary(RunId runId)
+    {
+        var run = _stateStore.GetRun(runId)
+            ?? throw new KeyNotFoundException($"Run {runId.Value} was not found in the design state store.");
+
+        var slots = run.Slots
+            .Where(slot => slot.SlotType == RunSlotType.Cabinet && slot.CabinetId is not null)
+            .Select(slot =>
+            {
+                var cabinet = _stateStore.GetCabinet(slot.CabinetId!.Value);
+                return new RunSlotSummaryDto(
+                    slot.CabinetId.Value.Value,
+                    cabinet?.CabinetTypeId ?? "Unknown cabinet",
+                    slot.OccupiedWidth.Inches,
+                    slot.SlotIndex);
+            })
+            .ToArray();
+
+        return new RunSummaryDto(
+            run.Id.Value,
+            run.WallId.Value.ToString(),
+            slots.Sum(s => s.NominalWidthInches),
+            slots.Length,
+            run.Slots.Any(slot => slot.SlotType == RunSlotType.Filler),
+            run.OccupiedLength > run.Capacity,
+            slots);
+    }
 }

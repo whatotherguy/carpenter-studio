@@ -21,6 +21,15 @@ namespace CabinetDesigner.Editor;
 /// (e.g. check <see cref="ActiveDrag"/>, then call <see cref="UpdateDragCursor"/>) must
 /// remain on the UI thread so that the WPF dispatcher serialises those two operations.
 /// </para>
+/// <para>
+/// <strong>Selection state bypass:</strong> <see cref="SelectedCabinetIds"/> and
+/// <see cref="HoveredCabinetId"/> are mutated directly on the editor session rather
+/// than routed through the <c>ResolutionOrchestrator</c>. This is intentional:
+/// selection is interaction state, not design state. Selection changes do not produce
+/// undo entries, do not persist, and do not trigger the resolution pipeline. Any
+/// refactoring that routes selection through the orchestrator must preserve this
+/// invariant to avoid spurious undo stack pollution.
+/// </para>
 /// </remarks>
 public sealed class EditorSession
 {

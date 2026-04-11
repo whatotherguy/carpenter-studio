@@ -1,9 +1,17 @@
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.Pipeline.StageResults;
 
 namespace CabinetDesigner.Application.Pipeline.Stages;
 
 public sealed class EngineeringResolutionStage : IResolutionStage
 {
+    private readonly IAppLogger? _logger;
+
+    public EngineeringResolutionStage(IAppLogger? logger = null)
+    {
+        _logger = logger;
+    }
+
     public int StageNumber => 4;
 
     public string StageName => "Engineering Resolution";
@@ -19,6 +27,15 @@ public sealed class EngineeringResolutionStage : IResolutionStage
             FillerRequirements = [],
             EndConditionUpdates = []
         };
+
+        _logger?.Log(new LogEntry
+        {
+            Level = LogLevel.Debug,
+            Category = "EngineeringResolutionStage",
+            Message = $"Stage {StageNumber} ({StageName}) not yet implemented; returning skeleton result.",
+            Timestamp = DateTimeOffset.UtcNow,
+            StageNumber = StageNumber.ToString()
+        });
 
         return StageResult.NotImplementedYet(StageNumber);
     }

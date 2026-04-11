@@ -34,7 +34,6 @@ public sealed class CabinetFaceSnapCandidateSource : ISnapCandidateSource
             var distance = request.Drag.CandidateRefPoint.DistanceTo(point);
             if (distance > request.Settings.SnapRadius)
             {
-                sourceIndex++;
                 return;
             }
 

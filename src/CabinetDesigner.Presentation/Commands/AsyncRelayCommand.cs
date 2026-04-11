@@ -58,7 +58,7 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
                 }
                 catch
                 {
-                    // Prevent a faulty exception handler from crashing the dispatcher.
+                    // A failing exception handler must not crash the command.
                 }
             });
         }
