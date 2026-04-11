@@ -56,6 +56,9 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         _logger = logger;
 
         ResetZoomCommand = new RelayCommand(ExecuteResetZoom);
+        FitToViewCommand = new RelayCommand(ExecuteFitToView);
+        SelectAllCommand = new RelayCommand(ExecuteSelectAll, () => Scene is not null);
+        SelectNoneCommand = new RelayCommand(ExecuteSelectNone, () => Scene is not null);
 
         _eventBus.Subscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Subscribe<UndoAppliedEvent>(OnUndoApplied);
@@ -74,7 +77,14 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     public RenderSceneDto? Scene
     {
         get => _scene;
-        private set => SetProperty(ref _scene, value);
+        private set
+        {
+            if (SetProperty(ref _scene, value))
+            {
+                SelectAllCommand.NotifyCanExecuteChanged();
+                SelectNoneCommand.NotifyCanExecuteChanged();
+            }
+        }
     }
 
     public IReadOnlyList<Guid> SelectedCabinetIds
@@ -100,6 +110,12 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     public bool IsBusy => _busyCount > 0;
 
     public RelayCommand ResetZoomCommand { get; }
+
+    public RelayCommand FitToViewCommand { get; }
+
+    public RelayCommand SelectAllCommand { get; }
+
+    public RelayCommand SelectNoneCommand { get; }
 
     public void SetStatusMessage(string statusMessage) => StatusMessage = statusMessage;
 
@@ -327,6 +343,63 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
 
         StatusMessage = "Zoom reset.";
+    }
+
+    private void ExecuteFitToView()
+    {
+        if (Scene is null)
+        {
+            return;
+        }
+
+        var bounds = RenderSceneBoundsCalculator.Calculate(Scene);
+        if (bounds is null)
+        {
+            StatusMessage = "Nothing to fit — canvas is empty.";
+            return;
+        }
+
+        var canvasWidth = _canvasHost.CanvasWidth;
+        var canvasHeight = _canvasHost.CanvasHeight;
+        if (canvasWidth <= 0 || canvasHeight <= 0)
+        {
+            StatusMessage = "Unable to fit to view — canvas is not ready.";
+            return;
+        }
+
+        _editorSession.FitViewport(bounds.Value, canvasWidth, canvasHeight);
+        RefreshScene();
+        StatusMessage = "Fit to view.";
+    }
+
+    private void ExecuteSelectAll()
+    {
+        if (Scene is null)
+        {
+            return;
+        }
+
+        var allIds = Scene.Cabinets.Select(c => c.CabinetId).ToArray();
+        _editorSession.SetSelectedCabinetIds(allIds);
+        RefreshScene();
+        StatusMessage = allIds.Length switch
+        {
+            0 => "Nothing to select.",
+            1 => "1 cabinet selected.",
+            _ => $"{allIds.Length} cabinets selected."
+        };
+    }
+
+    private void ExecuteSelectNone()
+    {
+        if (Scene is null)
+        {
+            return;
+        }
+
+        _editorSession.SetSelectedCabinetIds([]);
+        RefreshScene();
+        StatusMessage = "Selection cleared.";
     }
 
     private void BeginDrag(Guid cabinetId, HitTestTarget target, double screenX, double screenY)

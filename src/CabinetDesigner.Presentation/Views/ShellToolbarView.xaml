@@ -46,6 +46,21 @@
                         Content="Reset Zoom"
                         Margin="0"
                         ToolTip="Reset the canvas zoom to 100% (Ctrl+0)" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding FitToViewCommand}"
+                        Content="Fit View"
+                        Margin="0"
+                        ToolTip="Fit all content into view (Ctrl+Shift+F)" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding SelectAllCommand}"
+                        Content="Select All"
+                        Margin="0"
+                        ToolTip="Select all cabinets" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding SelectNoneCommand}"
+                        Content="Select None"
+                        Margin="0"
+                        ToolTip="Clear selection" />
             </StackPanel>
 
             <StackPanel Grid.Column="2"

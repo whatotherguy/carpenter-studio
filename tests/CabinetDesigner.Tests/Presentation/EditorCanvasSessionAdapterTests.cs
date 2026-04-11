@@ -178,4 +178,106 @@ public sealed class EditorCanvasSessionAdapterTests
 
         Assert.Equal(ViewportTransform.Default.ScalePixelsPerInch, adapter.Viewport.ScalePixelsPerInch);
     }
+
+    // -----------------------------------------------------------------
+    // FitViewport
+    // -----------------------------------------------------------------
+
+    [Fact]
+    public void FitViewport_WithKnownBounds_CentresContentInCanvas()
+    {
+        var adapter = CreateAdapter();
+        // Content: 20" × 10" block starting at (10", 5").
+        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
+            new CabinetDesigner.Domain.Geometry.Point2D(10m, 5m),
+            new CabinetDesigner.Domain.Geometry.Point2D(30m, 15m));
+
+        adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
+
+        // Content centre in world: (20", 10").
+        // After the fit, (20 * scale + offsetX) should equal canvasWidth / 2 = 400,
+        // and (10 * scale + offsetY) should equal canvasHeight / 2 = 300.
+        var scale = (double)adapter.Viewport.ScalePixelsPerInch;
+        var offsetX = (double)adapter.Viewport.OffsetXPixels;
+        var offsetY = (double)adapter.Viewport.OffsetYPixels;
+
+        Assert.Equal(400.0, 20.0 * scale + offsetX, precision: 5);
+        Assert.Equal(300.0, 10.0 * scale + offsetY, precision: 5);
+    }
+
+    [Fact]
+    public void FitViewport_WithKnownBounds_ScaleFitsWidestDimension()
+    {
+        var adapter = CreateAdapter();
+        // Wide content: 100" × 1".  Width dominates the fit.
+        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
+            CabinetDesigner.Domain.Geometry.Point2D.Origin,
+            new CabinetDesigner.Domain.Geometry.Point2D(100m, 1m));
+
+        adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
+
+        // scaleX = 800 * 0.8 / 100 = 6.4; scaleY = 600 * 0.8 / 1 = 480; min(scaleX, scaleY) = 6.4
+        Assert.Equal(6.4, (double)adapter.Viewport.ScalePixelsPerInch, precision: 5);
+    }
+
+    [Fact]
+    public void FitViewport_ScaleIsClampedToMaximum()
+    {
+        var adapter = CreateAdapter();
+        // Tiny content: 0.01" × 0.01" — would produce a huge scale without clamping.
+        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
+            CabinetDesigner.Domain.Geometry.Point2D.Origin,
+            new CabinetDesigner.Domain.Geometry.Point2D(0.01m, 0.01m));
+
+        adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
+
+        Assert.Equal(200.0, (double)adapter.Viewport.ScalePixelsPerInch, precision: 5);
+    }
+
+    [Fact]
+    public void FitViewport_WhenCanvasSizeIsZero_DoesNotChangeViewport()
+    {
+        var adapter = CreateAdapter();
+        adapter.PanBy(50.0, 30.0);
+        var viewport = adapter.Viewport;
+        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
+            CabinetDesigner.Domain.Geometry.Point2D.Origin,
+            new CabinetDesigner.Domain.Geometry.Point2D(10m, 10m));
+
+        adapter.FitViewport(bounds, canvasWidth: 0, canvasHeight: 0);
+
+        Assert.Equal(viewport, adapter.Viewport);
+    }
+
+    [Fact]
+    public void FitViewport_WithZeroWidthContent_FitsUsingHeightAxis()
+    {
+        // A vertical wall segment collapses to zero width — the fit should still work by
+        // treating width as near-zero rather than aborting.
+        var adapter = CreateAdapter();
+        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
+            new CabinetDesigner.Domain.Geometry.Point2D(5m, 0m),
+            new CabinetDesigner.Domain.Geometry.Point2D(5m, 20m)); // zero-width line
+
+        adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
+
+        // Scale must not remain at default; the viewport should have changed.
+        Assert.NotEqual(ViewportTransform.Default, adapter.Viewport);
+        // And still be within bounds.
+        Assert.InRange((double)adapter.Viewport.ScalePixelsPerInch, 2.0, 200.0);
+    }
+
+    [Fact]
+    public void ZoomAt_UsesSharedMinMax_MatchesFitViewportClampBounds()
+    {
+        // Regression guard: ZoomAt and FitViewport must both respect the same [2, 200] range.
+        var adapter = CreateAdapter();
+
+        for (var i = 0; i < 50; i++) adapter.ZoomAt(0, 0, 0.1); // force to minimum
+        Assert.Equal(2.0, (double)adapter.Viewport.ScalePixelsPerInch, precision: 5);
+
+        adapter.ResetViewport();
+        for (var i = 0; i < 50; i++) adapter.ZoomAt(0, 0, 10.0); // force to maximum
+        Assert.Equal(200.0, (double)adapter.Viewport.ScalePixelsPerInch, precision: 5);
+    }
 }

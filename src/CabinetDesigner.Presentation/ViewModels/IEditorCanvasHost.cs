@@ -10,6 +10,10 @@ public interface IEditorCanvasHost
 
     bool IsCtrlHeld { get; }
 
+    double CanvasWidth { get; }
+
+    double CanvasHeight { get; }
+
     void UpdateScene(RenderSceneDto scene);
 
     void UpdateViewport(ViewportTransform viewport);

@@ -27,6 +27,7 @@
         <KeyBinding Key="Z" Modifiers="Ctrl" Command="{Binding UndoCommand}" />
         <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
         <KeyBinding Key="D0" Modifiers="Ctrl" Command="{Binding ResetZoomCommand}" />
+        <KeyBinding Key="F" Modifiers="Ctrl+Shift" Command="{Binding FitToViewCommand}" />
     </Window.InputBindings>
 
     <DockPanel LastChildFill="True">
@@ -60,8 +61,16 @@
                 <MenuItem Header="_Redo"
                           Command="{Binding RedoCommand}"
                           InputGestureText="Ctrl+Y" />
+                <Separator />
+                <MenuItem Header="Select _All"
+                          Command="{Binding SelectAllCommand}" />
+                <MenuItem Header="Select _None"
+                          Command="{Binding SelectNoneCommand}" />
             </MenuItem>
             <MenuItem Header="_View">
+                <MenuItem Header="_Fit to View"
+                          Command="{Binding FitToViewCommand}"
+                          InputGestureText="Ctrl+Shift+F" />
                 <MenuItem Header="_Reset Zoom"
                           Command="{Binding ResetZoomCommand}"
                           InputGestureText="Ctrl+0" />
