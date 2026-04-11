@@ -18,14 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="CabinetDesigner.Application">
-      <HintPath>..\..\src\CabinetDesigner.Application\bin\Debug\net8.0\CabinetDesigner.Application.dll</HintPath>
-    </Reference>
-    <Reference Include="CabinetDesigner.Domain">
-      <HintPath>..\..\src\CabinetDesigner.Domain\bin\Debug\net8.0\CabinetDesigner.Domain.dll</HintPath>
-    </Reference>
-    <Reference Include="CabinetDesigner.Persistence">
-      <HintPath>..\..\src\CabinetDesigner.Persistence\bin\Debug\net8.0\CabinetDesigner.Persistence.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\..\src\CabinetDesigner.Application\CabinetDesigner.Application.csproj" />
+    <ProjectReference Include="..\..\src\CabinetDesigner.Domain\CabinetDesigner.Domain.csproj" />
+    <ProjectReference Include="..\..\src\CabinetDesigner.Persistence\CabinetDesigner.Persistence.csproj" />
   </ItemGroup>
 </Project>
