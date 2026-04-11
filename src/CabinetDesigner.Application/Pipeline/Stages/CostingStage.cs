@@ -26,6 +26,6 @@ public sealed class CostingStage : IResolutionStage
             CabinetBreakdowns = []
         };
 
-        return StageResult.Succeeded(StageNumber);
+        return StageResult.NotImplementedYet(StageNumber);
     }
 }

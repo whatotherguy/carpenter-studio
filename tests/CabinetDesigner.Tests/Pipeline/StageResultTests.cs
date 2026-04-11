@@ -34,4 +34,43 @@ public sealed class StageResultTests
         Assert.Same(issues, result.Issues);
         Assert.Same(explanationNodeIds, result.ExplanationNodeIds);
     }
+
+    [Fact]
+    public void NotImplementedYet_SetsPropertiesCorrectly()
+    {
+        ExplanationNodeId[] explanationNodeIds = [ExplanationNodeId.New()];
+
+        var result = StageResult.NotImplementedYet(5, explanationNodeIds);
+
+        Assert.Equal(5, result.StageNumber);
+        Assert.True(result.Success);
+        Assert.True(result.IsNotImplemented);
+        Assert.Empty(result.Issues);
+        Assert.Same(explanationNodeIds, result.ExplanationNodeIds);
+    }
+
+    [Fact]
+    public void NotImplementedYet_WithNoExplanationNodeIds_DefaultsToEmpty()
+    {
+        var result = StageResult.NotImplementedYet(6);
+
+        Assert.True(result.IsNotImplemented);
+        Assert.Empty(result.ExplanationNodeIds);
+    }
+
+    [Fact]
+    public void Succeeded_IsNotImplemented_IsFalse()
+    {
+        var result = StageResult.Succeeded(1);
+
+        Assert.False(result.IsNotImplemented);
+    }
+
+    [Fact]
+    public void Failed_IsNotImplemented_IsFalse()
+    {
+        var result = StageResult.Failed(1, [new ValidationIssue(ValidationSeverity.Error, "ERR", "Error")]);
+
+        Assert.False(result.IsNotImplemented);
+    }
 }

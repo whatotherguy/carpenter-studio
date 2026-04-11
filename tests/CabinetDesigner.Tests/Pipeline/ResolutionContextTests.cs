@@ -11,21 +11,45 @@ namespace CabinetDesigner.Tests.Pipeline;
 public sealed class ResolutionContextTests
 {
     [Fact]
-    public void AccessingUnsetStageResult_ThrowsInvalidOperationException()
+    public void AccessingUnsetStageResult_ThrowsPipelineStageNotExecutedException()
     {
         var context = CreateContext();
 
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.InputCapture);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.Interpretation);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.SpatialResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.EngineeringResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.ConstraintResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.PartResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.ManufacturingResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.InstallResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.CostingResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.ValidationResult);
+        Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.PackagingResult);
+    }
+
+    [Fact]
+    public void AccessingUnsetStageResult_IsAlsoInvalidOperationException()
+    {
+        // PipelineStageNotExecutedException extends InvalidOperationException so existing
+        // catch (InvalidOperationException) handlers continue to work.
+        var context = CreateContext();
         Assert.Throws<InvalidOperationException>(() => _ = context.InputCapture);
-        Assert.Throws<InvalidOperationException>(() => _ = context.Interpretation);
-        Assert.Throws<InvalidOperationException>(() => _ = context.SpatialResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.EngineeringResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.ConstraintResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.PartResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.ManufacturingResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.InstallResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.CostingResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.ValidationResult);
-        Assert.Throws<InvalidOperationException>(() => _ = context.PackagingResult);
+    }
+
+    [Fact]
+    public void AccessingUnsetStageResult_NeverInvoked_ExceptionHasCorrectProperties()
+    {
+        var context = CreateContext();
+
+        var ex = Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.EngineeringResult);
+
+        Assert.Equal(4, ex.StageNumber);
+        Assert.Equal("Engineering Resolution", ex.StageName);
+        Assert.False(ex.WasSkipped);
+        Assert.Null(ex.PipelineMode);
+        Assert.Contains("4", ex.Message);
+        Assert.Contains("Engineering Resolution", ex.Message);
     }
 
     [Fact]
@@ -179,6 +203,75 @@ public sealed class ResolutionContextTests
         context.AccumulatedIssues.Add(new ValidationIssue(ValidationSeverity.Warning, "WARN", "Warning"));
 
         Assert.False(context.HasBlockingIssues);
+    }
+
+    [Fact]
+    public void MarkStageSkipped_ThenAccessResult_ThrowsSkippedException()
+    {
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand([]),
+            Mode = ResolutionMode.Preview
+        };
+        context.MarkStageSkipped(4, "Engineering Resolution");
+
+        var ex = Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.EngineeringResult);
+
+        Assert.True(ex.WasSkipped);
+        Assert.Equal(4, ex.StageNumber);
+        Assert.Equal("Engineering Resolution", ex.StageName);
+        Assert.Equal(ResolutionMode.Preview, ex.PipelineMode);
+        Assert.Contains("skipped", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Preview", ex.Message);
+    }
+
+    [Fact]
+    public void MarkStageSkipped_AllStages_ThrowSkippedExceptionsForEach()
+    {
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand([]),
+            Mode = ResolutionMode.Preview
+        };
+        context.MarkStageSkipped(1, "Input Capture");
+        context.MarkStageSkipped(2, "Interaction Interpretation");
+        context.MarkStageSkipped(3, "Spatial Resolution");
+        context.MarkStageSkipped(4, "Engineering Resolution");
+        context.MarkStageSkipped(5, "Constraint Propagation");
+        context.MarkStageSkipped(6, "Part Generation");
+        context.MarkStageSkipped(7, "Manufacturing Planning");
+        context.MarkStageSkipped(8, "Install Planning");
+        context.MarkStageSkipped(9, "Costing");
+        context.MarkStageSkipped(10, "Validation");
+        context.MarkStageSkipped(11, "Packaging");
+
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.InputCapture).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.Interpretation).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.SpatialResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.EngineeringResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.ConstraintResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.PartResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.ManufacturingResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.InstallResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.CostingResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.ValidationResult).WasSkipped);
+        Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.PackagingResult).WasSkipped);
+    }
+
+    [Fact]
+    public void AccessingResult_AfterSet_ReturnValue_NotSkippedExceptionEvenIfMarkedSkipped()
+    {
+        // If a result is explicitly set, it takes precedence over the skipped marker.
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand([]),
+            Mode = ResolutionMode.Full
+        };
+        context.MarkStageSkipped(6, "Part Generation");
+        var partResult = new PartGenerationResult { Parts = [] };
+        context.PartResult = partResult;
+
+        Assert.Same(partResult, context.PartResult);
     }
 
     private static ResolutionContext CreateContext() =>

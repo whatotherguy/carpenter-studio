@@ -20,6 +20,6 @@ public sealed class EngineeringResolutionStage : IResolutionStage
             EndConditionUpdates = []
         };
 
-        return StageResult.Succeeded(StageNumber);
+        return StageResult.NotImplementedYet(StageNumber);
     }
 }

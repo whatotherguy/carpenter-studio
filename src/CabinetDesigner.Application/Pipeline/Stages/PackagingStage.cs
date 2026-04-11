@@ -22,6 +22,6 @@ public sealed class PackagingStage : IResolutionStage
             Summary = new CabinetDesigner.Application.Pipeline.StageResults.SnapshotSummary(0, 0, 0, 0, 0m)
         };
 
-        return StageResult.Succeeded(StageNumber);
+        return StageResult.NotImplementedYet(StageNumber);
     }
 }

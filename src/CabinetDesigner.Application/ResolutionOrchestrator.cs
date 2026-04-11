@@ -252,18 +252,28 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
     private static ValidationIssue CreateInternalErrorIssue() =>
         new(ValidationSeverity.Error, "INTERNAL_ERROR", "Resolution failed due to an unexpected internal error.");
 
+    private static ValidationIssue CreateNotImplementedIssue(IResolutionStage stage) =>
+        new(ValidationSeverity.Warning, "STAGE_NOT_IMPLEMENTED",
+            $"Stage {stage.StageNumber} ({stage.StageName}) is not yet implemented. Results are placeholder values.");
+
     private bool ExecuteStages(ResolutionContext context)
     {
         foreach (var stage in _stages)
         {
             if (!stage.ShouldExecute(context.Mode))
             {
+                context.MarkStageSkipped(stage.StageNumber, stage.StageName);
                 continue;
             }
 
             var result = stage.Execute(context);
             context.AccumulatedIssues.AddRange(result.Issues);
             context.ExplanationNodeIds.AddRange(result.ExplanationNodeIds);
+
+            if (result.IsNotImplemented)
+            {
+                context.AccumulatedIssues.Add(CreateNotImplementedIssue(stage));
+            }
 
             if (!result.Success || context.HasBlockingIssues)
             {
