@@ -1,11 +1,12 @@
+using System.Threading;
 using CabinetDesigner.Application;
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.Handlers;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Identifiers;
-using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -103,6 +104,26 @@ public sealed class DesignCommandHandlerTests
         await Assert.ThrowsAsync<ArgumentNullException>(() => handler.ExecuteAsync(null!));
     }
 
+    [Fact]
+    public async Task Execute_WhenPersistenceThrows_LogsErrorAndRethrows()
+    {
+        var orchestrator = new RecordingOrchestrator
+        {
+            ExecuteResult = CommandResult.Succeeded(CreateMetadata(), [], [])
+        };
+        var persistence = new ThrowingPersistencePort();
+        var logger = new CapturingLogger();
+        var handler = new DesignCommandHandler(orchestrator, new RecordingEventBus(), persistence, logger);
+        var command = new TestDesignCommand("layout.test", []);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.ExecuteAsync(command));
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.Equal("Persistence", entry.Category);
+        Assert.NotNull(entry.Exception);
+    }
+
     private static CommandMetadata CreateMetadata() =>
         CommandMetadata.Create(DateTimeOffset.UnixEpoch, CommandOrigin.User, "Test", ["entity-1"]);
 
@@ -165,6 +186,19 @@ public sealed class DesignCommandHandlerTests
             CommitCalls++;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class ThrowingPersistencePort : ICommandPersistencePort
+    {
+        public Task CommitCommandAsync(IDesignCommand command, CommandResult result, CancellationToken ct = default) =>
+            Task.FromException(new InvalidOperationException("simulated persistence failure"));
+    }
+
+    private sealed class CapturingLogger : IAppLogger
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public void Log(LogEntry entry) => Entries.Add(entry);
     }
 
     private sealed record TestDesignCommand(string Type, IReadOnlyList<ValidationIssue> StructuralIssues) : IDesignCommand

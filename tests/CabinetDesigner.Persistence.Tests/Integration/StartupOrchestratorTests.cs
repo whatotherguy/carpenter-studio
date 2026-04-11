@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Persistence.Migrations;
 using CabinetDesigner.Persistence.Tests.Fixtures;
@@ -50,11 +51,48 @@ public sealed class StartupOrchestratorTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => orchestrator.RunAsync());
     }
 
+    [Fact]
+    public async Task RunAsync_LogsFatalEntry_WhenMigrationFails()
+    {
+        await using var fixture = new SqliteTestFixture();
+        var failingRunner = new MigrationRunner(fixture.ConnectionFactory, [new ThrowingMigration()]);
+        var logger = new CapturingLogger();
+        var orchestrator = new StartupOrchestrator(failingRunner, logger);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => orchestrator.RunAsync());
+
+        Assert.Contains(logger.Entries, entry =>
+            entry.Level == LogLevel.Fatal &&
+            entry.Category == "Startup");
+    }
+
+    [Fact]
+    public async Task RunAsync_LogsInfoEntry_OnSuccessfulMigrations()
+    {
+        await using var fixture = new SqliteTestFixture();
+        var logger = new CapturingLogger();
+        var orchestrator = new StartupOrchestrator(fixture.MigrationRunner, logger);
+
+        await orchestrator.RunAsync();
+
+        Assert.Contains(logger.Entries, entry =>
+            entry.Level == LogLevel.Info &&
+            entry.Category == "Startup" &&
+            entry.Message.Contains("completed"));
+    }
+
     private sealed class ThrowingMigration : ISchemaMigration
     {
         public int Version => 999;
         public string Description => "always throws";
         public void Apply(IDbConnection connection, IDbTransaction transaction)
             => throw new InvalidOperationException("intentional failure");
+    }
+
+    private sealed class CapturingLogger : IAppLogger
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public void Log(LogEntry entry) => Entries.Add(entry);
     }
 }
