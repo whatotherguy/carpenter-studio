@@ -29,6 +29,38 @@ public sealed class AddCabinetToRunCommandTests
         Assert.Equal(Length.FromInches(36m), command.NominalWidth);
         Assert.Equal(RunPlacement.EndOfRun, command.Placement);
         Assert.Null(command.InsertAtIndex);
+        Assert.Equal(Length.FromInches(24m), command.NominalDepth);
+    }
+
+    [Fact]
+    public void Constructor_WithExplicitNominalDepth_SetsDepthProperty()
+    {
+        var command = new AddCabinetToRunCommand(
+            RunId.New(),
+            "base-36",
+            Length.FromInches(36m),
+            RunPlacement.EndOfRun,
+            CommandOrigin.User,
+            "Add cabinet",
+            DateTimeOffset.UnixEpoch,
+            nominalDepth: Length.FromInches(30m));
+
+        Assert.Equal(Length.FromInches(30m), command.NominalDepth);
+    }
+
+    [Fact]
+    public void Constructor_WithNullNominalDepth_DefaultsTo24Inches()
+    {
+        var command = new AddCabinetToRunCommand(
+            RunId.New(),
+            "base-36",
+            Length.FromInches(36m),
+            RunPlacement.EndOfRun,
+            CommandOrigin.User,
+            "Add cabinet",
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(Length.FromInches(24m), command.NominalDepth);
     }
 
     [Fact]

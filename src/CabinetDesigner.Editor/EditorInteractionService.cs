@@ -198,7 +198,8 @@ public sealed class EditorInteractionService : IEditorInteractionService
             CommandOrigin.User,
             CreateIntentDescription("Place cabinet", winner),
             _clock.Now,
-            insertIndex);
+            insertIndex,
+            drag.NominalDepth);
     }
 
     private IDesignCommand? BuildMoveCommand(DragContext drag, SnapCandidate? winner)

@@ -3,6 +3,7 @@ using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
+using CabinetDesigner.Domain.Commands.Modification;
 using CabinetDesigner.Domain.Commands.Structural;
 using CabinetDesigner.Domain.Identifiers;
 
@@ -82,6 +83,15 @@ public sealed class InputCaptureStage : IResolutionStage
                 }
 
                 resolvedEntities["wall"] = new ResolvedWallEntity(wall);
+                break;
+
+            case ResizeCabinetCommand resizeCabinet:
+                if (_stateStore.GetCabinet(resizeCabinet.CabinetId) is not { } cabinetToResize)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {resizeCabinet.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToResize);
                 break;
         }
 

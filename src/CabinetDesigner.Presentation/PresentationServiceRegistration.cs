@@ -15,7 +15,7 @@ public static class PresentationServiceRegistration
 
         services.AddScoped<EditorSession>();
         services.AddScoped<EditorCanvas>();
-        services.AddScoped<IEditorCanvasHost, EditorCanvasHost>();
+        services.AddScoped<IEditorCanvasHost, WpfEditorCanvasHost>();
         services.AddScoped<IEditorCanvasSession, EditorCanvasSessionAdapter>();
         services.AddScoped<IHitTester, DefaultHitTester>();
         services.AddScoped<ISceneProjector, SceneProjector>();

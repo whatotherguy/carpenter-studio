@@ -75,6 +75,55 @@ public sealed class EditorInteractionServiceTests
     }
 
     [Fact]
+    public void DragPreview_PlaceCabinet_NominalDepthFlowsFromDragContextToCommand()
+    {
+        var runId = RunId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        CabinetId.New(),
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(24m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var previewHandler = new RecordingPreviewCommandExecutor();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            previewHandler,
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        // Place a cabinet with a non-standard 30" depth.
+        service.BeginPlaceCabinet("tall-24", Length.FromInches(24m), Length.FromInches(30m), 238d, 0d);
+
+        var preview = service.OnDragMoved(238d, 0d);
+
+        Assert.True(preview.IsValid);
+        var previewCommand = Assert.IsType<AddCabinetToRunCommand>(preview.PreviewCommand);
+        Assert.Equal(Length.FromInches(30m), previewCommand.NominalDepth);
+    }
+
+    [Fact]
     public void BeginMoveCabinet_WithNonStandardDepth_PreservesActualDepthInDragContext()
     {
         var runId = RunId.New();
