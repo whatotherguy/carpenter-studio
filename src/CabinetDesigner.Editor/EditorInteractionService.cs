@@ -114,7 +114,7 @@ public sealed class EditorInteractionService : IEditorInteractionService
         var command = BuildCommand(drag, resolution.Winner);
         if (command is null)
         {
-            return DragPreviewResult.Invalid("Drag is not currently over a valid target.");
+            return DragPreviewResult.Invalid(GetNoTargetReason(drag.DragType));
         }
 
         return _previewCommandExecutor.Preview(command);
@@ -143,7 +143,7 @@ public sealed class EditorInteractionService : IEditorInteractionService
             var command = BuildCommand(drag, resolution.Winner);
             if (command is null)
             {
-                return DragCommitResult.Failed("Drag is not currently over a valid target.");
+                return DragCommitResult.Failed(GetNoTargetReason(drag.DragType));
             }
 
             // ConfigureAwait(true) ensures the finally block (EndDrag) runs on the
@@ -289,4 +289,12 @@ public sealed class EditorInteractionService : IEditorInteractionService
         winner is null
             ? $"{action} freeform"
             : $"{action} snapped to {winner.Label}";
+
+    private static string GetNoTargetReason(DragType dragType) => dragType switch
+    {
+        DragType.PlaceCabinet => "Cabinet must be dragged onto a wall run to place it.",
+        DragType.MoveCabinet => "Cabinet must be dragged onto a wall run to move it.",
+        DragType.ResizeCabinet => "Drag the handle along the run to set the cabinet width.",
+        _ => "Release over a valid target to apply the change."
+    };
 }
