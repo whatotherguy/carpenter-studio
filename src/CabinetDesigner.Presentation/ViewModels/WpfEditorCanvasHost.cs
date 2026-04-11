@@ -11,7 +11,7 @@ namespace CabinetDesigner.Presentation.ViewModels;
 /// mouse events on the <see cref="EditorCanvas"/> control into the handler callbacks that
 /// <see cref="EditorCanvasViewModel"/> registers via the <c>Set*Handler</c> methods.
 /// </summary>
-public class WpfEditorCanvasHost : IEditorCanvasHost
+public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
 {
     private readonly EditorCanvas _canvas;
     private Action<double, double>? _mouseDownHandler;
@@ -22,6 +22,7 @@ public class WpfEditorCanvasHost : IEditorCanvasHost
     private Action<double, double>? _panMoveHandler;
     private Action? _panEndHandler;
     private System.Windows.Point? _middleDragOrigin;
+    private bool _disposed;
 
     public WpfEditorCanvasHost(EditorCanvas canvas)
     {
@@ -71,8 +72,28 @@ public class WpfEditorCanvasHost : IEditorCanvasHost
         _panEndHandler = onEnd;
     }
 
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _canvas.MouseDown -= OnCanvasMouseDown;
+        _canvas.MouseMove -= OnCanvasMouseMove;
+        _canvas.MouseUp -= OnCanvasMouseUp;
+        _canvas.MouseWheel -= OnCanvasMouseWheel;
+        GC.SuppressFinalize(this);
+    }
+
     private void OnCanvasMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left)
         {
             var pos = e.GetPosition(_canvas);
@@ -91,6 +112,11 @@ public class WpfEditorCanvasHost : IEditorCanvasHost
 
     private void OnCanvasMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         var pos = e.GetPosition(_canvas);
         _mouseMoveHandler?.Invoke(pos.X, pos.Y);
 
@@ -102,6 +128,11 @@ public class WpfEditorCanvasHost : IEditorCanvasHost
 
     private void OnCanvasMouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         if (e.ChangedButton == MouseButton.Left)
         {
             var pos = e.GetPosition(_canvas);
@@ -122,6 +153,11 @@ public class WpfEditorCanvasHost : IEditorCanvasHost
 
     private void OnCanvasMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         if (_mouseWheelHandler is null)
         {
             return;
