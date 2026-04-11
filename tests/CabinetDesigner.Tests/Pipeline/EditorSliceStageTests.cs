@@ -291,6 +291,7 @@ public sealed class EditorSliceStageTests
         deltaTracker.Begin();
 
         var result = new InteractionInterpretationStage(deltaTracker, store).Execute(context);
+        var deltas = deltaTracker.Finalize();
 
         Assert.True(result.Success);
         var updatedCabinet = store.GetCabinet(cabinetId);
@@ -299,6 +300,11 @@ public sealed class EditorSliceStageTests
         Assert.Equal(Length.FromInches(30m), updatedCabinet.NominalDepth);
         Assert.Single(run.Slots);
         Assert.Equal(Length.FromInches(36m), run.Slots[0].OccupiedWidth);
+        // SlotId must reference the replacement slot (not the removed one).
+        Assert.Equal(run.Slots[0].Id, updatedCabinet.SlotId);
+        // Both a run delta and a cabinet delta must be recorded.
+        Assert.Contains(deltas, d => d.EntityType == "CabinetRun" && d.Operation == DeltaOperation.Modified);
+        Assert.Contains(deltas, d => d.EntityType == "Cabinet" && d.Operation == DeltaOperation.Modified);
     }
 
     [Fact]

@@ -168,6 +168,7 @@ public sealed class InteractionInterpretationStage : IResolutionStage
         var existingSlot = run.Slots.FirstOrDefault(slot => slot.CabinetId == command.CabinetId)
             ?? throw new InvalidOperationException($"Cabinet {command.CabinetId} has no slot in run {cabinet.RunId}.");
 
+        var previousRunValues = _stateStore.CaptureRunValues(run);
         var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
 
         // Remove the old slot and re-insert at the same index with the new width.
@@ -175,9 +176,16 @@ public sealed class InteractionInterpretationStage : IResolutionStage
         run.RemoveSlot(existingSlot.Id);
         var newSlot = run.InsertCabinetAt(slotIndex, command.CabinetId, command.NewNominalWidth);
 
-        // Preserve depth: only update NominalWidth.
-        var updatedCabinet = cabinet with { NominalWidth = command.NewNominalWidth };
+        // Preserve depth while updating the cabinet to reference the replacement slot.
+        var updatedCabinet = cabinet with { NominalWidth = command.NewNominalWidth, SlotId = newSlot.Id };
         _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            run.Id.Value.ToString(),
+            "CabinetRun",
+            DeltaOperation.Modified,
+            previousRunValues,
+            _stateStore.CaptureRunValues(run)));
 
         _deltaTracker.RecordDelta(new StateDelta(
             command.CabinetId.Value.ToString(),
