@@ -385,6 +385,44 @@ public sealed class EditorCanvasViewModelTests
         Assert.Equal("Drag failed.", viewModel.StatusMessage);
     }
 
+    [Fact]
+    public void CommitDrag_WhenServiceReturnsFailureWithReason_ShowsReasonInStatusMessage()
+    {
+        const string rejectionReason = "Cabinet must be dragged onto a wall run to move it.";
+        var failingInteraction = new FailingCommitInteractionService(rejectionReason);
+        using var viewModel = CreateViewModelWithLogger(new RecordingRunService(), failingInteraction, new CapturingAppLogger(), out var projector, out var eventBus);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d); // start drag
+        viewModel.OnMouseUp(10d, 5d);   // triggers CommitDragAsync
+
+        // CommitDragAsync is fire-and-forget; spin until the status is updated.
+        SpinWait.SpinUntil(() => viewModel.StatusMessage == rejectionReason, TimeSpan.FromSeconds(5));
+
+        Assert.Equal(rejectionReason, viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public void CommitDrag_WhenServiceReturnsFailureWithNoReason_ShowsFallbackMessage()
+    {
+        var failingInteraction = new FailingCommitInteractionService(null);
+        using var viewModel = CreateViewModelWithLogger(new RecordingRunService(), failingInteraction, new CapturingAppLogger(), out var projector, out var eventBus);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d);
+        viewModel.OnMouseUp(10d, 5d);
+
+        SpinWait.SpinUntil(() => viewModel.StatusMessage != "Moving cabinet...", TimeSpan.FromSeconds(5));
+
+        Assert.Equal("Placement rejected — check validation issues.", viewModel.StatusMessage);
+    }
+
     private static EditorCanvasViewModel CreateViewModelWithLogger(
         RecordingRunService runService,
         IEditorInteractionService interactionService,
@@ -447,6 +485,35 @@ public sealed class EditorCanvasViewModelTests
 
         public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default) =>
             Task.FromException<DragCommitResult>(new InvalidOperationException("Simulated commit failure."));
+
+        public void OnDragAborted() => _mode = EditorMode.Idle;
+    }
+
+    private sealed class FailingCommitInteractionService : IEditorInteractionService
+    {
+        private readonly string? _failureReason;
+        private EditorMode _mode = EditorMode.Idle;
+
+        public FailingCommitInteractionService(string? failureReason) => _failureReason = failureReason;
+
+        public EditorMode CurrentMode => _mode;
+
+        public void BeginPlaceCabinet(string cabinetTypeId, Length nominalWidth, Length nominalDepth, double screenX, double screenY) { }
+
+        public void BeginMoveCabinet(CabinetId cabinetId, double screenX, double screenY) =>
+            _mode = EditorMode.MovingCabinet;
+
+        public void BeginResizeCabinet(CabinetId cabinetId, double screenX, double screenY) =>
+            _mode = EditorMode.ResizingCabinet;
+
+        public DragPreviewResult OnDragMoved(double screenX, double screenY) =>
+            new DragPreviewResult(true, null, null);
+
+        public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default)
+        {
+            _mode = EditorMode.Idle;
+            return Task.FromResult(DragCommitResult.Failed(_failureReason ?? string.Empty));
+        }
 
         public void OnDragAborted() => _mode = EditorMode.Idle;
     }

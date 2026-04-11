@@ -112,7 +112,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             var result = await _runService.AddCabinetAsync(
                 new AddCabinetRequestDto(runId, cabinetTypeId, nominalWidthInches, "EndOfRun"))
                 .ConfigureAwait(true);
-            StatusMessage = result.Success ? "Cabinet added." : "Cabinet add rejected.";
+            StatusMessage = result.Success ? "Cabinet added." : "Could not add cabinet — check validation issues.";
             return result;
         }
         finally
@@ -131,7 +131,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             var result = await _runService.MoveCabinetAsync(
                 new MoveCabinetRequestDto(cabinetId, sourceRunId, targetRunId, placement, targetIndex))
                 .ConfigureAwait(true);
-            StatusMessage = result.Success ? "Cabinet moved." : "Cabinet move rejected.";
+            StatusMessage = result.Success ? "Cabinet moved." : "Could not move cabinet — check validation issues.";
             return result;
         }
         finally
@@ -367,7 +367,9 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         try
         {
             var result = await _interactionService.OnDragCommittedAsync().ConfigureAwait(true);
-            StatusMessage = result.Success ? "Drag committed." : "Drag rejected.";
+            StatusMessage = result.Success
+                ? "Drag committed."
+                : !string.IsNullOrEmpty(result.FailureReason) ? result.FailureReason : "Placement rejected — check validation issues.";
         }
         catch (OperationCanceledException)
         {
