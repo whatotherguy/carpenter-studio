@@ -66,9 +66,9 @@ public sealed class CatalogService : ICatalogService
         : cabinetTypeId.StartsWith("tall-", StringComparison.OrdinalIgnoreCase) ? "Tall"
         : "Cabinet";
 
-    private static Guid StableIdFor(string cabinetTypeId)
+    internal static Guid StableIdFor(string cabinetTypeId)
     {
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(cabinetTypeId));
-        return new Guid(hashBytes[..16]);
+        return new Guid(hashBytes.AsSpan(0, 16));
     }
 }

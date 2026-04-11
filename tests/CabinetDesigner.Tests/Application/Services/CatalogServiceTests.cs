@@ -33,9 +33,9 @@ public sealed class CatalogServiceTests
     }
 
     // -----------------------------------------------------------------------
-    // StableIdFor is private, so we verify its contract through observable
-    // behaviour: every item exposes a deterministic string TypeId that
-    // derives from the well-known cabinet-type slug.
+    // Verify the observable TypeId values returned by GetAllItems(): they are
+    // deterministic across calls and match the well-known cabinet-type slugs
+    // exposed by the catalog service.
     // -----------------------------------------------------------------------
 
     [Theory]
@@ -53,63 +53,42 @@ public sealed class CatalogServiceTests
     }
 
     [Fact]
-    public void StableId_SHA256_Produces_Valid_Guid_Format()
+    public void StableIdFor_Returns_Known_Value_For_Base24()
     {
-        // Reproduce the same logic as CatalogService.StableIdFor so we can
-        // assert the format in isolation without making the method non-private.
-        static Guid StableIdFor(string input)
-        {
-            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-            return new Guid(hashBytes[..16]);
-        }
-
-        var guid = StableIdFor("base-24");
-
-        // Must round-trip through the canonical 8-4-4-4-12 format.
-        Assert.True(Guid.TryParse(guid.ToString(), out _));
-        Assert.NotEqual(Guid.Empty, guid);
+        // Hard-coded expected value derived from SHA-256("base-24")[0..15]
+        // interpreted as a little-endian Guid. Changing the hash algorithm
+        // will break this test, making any regression immediately visible.
+        var expected = new Guid("a71bb0ff-2bc8-dccf-8ac0-9c8a8e43a488");
+        var actual = CatalogService.StableIdFor("base-24");
+        Assert.Equal(expected, actual);
     }
 
     [Fact]
-    public void StableId_SHA256_Is_Deterministic()
+    public void StableIdFor_Is_Deterministic()
     {
-        static Guid StableIdFor(string input)
-        {
-            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-            return new Guid(hashBytes[..16]);
-        }
-
-        Assert.Equal(StableIdFor("base-24"), StableIdFor("base-24"));
-        Assert.Equal(StableIdFor("tall-36"), StableIdFor("tall-36"));
+        Assert.Equal(
+            CatalogService.StableIdFor("base-24"),
+            CatalogService.StableIdFor("base-24"));
+        Assert.Equal(
+            CatalogService.StableIdFor("tall-36"),
+            CatalogService.StableIdFor("tall-36"));
     }
 
     [Fact]
-    public void StableId_SHA256_Different_Inputs_Produce_Different_Guids()
+    public void StableIdFor_Different_Inputs_Produce_Different_Guids()
     {
-        static Guid StableIdFor(string input)
-        {
-            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-            return new Guid(hashBytes[..16]);
-        }
-
         var slugs = new[] { "base-24", "base-30", "base-36", "wall-30", "wall-36", "tall-24", "tall-36" };
-        var guids = slugs.Select(StableIdFor).ToList();
-
+        var guids = slugs.Select(CatalogService.StableIdFor).ToList();
         Assert.Equal(guids.Count, guids.Distinct().Count());
     }
 
     [Fact]
-    public void StableId_SHA256_Does_Not_Match_MD5_Derived_Guid()
+    public void StableIdFor_Does_Not_Match_MD5_Derived_Guid()
     {
-        // Guard against accidentally reverting to MD5 — the SHA-256 result
-        // must differ from what MD5 would produce for the same input.
+        // Guard against accidentally reverting to MD5.
         var input = "base-24";
-        var md5Bytes  = MD5.HashData(Encoding.UTF8.GetBytes(input));
-        var sha256Bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-
-        var md5Guid    = new Guid(md5Bytes);
-        var sha256Guid = new Guid(sha256Bytes[..16]);
-
-        Assert.NotEqual(md5Guid, sha256Guid);
+        var md5Guid = new Guid(MD5.HashData(Encoding.UTF8.GetBytes(input)));
+        Assert.NotEqual(md5Guid, CatalogService.StableIdFor(input));
     }
 }
+
