@@ -262,7 +262,7 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         {
             if (!stage.ShouldExecute(context.Mode))
             {
-                context.MarkStageSkipped(stage.StageNumber, stage.StageName, context.Mode);
+                context.MarkStageSkipped(stage.StageNumber, stage.StageName);
                 continue;
             }
 

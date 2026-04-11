@@ -6,7 +6,7 @@ namespace CabinetDesigner.Application.Pipeline;
 
 public sealed class ResolutionContext
 {
-    private readonly Dictionary<int, (string StageName, ResolutionMode Mode)> _skippedStages = [];
+    private readonly Dictionary<int, string> _skippedStages = [];
 
     private InputCaptureResult? _inputCapture;
     private InteractionInterpretationResult? _interpretation;
@@ -101,15 +101,15 @@ public sealed class ResolutionContext
     /// deliberately skipped because <see cref="IResolutionStage.ShouldExecute"/> returned
     /// <see langword="false"/> for the current pipeline mode.
     /// </summary>
-    public void MarkStageSkipped(int stageNumber, string stageName, ResolutionMode mode) =>
-        _skippedStages[stageNumber] = (stageName, mode);
+    public void MarkStageSkipped(int stageNumber, string stageName) =>
+        _skippedStages[stageNumber] = stageName;
 
     // Returns T only to satisfy the compiler's nullable-flow analysis; always throws.
     private T ThrowNotExecuted<T>(int stageNumber, string stageName)
     {
-        if (_skippedStages.TryGetValue(stageNumber, out var skipped))
+        if (_skippedStages.TryGetValue(stageNumber, out var skippedStageName))
         {
-            throw PipelineStageNotExecutedException.Skipped(stageNumber, skipped.StageName, skipped.Mode);
+            throw PipelineStageNotExecutedException.Skipped(stageNumber, skippedStageName, Mode);
         }
 
         throw PipelineStageNotExecutedException.NeverInvoked(stageNumber, stageName);

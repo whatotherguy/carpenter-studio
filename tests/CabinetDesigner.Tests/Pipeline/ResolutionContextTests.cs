@@ -208,8 +208,12 @@ public sealed class ResolutionContextTests
     [Fact]
     public void MarkStageSkipped_ThenAccessResult_ThrowsSkippedException()
     {
-        var context = CreateContext();
-        context.MarkStageSkipped(4, "Engineering Resolution", ResolutionMode.Preview);
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand([]),
+            Mode = ResolutionMode.Preview
+        };
+        context.MarkStageSkipped(4, "Engineering Resolution");
 
         var ex = Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.EngineeringResult);
 
@@ -224,18 +228,22 @@ public sealed class ResolutionContextTests
     [Fact]
     public void MarkStageSkipped_AllStages_ThrowSkippedExceptionsForEach()
     {
-        var context = CreateContext();
-        context.MarkStageSkipped(1, "Input Capture", ResolutionMode.Preview);
-        context.MarkStageSkipped(2, "Interaction Interpretation", ResolutionMode.Preview);
-        context.MarkStageSkipped(3, "Spatial Resolution", ResolutionMode.Preview);
-        context.MarkStageSkipped(4, "Engineering Resolution", ResolutionMode.Preview);
-        context.MarkStageSkipped(5, "Constraint Propagation", ResolutionMode.Preview);
-        context.MarkStageSkipped(6, "Part Generation", ResolutionMode.Preview);
-        context.MarkStageSkipped(7, "Manufacturing Planning", ResolutionMode.Preview);
-        context.MarkStageSkipped(8, "Install Planning", ResolutionMode.Preview);
-        context.MarkStageSkipped(9, "Costing", ResolutionMode.Preview);
-        context.MarkStageSkipped(10, "Validation", ResolutionMode.Preview);
-        context.MarkStageSkipped(11, "Packaging", ResolutionMode.Preview);
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand([]),
+            Mode = ResolutionMode.Preview
+        };
+        context.MarkStageSkipped(1, "Input Capture");
+        context.MarkStageSkipped(2, "Interaction Interpretation");
+        context.MarkStageSkipped(3, "Spatial Resolution");
+        context.MarkStageSkipped(4, "Engineering Resolution");
+        context.MarkStageSkipped(5, "Constraint Propagation");
+        context.MarkStageSkipped(6, "Part Generation");
+        context.MarkStageSkipped(7, "Manufacturing Planning");
+        context.MarkStageSkipped(8, "Install Planning");
+        context.MarkStageSkipped(9, "Costing");
+        context.MarkStageSkipped(10, "Validation");
+        context.MarkStageSkipped(11, "Packaging");
 
         Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.InputCapture).WasSkipped);
         Assert.True(Assert.Throws<PipelineStageNotExecutedException>(() => _ = context.Interpretation).WasSkipped);
@@ -255,7 +263,7 @@ public sealed class ResolutionContextTests
     {
         // If a result is explicitly set, it takes precedence over the skipped marker.
         var context = CreateContext();
-        context.MarkStageSkipped(6, "Part Generation", ResolutionMode.Preview);
+        context.MarkStageSkipped(6, "Part Generation");
         var partResult = new PartGenerationResult { Parts = [] };
         context.PartResult = partResult;
 

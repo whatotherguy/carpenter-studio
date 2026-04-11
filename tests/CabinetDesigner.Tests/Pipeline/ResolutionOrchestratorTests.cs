@@ -705,34 +705,6 @@ public sealed class ResolutionOrchestratorTests
 
         public StageResult Execute(ResolutionContext context) => throw new InvalidOperationException("boom");
     }
-
-    private sealed class NotImplementedStage(int stageNumber) : IResolutionStage
-    {
-        public int StageNumber => stageNumber;
-
-        public string StageName => $"Stage {stageNumber}";
-
-        public bool ShouldExecute(ResolutionMode mode) => true;
-
-        public StageResult Execute(ResolutionContext context) =>
-            StageResult.NotImplementedYet(stageNumber);
-    }
-
-    private sealed class SkippableStage(int stageNumber, List<int> executionLog) : IResolutionStage
-    {
-        public int StageNumber => stageNumber;
-
-        public string StageName => $"Stage {stageNumber}";
-
-        // Only runs in Full mode.
-        public bool ShouldExecute(ResolutionMode mode) => mode == ResolutionMode.Full;
-
-        public StageResult Execute(ResolutionContext context)
-        {
-            executionLog.Add(stageNumber);
-            return StageResult.Succeeded(stageNumber);
-        }
-    }
 }
 
 public sealed class ResolutionOrchestratorIncompleteStageTests
@@ -789,10 +761,11 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
     public void Preview_SkippedFullOnlyStage_ContextMarksItSkipped()
     {
         var executionLog = new List<int>();
+        ResolutionContext? capturedContext = null;
         // Stage 1-3 run in Preview; stage 4 only runs in Full.
         var stages = new IResolutionStage[]
         {
-            new ModeAwareStageHelper(1, executionLog),
+            new ContextCapturingStageHelper(1, ctx => capturedContext = ctx, executionLog),
             new ModeAwareStageHelper(2, executionLog),
             new SpatialHelper(3, executionLog),
             new FullOnlyHelper(4, executionLog)
@@ -804,6 +777,10 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
         Assert.True(result.Success);
         // Stage 4 was skipped – confirm it didn't execute.
         Assert.Equal([1, 2, 3], executionLog);
+        // Verify the orchestrator marked stage 4 as skipped in the context.
+        var ex = Assert.Throws<PipelineStageNotExecutedException>(() => _ = capturedContext!.EngineeringResult);
+        Assert.True(ex.WasSkipped);
+        Assert.Equal(ResolutionMode.Preview, ex.PipelineMode);
     }
 
     [Fact]
@@ -847,6 +824,19 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
         public string StageName => string.IsNullOrEmpty(stageName) ? $"Stage {stageNumber}" : stageName;
         public bool ShouldExecute(ResolutionMode mode) => true;
         public StageResult Execute(ResolutionContext context) => StageResult.NotImplementedYet(stageNumber);
+    }
+
+    private sealed class ContextCapturingStageHelper(int stageNumber, Action<ResolutionContext> capture, List<int> log) : IResolutionStage
+    {
+        public int StageNumber => stageNumber;
+        public string StageName => $"Stage {stageNumber}";
+        public bool ShouldExecute(ResolutionMode mode) => true;
+        public StageResult Execute(ResolutionContext context)
+        {
+            capture(context);
+            log.Add(stageNumber);
+            return StageResult.Succeeded(stageNumber);
+        }
     }
 
     private sealed class ModeAwareStageHelper(int stageNumber, List<int> log) : IResolutionStage
