@@ -45,12 +45,9 @@ No other properties need changing. `TargetFramework` is inherited from `Director
 
 ### Tests to add/update
 
-None. Verify all five existing test files compile and pass from a clean checkout:
-- `WorkingRevisionReconstructionTests.cs`
-- `BlobCorruptionTests.cs`
-- `JournalReplayTests.cs`
-- `CommandPersistenceServiceTests.cs`
-- Any file under `Integration/`
+None. Verify the existing persistence test suite compiles and passes from a clean checkout, including:
+- Top-level test files: `WorkingRevisionReconstructionTests.cs`, `BlobCorruptionTests.cs`, `JournalReplayTests.cs`, and `CommandPersistenceServiceTests.cs`
+- All existing integration test files under `tests/CabinetDesigner.Persistence.Tests/Integration/`: `CommandJournalRepositoryTests.cs`, `CommandPersistenceServiceTests.cs`, `ExplanationRepositoryTests.cs`, `PersistenceHardeningTests.cs`, `PersistenceIntegrationTests.cs`, `StartupOrchestratorTests.cs`, `ValidationHistoryAtomicityTests.cs`, `ValidationHistoryReplaceTests.cs`, `WorkingRevisionAtomicityTests.cs`, and `WorkingRevisionRepositoryTests.cs`
 
 ### Acceptance criteria
 
@@ -131,13 +128,13 @@ Store the handler in a private field: `private readonly Action<Exception>? _onEx
 For each of the four `AsyncRelayCommand` constructions, pass a `HandleCommandException` lambda as the third argument:
 
 ```csharp
-NewProjectCommand   = new AsyncRelayCommand(CreateProjectAsync,  () => true,             HandleCommandException);
+NewProjectCommand   = new AsyncRelayCommand(CreateProjectAsync,  () => !string.IsNullOrWhiteSpace(PendingProjectName), HandleCommandException);
 OpenProjectCommand  = new AsyncRelayCommand(OpenProjectAsync,    () => !string.IsNullOrWhiteSpace(PendingProjectFilePath), HandleCommandException);
 SaveCommand         = new AsyncRelayCommand(SaveAsync,           () => HasActiveProject,  HandleCommandException);
 CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync,   () => HasActiveProject,  HandleCommandException);
 ```
 
-Also note: the existing code has `() => true` for `OpenProjectCommand` even though `PendingProjectFilePath` drives availability. Fix the can-execute predicate while you are touching this line (this is a latent correctness bug uncovered during the `NewProjectCommand` change — `PendingProjectFilePath_TogglesOpenCommandAvailability` test already covers it but only because `NotifyCanExecuteChanged` is called separately).
+Also note: the existing code uses `() => true` for `NewProjectCommand` and `() => true` for `OpenProjectCommand`. The `PendingProjectName_TogglesNewCommandAvailability` test asserts that `NewProjectCommand` is disabled when `PendingProjectName` is whitespace — so the can-execute predicate for `NewProjectCommand` must be `() => !string.IsNullOrWhiteSpace(PendingProjectName)`. The `PendingProjectFilePath_TogglesOpenCommandAvailability` test drives the same requirement for `OpenProjectCommand` via `NotifyCanExecuteChanged`. Fix both predicates while touching these lines.
 
 Add the private handler:
 
@@ -240,7 +237,7 @@ public async Task ExecuteAsync_WhenDelegateSucceeds_ExceptionHandlerIsNotCalled(
 }
 ```
 
-**File:** `tests/CabinetDesigner.Tests/Presentation/ViewModels/ShellViewModelTests.cs` (add to existing class)
+**File:** `tests/CabinetDesigner.Tests/Presentation/ShellViewModelTests.cs` (add to existing class)
 
 ```csharp
 [Fact]
@@ -715,6 +712,8 @@ private sealed class NoOpDesignCommandHandler : IDesignCommandHandler
 
 > **Note:** `InMemoryDesignStateStore` is already used in `ShellViewModelTests.cs`. Check that the `AddRun` overload accepting two `Point2D` arguments matches the current `IDesignStateStore.AddRun` signature.
 
+> **Important:** Adding `IDesignStateStore` to the `RunService` constructor changes its signature. The existing `RunServiceTests` constructs `new RunService(handler, clock)` in multiple places — update every call site to `new RunService(handler, clock, new InMemoryDesignStateStore())`. This is required for the test project to compile after the production change.
+
 ### Acceptance criteria
 
 - `GetRunSummary` returns a correctly-populated `RunSummaryDto` for a known `RunId`.
@@ -729,6 +728,7 @@ private sealed class NoOpDesignCommandHandler : IDesignCommandHandler
 - [ ] `GetRunSummary` implemented using `_stateStore.GetRun(runId)`.
 - [ ] `DeleteRunAsync` / `SetCabinetOverrideAsync` unchanged.
 - [ ] DI registration updated to pass `IDesignStateStore`.
+- [ ] All existing `RunServiceTests` call sites updated from `new RunService(handler, clock)` to `new RunService(handler, clock, new InMemoryDesignStateStore())`.
 - [ ] Three new `RunServiceTests` tests pass.
 - [ ] `ApplicationServiceRegistrationTests` still passes.
 
@@ -794,35 +794,52 @@ Apply identical pattern to `ConstraintPropagationStage` (stage 5), `PackagingSta
 
 **File:** `tests/CabinetDesigner.Tests/Pipeline/SkeletonStageTests.cs` (new file)
 
+`ResolutionContext` uses required init properties — construct it directly (no `ForFullResolution` factory method exists). `StageResult.NotImplementedYet(n)` returns `Success = true` and `IsNotImplemented = true` (confirmed in `StageResultTests.cs`).
+
 ```csharp
 [Theory]
 [MemberData(nameof(SkeletonStages))]
-public void SkeletonStage_Execute_ReturnsNotImplementedYet(IResolutionStage stage)
+public void SkeletonStage_Execute_ReturnsSuccessWithIsNotImplementedTrue(IResolutionStage stage)
 {
-    var context = ResolutionContext.ForFullResolution(/* minimal seed */);
+    var context = new ResolutionContext
+    {
+        Command = new TestDesignCommand([]),
+        Mode = ResolutionMode.Full
+    };
     var result = stage.Execute(context);
-    Assert.False(result.IsSuccess);    // NotImplementedYet is not a success result
-    // OR Assert.Equal(StageResultKind.NotImplemented, result.Kind);
-    // — use whatever StageResult exposes; check StageResultTests.cs for the pattern.
+
+    Assert.True(result.Success);          // NotImplementedYet returns Success = true
+    Assert.True(result.IsNotImplemented); // and IsNotImplemented = true
 }
 
 [Theory]
 [MemberData(nameof(SkeletonStages))]
 public void SkeletonStage_Execute_DoesNotThrow(IResolutionStage stage)
 {
-    var context = ResolutionContext.ForFullResolution(/* minimal seed */);
+    var context = new ResolutionContext
+    {
+        Command = new TestDesignCommand([]),
+        Mode = ResolutionMode.Full
+    };
     var ex = Record.Exception(() => stage.Execute(context));
     Assert.Null(ex);
 }
 
-[Theory]
-[MemberData(nameof(SkeletonStages))]
-public void SkeletonStage_Execute_WithLogger_EmitsDebugLogEntry(IResolutionStage stage)
+[Fact]
+public void CostingStage_Execute_WithLogger_EmitsOneDebugLogEntry()
 {
-    // Arrange: create a recording logger, construct stage with it.
-    // This test only applies if the stage was constructed with a logger.
-    // Use a factory helper that creates stages with a RecordingAppLogger.
+    var logger = new RecordingAppLogger();
+    var stage = new CostingStage(logger);
+    var context = new ResolutionContext { Command = new TestDesignCommand([]), Mode = ResolutionMode.Full };
+
+    stage.Execute(context);
+
+    Assert.Single(logger.Entries);
+    Assert.Equal(LogLevel.Debug, logger.Entries[0].Level);
 }
+
+// Repeat the logger test for each of the remaining four stages:
+// ConstraintPropagationStage, PackagingStage, PartGenerationStage, EngineeringResolutionStage
 
 public static IEnumerable<object[]> SkeletonStages()
 {
@@ -832,9 +849,21 @@ public static IEnumerable<object[]> SkeletonStages()
     yield return [new PartGenerationStage()];
     yield return [new EngineeringResolutionStage()];
 }
-```
 
-> Check `StageResultTests.cs` to confirm whether `StageResult.NotImplementedYet` has `IsSuccess == false` or some other testable property before writing the assertion.
+// Helpers (copy TestDesignCommand pattern from ResolutionContextTests.cs):
+private sealed record TestDesignCommand(IReadOnlyList<ValidationIssue> Issues) : IDesignCommand
+{
+    public CommandMetadata Metadata { get; } =
+        CommandMetadata.Create(DateTimeOffset.UnixEpoch, CommandOrigin.User, "test", []);
+    public string CommandType => "test.command";
+}
+
+private sealed class RecordingAppLogger : IAppLogger
+{
+    public List<LogEntry> Entries { get; } = [];
+    public void Log(LogEntry entry) => Entries.Add(entry);
+}
+```
 
 ### Acceptance criteria
 
