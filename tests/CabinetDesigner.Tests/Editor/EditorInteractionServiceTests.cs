@@ -279,7 +279,7 @@ public sealed class EditorInteractionServiceTests
             new RecordingCommitCommandExecutor(),
             new StubClock());
 
-        // Force an active drag with no target run by patching via BeginMoveCabinet — the
+        // Force an active drag with no target run by calling BeginMoveDrag directly — the
         // NoHitSceneGraph always returns null from HitTestRun, so TargetRunId will be null.
         session.BeginMoveDrag(new DragContext(
             DragType.MoveCabinet,
@@ -297,6 +297,63 @@ public sealed class EditorInteractionServiceTests
 
         Assert.False(result.Success);
         Assert.Equal("Cabinet must be dragged onto a wall run to move it.", result.FailureReason);
+    }
+
+    [Fact]
+    public void OnDragMoved_WhenResizeHasNoTargetRun_ReturnsResizeCabinetSpecificRejection()
+    {
+        var runId = RunId.New();
+        var cabinetId = CabinetId.New();
+        var scene = new EditorSceneSnapshot([
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        cabinetId,
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(24m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var service = new EditorInteractionService(
+            session,
+            new NoHitSceneGraph(scene),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            new RecordingPreviewCommandExecutor(),
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        // Force an active resize drag with no target run by calling BeginResizeDrag directly.
+        session.BeginResizeDrag(new DragContext(
+            DragType.ResizeCabinet,
+            Point2D.Origin,
+            Vector2D.Zero,
+            Length.FromInches(24m),
+            Length.FromInches(24m),
+            null,
+            cabinetId,
+            null,
+            Point2D.Origin,
+            null));
+
+        var result = service.OnDragMoved(500d, 500d);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Drag the handle along the run to set the cabinet width.", result.RejectionReason);
     }
 
     private sealed class StubSceneGraph : IEditorSceneGraph

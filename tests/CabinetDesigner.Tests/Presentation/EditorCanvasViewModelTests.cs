@@ -400,7 +400,8 @@ public sealed class EditorCanvasViewModelTests
         viewModel.OnMouseUp(10d, 5d);   // triggers CommitDragAsync
 
         // CommitDragAsync is fire-and-forget; spin until the status is updated.
-        SpinWait.SpinUntil(() => viewModel.StatusMessage == rejectionReason, TimeSpan.FromSeconds(5));
+        var completed = SpinWait.SpinUntil(() => viewModel.StatusMessage == rejectionReason, TimeSpan.FromSeconds(5));
+        Assert.True(completed, $"Timed out waiting for StatusMessage to become \"{rejectionReason}\".");
 
         Assert.Equal(rejectionReason, viewModel.StatusMessage);
     }
@@ -418,9 +419,11 @@ public sealed class EditorCanvasViewModelTests
         viewModel.OnMouseMove(10d, 5d);
         viewModel.OnMouseUp(10d, 5d);
 
-        SpinWait.SpinUntil(() => viewModel.StatusMessage != "Moving cabinet...", TimeSpan.FromSeconds(5));
+        const string expected = "Placement rejected — check validation issues.";
+        var completed = SpinWait.SpinUntil(() => viewModel.StatusMessage == expected, TimeSpan.FromSeconds(5));
+        Assert.True(completed, $"Timed out waiting for StatusMessage to become \"{expected}\".");
 
-        Assert.Equal("Placement rejected — check validation issues.", viewModel.StatusMessage);
+        Assert.Equal(expected, viewModel.StatusMessage);
     }
 
     private static EditorCanvasViewModel CreateViewModelWithLogger(
