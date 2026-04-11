@@ -50,7 +50,17 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            _onException?.Invoke(ex);
+            PostToUiThread(() =>
+            {
+                try
+                {
+                    _onException?.Invoke(ex);
+                }
+                catch
+                {
+                    // A failing exception handler must not crash the command.
+                }
+            });
         }
         finally
         {

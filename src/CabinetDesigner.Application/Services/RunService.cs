@@ -113,8 +113,6 @@ public sealed class RunService : IRunService
 
     public RunSummaryDto GetRunSummary(RunId runId)
     {
-        ArgumentNullException.ThrowIfNull(runId);
-
         var run = _stateStore.GetRun(runId)
             ?? throw new KeyNotFoundException($"Run {runId.Value} was not found in the design state store.");
 

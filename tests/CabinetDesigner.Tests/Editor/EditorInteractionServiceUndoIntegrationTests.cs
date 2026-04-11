@@ -44,7 +44,7 @@ public sealed class EditorInteractionServiceUndoIntegrationTests
     public async Task DragCommit_MoveCabinet_CommitCommandExecutorReceivesMoveCabinetCommand()
     {
         var cabinetId = CabinetId.New();
-        var (service, spy, _, scene) = CreateServiceWithSpyAndCabinet(cabinetId);
+        var (service, spy, _, _) = CreateServiceWithSpyAndCabinet(cabinetId);
 
         service.BeginMoveCabinet(cabinetId, 12d, 0d);
         service.OnDragMoved(60d, 0d);
@@ -58,7 +58,7 @@ public sealed class EditorInteractionServiceUndoIntegrationTests
     public async Task DragCommit_ResizeCabinet_CommitCommandExecutorReceivesResizeCabinetCommand()
     {
         var cabinetId = CabinetId.New();
-        var (service, spy, _, scene) = CreateServiceWithSpyAndCabinet(cabinetId);
+        var (service, spy, _, _) = CreateServiceWithSpyAndCabinet(cabinetId);
 
         service.BeginResizeCabinet(cabinetId, 24d, 0d);
         service.OnDragMoved(36d, 0d);
