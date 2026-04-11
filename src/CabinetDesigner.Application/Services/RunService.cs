@@ -46,12 +46,7 @@ public sealed class RunService : IRunService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (!Enum.TryParse<RunPlacement>(request.Placement, ignoreCase: true, out var placement))
-        {
-            throw new ArgumentException(
-                $"'{request.Placement}' is not a valid RunPlacement value. Expected one of: {string.Join(", ", Enum.GetNames<RunPlacement>())}.",
-                nameof(request));
-        }
+        var placement = ParseRunPlacement(request.Placement, nameof(request.Placement));
 
         var command = new AddCabinetToRunCommand(
             new RunId(request.RunId),
@@ -87,12 +82,7 @@ public sealed class RunService : IRunService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (!Enum.TryParse<RunPlacement>(request.TargetPlacement, ignoreCase: true, out var targetPlacement))
-        {
-            throw new ArgumentException(
-                $"'{request.TargetPlacement}' is not a valid RunPlacement value. Expected one of: {string.Join(", ", Enum.GetNames<RunPlacement>())}.",
-                nameof(request));
-        }
+        var targetPlacement = ParseRunPlacement(request.TargetPlacement, nameof(request.TargetPlacement));
 
         var command = new MoveCabinetCommand(
             new CabinetId(request.CabinetId),
@@ -151,5 +141,19 @@ public sealed class RunService : IRunService
             run.Slots.Any(slot => slot.SlotType == RunSlotType.Filler),
             run.OccupiedLength > run.Capacity,
             slots);
+    }
+
+    private static readonly string[] _runPlacementNames = Enum.GetNames<RunPlacement>();
+
+    private static RunPlacement ParseRunPlacement(string value, string paramName)
+    {
+        if (!_runPlacementNames.Contains(value, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"'{value}' is not a valid RunPlacement value. Expected one of: {string.Join(", ", _runPlacementNames)}.",
+                paramName);
+        }
+
+        return Enum.Parse<RunPlacement>(value, ignoreCase: true);
     }
 }
