@@ -46,11 +46,13 @@ public sealed class RunService : IRunService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var placement = ParseRunPlacement(request.Placement, nameof(request.Placement));
+
         var command = new AddCabinetToRunCommand(
             new RunId(request.RunId),
             request.CabinetTypeId,
             Length.FromInches(request.NominalWidthInches),
-            Enum.Parse<RunPlacement>(request.Placement, ignoreCase: true),
+            placement,
             CommandOrigin.User,
             $"Add {request.NominalWidthInches}\" {request.CabinetTypeId} to run",
             _clock.Now);
@@ -80,11 +82,13 @@ public sealed class RunService : IRunService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var targetPlacement = ParseRunPlacement(request.TargetPlacement, nameof(request.TargetPlacement));
+
         var command = new MoveCabinetCommand(
             new CabinetId(request.CabinetId),
             new RunId(request.SourceRunId),
             new RunId(request.TargetRunId),
-            Enum.Parse<RunPlacement>(request.TargetPlacement, ignoreCase: true),
+            targetPlacement,
             CommandOrigin.User,
             $"Move cabinet {request.CabinetId} to run {request.TargetRunId}",
             _clock.Now,
@@ -137,5 +141,19 @@ public sealed class RunService : IRunService
             run.Slots.Any(slot => slot.SlotType == RunSlotType.Filler),
             run.OccupiedLength > run.Capacity,
             slots);
+    }
+
+    private static readonly string[] _runPlacementNames = Enum.GetNames<RunPlacement>();
+
+    private static RunPlacement ParseRunPlacement(string value, string paramName)
+    {
+        if (!_runPlacementNames.Contains(value, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                $"'{value}' is not a valid RunPlacement value. Expected one of: {string.Join(", ", _runPlacementNames)}.",
+                paramName);
+        }
+
+        return Enum.Parse<RunPlacement>(value, ignoreCase: true);
     }
 }

@@ -153,6 +153,62 @@ public sealed class RunServiceTests
         Assert.Throws<KeyNotFoundException>(() => service.GetRunSummary(RunId.New()));
     }
 
+    [Fact]
+    public async Task AddCabinetAsync_WithInvalidPlacementString_ThrowsArgumentException()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.AddCabinetAsync(new AddCabinetRequestDto(Guid.NewGuid(), "base-36", 36m, "NotAPlacement")));
+
+        Assert.Contains("NotAPlacement", ex.Message);
+        Assert.Contains("Expected one of:", ex.Message);
+        Assert.Contains("StartOfRun", ex.Message);
+        Assert.Equal(0, handler.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task MoveCabinetAsync_WithInvalidTargetPlacementString_ThrowsArgumentException()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.MoveCabinetAsync(new MoveCabinetRequestDto(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "BadValue", null)));
+
+        Assert.Contains("BadValue", ex.Message);
+        Assert.Contains("Expected one of:", ex.Message);
+        Assert.Contains("StartOfRun", ex.Message);
+        Assert.Equal(0, handler.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task AddCabinetAsync_WithNumericPlacementString_ThrowsArgumentException()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.AddCabinetAsync(new AddCabinetRequestDto(Guid.NewGuid(), "base-36", 36m, "0")));
+
+        Assert.Contains("0", ex.Message);
+        Assert.Equal(0, handler.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task MoveCabinetAsync_WithNumericTargetPlacementString_ThrowsArgumentException()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.MoveCabinetAsync(new MoveCabinetRequestDto(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "1", null)));
+
+        Assert.Contains("1", ex.Message);
+        Assert.Equal(0, handler.ExecuteCalls);
+    }
+
     private sealed class RecordingDesignCommandHandler : IDesignCommandHandler
     {
         public int ExecuteCalls { get; private set; }
