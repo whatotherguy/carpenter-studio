@@ -43,10 +43,10 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         Catalog.ItemActivated += OnCatalogItemActivated;
         IssuePanel.SetSelectionCallback(SelectEntities);
 
-        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, () => true);
-        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, () => true);
-        SaveCommand = new AsyncRelayCommand(SaveAsync, () => HasActiveProject);
-        CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync, () => HasActiveProject);
+        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, () => !string.IsNullOrWhiteSpace(PendingProjectName), HandleCommandException);
+        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, () => !string.IsNullOrWhiteSpace(PendingProjectFilePath), HandleCommandException);
+        SaveCommand = new AsyncRelayCommand(SaveAsync, () => HasActiveProject, HandleCommandException);
+        CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync, () => HasActiveProject, HandleCommandException);
         UndoCommand = new RelayCommand(() => _ = _undoRedoService.Undo(), () => _undoRedoService.CanUndo);
         RedoCommand = new RelayCommand(() => _ = _undoRedoService.Redo(), () => _undoRedoService.CanRedo);
 
@@ -137,8 +137,15 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await Canvas.AddCabinetToRunAsync(runId.Value, item.TypeId, item.DefaultNominalWidthInches)
-            .ConfigureAwait(true);
+        try
+        {
+            await Canvas.AddCabinetToRunAsync(runId.Value, item.TypeId, item.DefaultNominalWidthInches)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            StatusBar.SetStatusMessage($"Failed to add cabinet: {ex.Message}");
+        }
     }
 
     private Guid? ResolveTargetRunId()
@@ -167,7 +174,10 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         get => _pendingProjectName;
         set
         {
-            SetProperty(ref _pendingProjectName, value);
+            if (SetProperty(ref _pendingProjectName, value))
+            {
+                NewProjectCommand.NotifyCanExecuteChanged();
+            }
         }
     }
 
@@ -338,6 +348,11 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         CloseProjectCommand.NotifyCanExecuteChanged();
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
+    }
+
+    private void HandleCommandException(Exception ex)
+    {
+        StatusBar.SetStatusMessage($"Error: {ex.Message}");
     }
 
     private void RefreshSelectionDrivenPanels()

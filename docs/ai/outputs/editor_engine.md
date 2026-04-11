@@ -1986,3 +1986,22 @@ services.AddScoped<IEditorInteractionService, EditorInteractionService>();
 | Draw run with zero length | `CreateRunCommand.ValidateStructure()` rejects it (StartPoint == EndPoint → zero length). UI should suppress commit if start ≈ end. |
 | SceneGraph stale during fast drag | Expected and acceptable — snap candidates are opportunistic. Domain pipeline at commit time performs authoritative spatial validation (stage 3). Stale candidates produce a visual preview error, not a committed design error. |
 | Multiple monitors, high-DPI | `ViewportTransform.ToWorld` works on logical pixels, not physical pixels. WPF provides logical pixels natively. No additional scaling needed. |
+
+---
+
+## Editor State vs Design State Boundary
+
+The editor layer maintains two distinct categories of state:
+
+| Category | Examples | Persisted? | Undo/Redo? | Routed via Orchestrator? |
+|---|---|---|---|---|
+| **Design state** | Cabinet position, width, run membership | Yes | Yes | Yes |
+| **Editor interaction state** | Selected cabinet IDs, hovered cabinet ID, active drag, viewport transform | No | No | No |
+
+**Why selection bypasses the orchestrator:**
+`EditorSession.SelectedCabinetIds` and `EditorSession.HoveredCabinetId` are mutated directly by `EditorInteractionService` and `EditorCanvasViewModel`. They are intentionally excluded from the `ResolutionOrchestrator` pipeline because:
+1. Selection changes must be instant (no async round-trip).
+2. Selection is not design intent — it should never appear on the undo stack.
+3. Persisting selection state would create noise in the revision history.
+
+Any future feature that needs selection to influence the pipeline (e.g. "apply to selected") should do so by reading `EditorSession.SelectedCabinetIds` as an input parameter to a command, not by routing selection itself through the orchestrator.
