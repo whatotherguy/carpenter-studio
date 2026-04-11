@@ -1,3 +1,5 @@
+using CabinetDesigner.Application.Diagnostics;
+
 namespace CabinetDesigner.Persistence.Migrations;
 
 /// <summary>
@@ -9,10 +11,12 @@ namespace CabinetDesigner.Persistence.Migrations;
 public sealed class StartupOrchestrator
 {
     private readonly MigrationRunner _migrationRunner;
+    private readonly IAppLogger? _logger;
 
-    public StartupOrchestrator(MigrationRunner migrationRunner)
+    public StartupOrchestrator(MigrationRunner migrationRunner, IAppLogger? logger = null)
     {
         _migrationRunner = migrationRunner ?? throw new ArgumentNullException(nameof(migrationRunner));
+        _logger = logger;
     }
 
     /// <summary>
@@ -20,6 +24,39 @@ public sealed class StartupOrchestrator
     /// Microsoft.Data.Sqlite completes its async operations synchronously the caller
     /// must ensure the method is invoked on a thread-pool thread (e.g. via Task.Run).
     /// </summary>
-    public Task RunAsync(CancellationToken ct = default)
-        => _migrationRunner.RunAsync(ct);
+    public async Task RunAsync(CancellationToken ct = default)
+    {
+        _logger?.Log(new LogEntry
+        {
+            Level = LogLevel.Info,
+            Category = "Startup",
+            Message = "Running schema migrations.",
+            Timestamp = DateTimeOffset.UtcNow
+        });
+
+        try
+        {
+            await _migrationRunner.RunAsync(ct).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Fatal,
+                Category = "Startup",
+                Message = "Schema migration sequence failed; application cannot start.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Exception = exception
+            });
+            throw;
+        }
+
+        _logger?.Log(new LogEntry
+        {
+            Level = LogLevel.Info,
+            Category = "Startup",
+            Message = "Schema migrations completed successfully.",
+            Timestamp = DateTimeOffset.UtcNow
+        });
+    }
 }

@@ -1,16 +1,20 @@
+using CabinetDesigner.Application.Diagnostics;
+
 namespace CabinetDesigner.Persistence.Migrations;
 
 public sealed class MigrationRunner
 {
     private readonly IDbConnectionFactory _connectionFactory;
     private readonly IReadOnlyList<ISchemaMigration> _migrations;
+    private readonly IAppLogger? _logger;
 
-    public MigrationRunner(IDbConnectionFactory connectionFactory, IEnumerable<ISchemaMigration> migrations)
+    public MigrationRunner(IDbConnectionFactory connectionFactory, IEnumerable<ISchemaMigration> migrations, IAppLogger? logger = null)
     {
         _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
         _migrations = migrations
             .OrderBy(migration => migration.Version)
             .ToArray();
+        _logger = logger;
     }
 
     public async Task RunAsync(CancellationToken ct = default)
@@ -27,6 +31,19 @@ public sealed class MigrationRunner
             {
                 continue;
             }
+
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Info,
+                Category = "Migration",
+                Message = "Applying schema migration.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Properties = new Dictionary<string, string>
+                {
+                    ["version"] = migration.Version.ToString(),
+                    ["description"] = migration.Description
+                }
+            });
 
             await using var transaction = (Microsoft.Data.Sqlite.SqliteTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
 
@@ -47,9 +64,31 @@ public sealed class MigrationRunner
 
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
             }
-            catch
+            catch (Exception exception)
             {
-                await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                _logger?.Log(new LogEntry
+                {
+                    Level = LogLevel.Error,
+                    Category = "Migration",
+                    Message = "Schema migration failed; transaction rolled back.",
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Properties = new Dictionary<string, string>
+                    {
+                        ["version"] = migration.Version.ToString(),
+                        ["description"] = migration.Description
+                    },
+                    Exception = exception
+                });
+
+                try
+                {
+                    await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Rollback failure is best-effort; the original exception is already logged and will be rethrown.
+                }
+
                 throw;
             }
         }
