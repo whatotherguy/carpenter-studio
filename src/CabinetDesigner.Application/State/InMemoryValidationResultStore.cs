@@ -21,9 +21,9 @@ public sealed class InMemoryValidationResultStore : IValidationResultStore
         ArgumentNullException.ThrowIfNull(result);
         _current = result;
 
-        if (result.HasManufactureBlockers)
+        var counts = result.SeverityCounts;
+        if (counts.ManufactureBlockers > 0)
         {
-            var counts = result.SeverityCounts;
             _logger?.Log(new LogEntry
             {
                 Level = LogLevel.Warning,

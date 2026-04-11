@@ -66,7 +66,6 @@ public sealed class MigrationRunner
             }
             catch (Exception exception)
             {
-                await transaction.RollbackAsync(ct).ConfigureAwait(false);
                 _logger?.Log(new LogEntry
                 {
                     Level = LogLevel.Error,
@@ -80,6 +79,16 @@ public sealed class MigrationRunner
                     },
                     Exception = exception
                 });
+
+                try
+                {
+                    await transaction.RollbackAsync(ct).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Rollback failure is best-effort; the original exception is already logged and will be rethrown.
+                }
+
                 throw;
             }
         }
