@@ -68,7 +68,7 @@ public sealed class CatalogService : ICatalogService
 
     private static Guid StableIdFor(string cabinetTypeId)
     {
-        var guidBytes = MD5.HashData(Encoding.UTF8.GetBytes(cabinetTypeId));
-        return new Guid(guidBytes);
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(cabinetTypeId));
+        return new Guid(hashBytes[..16]);
     }
 }
