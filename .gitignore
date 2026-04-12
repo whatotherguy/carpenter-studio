@@ -31,5 +31,8 @@ Coverage/
 *.coverage
 *.coveragexml
 
+# Git worktrees
+.worktrees/
+
 # Root-level build and restore logs
 *.log
