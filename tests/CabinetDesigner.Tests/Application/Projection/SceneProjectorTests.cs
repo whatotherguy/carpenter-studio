@@ -1,4 +1,5 @@
 using CabinetDesigner.Application.State;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Domain.RunContext;
@@ -33,7 +34,7 @@ public sealed class SceneProjectorTests
         var slot = run.AppendCabinet(cabinetId, Length.FromInches(30m));
         store.AddWall(wall);
         store.AddRun(run, wall.StartPoint, wall.EndPoint);
-        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, slot.Id));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, slot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var scene = new SceneProjector(store).Project();
 
@@ -60,8 +61,8 @@ public sealed class SceneProjectorTests
         var secondSlot = run.AppendCabinet(secondCabinetId, Length.FromInches(24m));
         store.AddWall(wall);
         store.AddRun(run, wall.StartPoint, wall.EndPoint);
-        store.AddCabinet(new CabinetStateRecord(firstCabinetId, "diag-1", Length.FromInches(24m), Length.FromInches(24m), run.Id, firstSlot.Id));
-        store.AddCabinet(new CabinetStateRecord(secondCabinetId, "diag-2", Length.FromInches(24m), Length.FromInches(24m), run.Id, secondSlot.Id));
+        store.AddCabinet(new CabinetStateRecord(firstCabinetId, "diag-1", Length.FromInches(24m), Length.FromInches(24m), run.Id, firstSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
+        store.AddCabinet(new CabinetStateRecord(secondCabinetId, "diag-2", Length.FromInches(24m), Length.FromInches(24m), run.Id, secondSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var scene = new SceneProjector(store).Project();
 

@@ -1,4 +1,5 @@
 using CabinetDesigner.Application.Pipeline.StageResults;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
@@ -48,7 +49,9 @@ public sealed record CabinetStateRecord(
     Length NominalWidth,
     Length NominalDepth,
     RunId RunId,
-    RunSlotId SlotId) : IDomainEntity
+    RunSlotId SlotId,
+    CabinetCategory Category,
+    ConstructionMethod Construction) : IDomainEntity
 {
     public string EntityId => CabinetId.Value.ToString();
 

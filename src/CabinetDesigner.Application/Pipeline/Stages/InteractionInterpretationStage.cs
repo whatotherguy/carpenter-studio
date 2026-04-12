@@ -95,7 +95,9 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             command.NominalWidth,
             command.NominalDepth,
             run.Id,
-            slot.Id);
+            slot.Id,
+            command.Category,
+            command.Construction);
         _stateStore.AddCabinet(cabinet);
 
         _deltaTracker.RecordDelta(new StateDelta(

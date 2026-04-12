@@ -1,6 +1,7 @@
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.Stages;
 using CabinetDesigner.Application.State;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
@@ -45,8 +46,8 @@ public sealed class DeterminismTests
 
         store.AddWall(wall);
         store.AddRun(run, wall.StartPoint, wall.EndPoint);
-        store.AddCabinet(new CabinetStateRecord(firstCabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, firstSlot.Id));
-        store.AddCabinet(new CabinetStateRecord(secondCabinetId, "drawer-36", Length.FromInches(36m), Length.FromInches(24m), run.Id, secondSlot.Id));
+        store.AddCabinet(new CabinetStateRecord(firstCabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, firstSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
+        store.AddCabinet(new CabinetStateRecord(secondCabinetId, "drawer-36", Length.FromInches(36m), Length.FromInches(24m), run.Id, secondSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
         return store;
     }
 

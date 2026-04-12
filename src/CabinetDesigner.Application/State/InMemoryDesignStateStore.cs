@@ -1,4 +1,5 @@
 using CabinetDesigner.Application.Pipeline;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
@@ -168,7 +169,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 cabinet.NominalWidth,
                 cabinet.Depth,
                 slot.RunId,
-                slot.Id));
+                slot.Id,
+                cabinet.Category,
+                cabinet.Construction));
         }
 
         lock (_sync)
@@ -345,7 +348,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
             Length.FromInches(cabinetSnapshot.NominalWidthInches),
             Length.FromInches(cabinetSnapshot.NominalDepthInches),
             new RunId(cabinetSnapshot.RunId),
-            new RunSlotId(cabinetSnapshot.SlotId));
+            new RunSlotId(cabinetSnapshot.SlotId),
+            cabinetSnapshot.Category,
+            cabinetSnapshot.Construction);
 
         lock (_sync)
         {
@@ -414,7 +419,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         decimal NominalWidthInches,
         decimal NominalDepthInches,
         Guid RunId,
-        Guid SlotId)
+        Guid SlotId,
+        CabinetCategory Category,
+        ConstructionMethod Construction)
     {
         public static CabinetSnapshot From(CabinetStateRecord cabinet) =>
             new(
@@ -423,7 +430,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 cabinet.NominalWidth.Inches,
                 cabinet.NominalDepth.Inches,
                 cabinet.RunId.Value,
-                cabinet.SlotId.Value);
+                cabinet.SlotId.Value,
+                cabinet.Category,
+                cabinet.Construction);
     }
 
     private sealed record WallSnapshot(

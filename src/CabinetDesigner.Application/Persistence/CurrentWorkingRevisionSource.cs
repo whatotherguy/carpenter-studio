@@ -57,8 +57,8 @@ public sealed class CurrentWorkingRevisionSource : IWorkingRevisionSource, ICurr
                 cabinet.CabinetId,
                 revisionId,
                 cabinet.CabinetTypeId,
-                CabinetCategory.Base,
-                ConstructionMethod.Frameless,
+                cabinet.Category,
+                cabinet.Construction,
                 cabinet.NominalWidth,
                 cabinet.NominalDepth,
                 Length.FromInches(34.5m)))

@@ -2,6 +2,7 @@ using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.StageResults;
 using CabinetDesigner.Application.Pipeline.Stages;
 using CabinetDesigner.Application.State;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
 using CabinetDesigner.Domain.Commands.Modification;
@@ -94,7 +95,7 @@ public sealed class EditorSliceStageTests
         store.AddRun(targetRun, new Point2D(0m, 24m), new Point2D(96m, 24m));
         var cabinetId = CabinetId.New();
         var sourceSlot = sourceRun.AppendCabinet(cabinetId, Length.FromInches(24m));
-        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(24m), sourceRun.Id, sourceSlot.Id));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(24m), sourceRun.Id, sourceSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var command = new MoveCabinetCommand(
             cabinetId,
@@ -122,7 +123,7 @@ public sealed class EditorSliceStageTests
         var store = CreateStoreWithRun(out var run, out _);
         var cabinetId = CabinetId.New();
         var slot = run.AppendCabinet(cabinetId, Length.FromInches(30m));
-        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, slot.Id));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, slot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var context = CreateContext(new AddCabinetToRunCommand(run.Id, "base-30", Length.FromInches(30m), DomainRunPlacement.EndOfRun, CommandOrigin.User, "preview", DateTimeOffset.UnixEpoch));
         context.Interpretation = new InteractionInterpretationResult
@@ -145,10 +146,10 @@ public sealed class EditorSliceStageTests
         var store = CreateStoreWithRun(out var run, out _);
         var firstCabinetId = CabinetId.New();
         var firstSlot = run.AppendCabinet(firstCabinetId, Length.FromInches(30m));
-        store.AddCabinet(new CabinetStateRecord(firstCabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, firstSlot.Id));
+        store.AddCabinet(new CabinetStateRecord(firstCabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, firstSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
         var secondCabinetId = CabinetId.New();
         var secondSlot = run.AppendCabinet(secondCabinetId, Length.FromInches(18m));
-        store.AddCabinet(new CabinetStateRecord(secondCabinetId, "base-18", Length.FromInches(18m), Length.FromInches(24m), run.Id, secondSlot.Id));
+        store.AddCabinet(new CabinetStateRecord(secondCabinetId, "base-18", Length.FromInches(18m), Length.FromInches(24m), run.Id, secondSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var context = CreateContext(new AddCabinetToRunCommand(run.Id, "base-18", Length.FromInches(18m), DomainRunPlacement.EndOfRun, CommandOrigin.User, "preview", DateTimeOffset.UnixEpoch));
         context.Interpretation = new InteractionInterpretationResult
@@ -173,7 +174,7 @@ public sealed class EditorSliceStageTests
         store.AddRun(run, wall.StartPoint, wall.EndPoint);
         var cabinetId = CabinetId.New();
         var slot = run.AppendCabinet(cabinetId, Length.FromInches(24m));
-        store.AddCabinet(new CabinetStateRecord(cabinetId, "diag", Length.FromInches(24m), Length.FromInches(24m), run.Id, slot.Id));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "diag", Length.FromInches(24m), Length.FromInches(24m), run.Id, slot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
         var context = CreateContext(new AddCabinetToRunCommand(run.Id, "diag", Length.FromInches(24m), DomainRunPlacement.EndOfRun, CommandOrigin.User, "preview", DateTimeOffset.UnixEpoch));
         context.Interpretation = new InteractionInterpretationResult
         {
@@ -195,7 +196,7 @@ public sealed class EditorSliceStageTests
         store.AddRun(targetRun, new Point2D(0m, 24m), new Point2D(96m, 24m));
         var cabinetId = CabinetId.New();
         var sourceSlot = sourceRun.AppendCabinet(cabinetId, Length.FromInches(24m));
-        store.AddCabinet(new CabinetStateRecord(cabinetId, "deep-30", Length.FromInches(24m), Length.FromInches(30m), sourceRun.Id, sourceSlot.Id));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "deep-30", Length.FromInches(24m), Length.FromInches(30m), sourceRun.Id, sourceSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var command = new MoveCabinetCommand(
             cabinetId,
@@ -251,7 +252,7 @@ public sealed class EditorSliceStageTests
         var store = CreateStoreWithRun(out var run, out _);
         var cabinetId = CabinetId.New();
         var slot = run.AppendCabinet(cabinetId, Length.FromInches(24m));
-        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(24m), run.Id, slot.Id));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(24m), run.Id, slot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var command = new ResizeCabinetCommand(
             cabinetId,
@@ -276,7 +277,7 @@ public sealed class EditorSliceStageTests
         var store = CreateStoreWithRun(out var run, out _);
         var cabinetId = CabinetId.New();
         var slot = run.AppendCabinet(cabinetId, Length.FromInches(24m));
-        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(30m), run.Id, slot.Id));
+        store.AddCabinet(new CabinetStateRecord(cabinetId, "base-24", Length.FromInches(24m), Length.FromInches(30m), run.Id, slot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
         var command = new ResizeCabinetCommand(
             cabinetId,

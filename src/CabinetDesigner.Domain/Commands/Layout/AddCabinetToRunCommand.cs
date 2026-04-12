@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
 
@@ -21,6 +22,10 @@ public sealed record AddCabinetToRunCommand : DesignCommandBase
 
     public int? InsertAtIndex { get; }
 
+    public CabinetCategory Category { get; }
+
+    public ConstructionMethod Construction { get; }
+
     public AddCabinetToRunCommand(
         RunId runId,
         string cabinetTypeId,
@@ -30,7 +35,9 @@ public sealed record AddCabinetToRunCommand : DesignCommandBase
         string intentDescription,
         DateTimeOffset timestamp,
         int? insertAtIndex = null,
-        Length? nominalDepth = null)
+        Length? nominalDepth = null,
+        CabinetCategory category = CabinetCategory.Base,
+        ConstructionMethod construction = ConstructionMethod.Frameless)
         : base(CommandMetadata.Create(
             timestamp,
             origin,
@@ -43,6 +50,8 @@ public sealed record AddCabinetToRunCommand : DesignCommandBase
         NominalDepth = nominalDepth ?? Length.FromInches(24m);
         Placement = placement;
         InsertAtIndex = insertAtIndex;
+        Category = category;
+        Construction = construction;
     }
 
     public override IReadOnlyList<ValidationIssue> ValidateStructure()
