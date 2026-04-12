@@ -115,10 +115,10 @@ public sealed class SnapshotService : ISnapshotService
         return new RevisionDto(snapshot.RevisionId.Value, snapshot.Label, snapshot.ApprovedAt, ApprovalState.Approved.ToString(), true, false);
     }
 
-    public IReadOnlyList<RevisionDto> GetRevisionHistory()
+    public async Task<IReadOnlyList<RevisionDto>> GetRevisionHistoryAsync(CancellationToken ct = default)
     {
         var state = _workingRevisionSource.CaptureCurrentState();
-        var revisions = _revisionRepository.ListAsync(state.Project.Id).GetAwaiter().GetResult();
+        var revisions = await _revisionRepository.ListAsync(state.Project.Id, ct).ConfigureAwait(false);
         return revisions.Select(revision => new RevisionDto(
             revision.Id.Value,
             revision.Label ?? $"Rev {revision.RevisionNumber}",

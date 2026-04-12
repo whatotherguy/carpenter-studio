@@ -9,5 +9,5 @@ public interface ISnapshotService
 
     Task<RevisionDto> LoadSnapshotAsync(Guid revisionId, CancellationToken ct = default);
 
-    IReadOnlyList<RevisionDto> GetRevisionHistory();
+    Task<IReadOnlyList<RevisionDto>> GetRevisionHistoryAsync(CancellationToken ct = default);
 }
