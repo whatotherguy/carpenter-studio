@@ -119,19 +119,19 @@ public sealed class SnapshotServiceTests
     [Fact]
     public async Task GetRevisionHistoryAsync_WhenNoProjectStateLoaded_ThrowsInvalidOperationException()
     {
-        // Test null guard: should throw when CaptureCurrentState returns null state
+        // Test null guard: should throw InvalidOperationException when no project state is loaded
         var service = new SnapshotService(
             new RecordingUnitOfWork(),
             new RecordingProjectRepository(null!),
             new RecordingRevisionRepository(null!),
             new RecordingSnapshotRepository(),
-            new RecordingWorkingRevisionSourceNull(),
+            new RecordingWorkingRevisionSourceThrowsInvalidOperation(),
             new RecordingValidationHistoryRepository(),
             new RecordingEventBus(),
             new FixedClock(DateTimeOffset.Now));
 
-        var ex = await Assert.ThrowsAsync<NullReferenceException>(async () => await service.GetRevisionHistoryAsync());
-        Assert.NotNull(ex);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () => await service.GetRevisionHistoryAsync());
+        Assert.Equal("No project state is currently loaded.", ex.Message);
     }
 
     private static PersistedProjectState CreateState()
@@ -251,9 +251,9 @@ public sealed class SnapshotServiceTests
             Task.FromResult<IReadOnlyList<RevisionRecord>>(revisions.Where(r => r.ProjectId == projectId).ToArray());
     }
 
-    private sealed class RecordingWorkingRevisionSourceNull : IWorkingRevisionSource
+    private sealed class RecordingWorkingRevisionSourceThrowsInvalidOperation : IWorkingRevisionSource
     {
         public PersistedProjectState CaptureCurrentState(PartGenerationResult? partResult = null) =>
-            null!; // Intentionally return null to test null guard
+            throw new InvalidOperationException("No project state is currently loaded.");
     }
 }

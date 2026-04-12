@@ -118,6 +118,9 @@ public sealed class SnapshotService : ISnapshotService
     public async Task<IReadOnlyList<RevisionDto>> GetRevisionHistoryAsync(CancellationToken ct = default)
     {
         var state = _workingRevisionSource.CaptureCurrentState();
+        if (state is null)
+            throw new InvalidOperationException("No project state is currently loaded.");
+
         var revisions = await _revisionRepository.ListAsync(state.Project.Id, ct).ConfigureAwait(false);
         return revisions.Select(revision => new RevisionDto(
             revision.Id.Value,
