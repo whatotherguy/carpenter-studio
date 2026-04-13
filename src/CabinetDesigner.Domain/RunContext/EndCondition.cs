@@ -10,8 +10,13 @@ public sealed record EndCondition
 
     public EndCondition(EndConditionType type, Length? fillerWidth = null)
     {
-        if (type is EndConditionType.Filler or EndConditionType.Scribe && fillerWidth is null)
-            throw new ArgumentException($"{type} end condition requires a width.", nameof(fillerWidth));
+        if (type is EndConditionType.Filler or EndConditionType.Scribe)
+        {
+            if (fillerWidth is null)
+                throw new ArgumentException($"{type} end condition requires a width.", nameof(fillerWidth));
+            if (fillerWidth <= Length.Zero)
+                throw new ArgumentException($"{type} end condition width must be greater than zero.", nameof(fillerWidth));
+        }
 
         Type = type;
         FillerWidth = fillerWidth;
