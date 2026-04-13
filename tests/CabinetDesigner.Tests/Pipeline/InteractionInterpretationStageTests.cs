@@ -150,12 +150,12 @@ public sealed class InteractionInterpretationStageTests
         var result = new InteractionInterpretationStage(deltaTracker, store).Execute(context);
         var deltas = deltaTracker.Finalize();
 
-        // Assert: Result should be [B, A, C] (A moved to before the last position)
+        // Assert: Result should be [B, C, A] (A moved to the end)
         Assert.True(result.Success);
         Assert.Equal(3, run.Slots.Count);
         Assert.Equal(cabinetBId, run.Slots[0].CabinetId);
-        Assert.Equal(cabinetAId, run.Slots[1].CabinetId);
-        Assert.Equal(cabinetCId, run.Slots[2].CabinetId);
+        Assert.Equal(cabinetCId, run.Slots[1].CabinetId);
+        Assert.Equal(cabinetAId, run.Slots[2].CabinetId);
 
         // Verify deltas were recorded
         Assert.Contains(deltas, d => d.EntityType == "CabinetRun" && d.Operation == DeltaOperation.Modified);
