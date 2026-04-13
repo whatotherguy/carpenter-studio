@@ -246,6 +246,13 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             _ => throw new InvalidOperationException("Move command is missing a target index.")
         };
 
+        // When moving within the same run, the source slot is removed before insertion,
+        // shifting all subsequent indices by -1. Adjust for end-of-run to avoid an off-by-one.
+        if (isSameRunMove && command.TargetPlacement == DomainRunPlacement.EndOfRun)
+        {
+            index -= 1;
+        }
+
         return index;
     }
 }
