@@ -1044,6 +1044,51 @@ public sealed class EditorCanvasViewModelForwardingTests
         Assert.Equal(0, interactionService.CommitCallCount);
     }
 
+    [Fact]
+    public void OnMouseDown_WhileCommitInFlight_AbortsCommitAndAcceptsNewInput()
+    {
+        // Regression test for C9: rapid second click during in-flight drag commit should abort the pending operation
+        // and accept the new input, rather than throwing and leaving the session permanently stuck.
+        var tcs = new TaskCompletionSource<DragCommitResult>();
+        var slowInteractionService = new SlowCommitInteractionService(tcs);
+        var projector = new RecordingSceneProjector();
+        var eventBus = new ApplicationEventBus();
+        using var viewModel = new EditorCanvasViewModel(
+            new RecordingRunService(),
+            eventBus,
+            projector,
+            new TestEditorCanvasSession(),
+            new DefaultHitTester(),
+            new ForwardingCanvasHost(),
+            slowInteractionService);
+
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // Start drag: click, move past threshold, release
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d); // exceeds 4px threshold, starts drag
+        viewModel.OnMouseUp(10d, 5d); // fires CommitDragAsync, which awaits OnDragCommittedAsync
+        // At this point, CommitDragAsync is awaiting the TCS and has not yet completed.
+
+        // Before the commit completes, user clicks another cabinet
+        // This should NOT throw; instead it should abort the pending operation and accept the new input.
+        viewModel.OnMouseDown(5d, 5d);
+
+        // Verify that OnDragAborted was called (the guard executed)
+        Assert.True(slowInteractionService.OnDragAbortedCalled);
+
+        // Complete the pending commit task
+        tcs.SetResult(new DragCommitResult(true, null, null));
+
+        // Spin until the async commit finishes (OnMouseUp -> CommitDragAsync -> await)
+        SpinWait.SpinUntil(() => slowInteractionService.CommitCallCount > 0, TimeSpan.FromSeconds(1));
+
+        // The view model should still be functional (no thrown exception, not permanently locked)
+        Assert.NotNull(viewModel.Scene);
+    }
+
     private static RenderSceneDto MakeSingleCabinetScene(Guid cabinetId) =>
         new RenderSceneDto(
             [],
@@ -1068,6 +1113,24 @@ public sealed class EditorCanvasViewModelForwardingTests
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             host,
+            interactionService);
+    }
+
+    private static EditorCanvasViewModel CreateViewModelWithInteraction(
+        RecordingRunService runService,
+        IEditorInteractionService interactionService,
+        out RecordingSceneProjector projector,
+        out ApplicationEventBus eventBus)
+    {
+        projector = new RecordingSceneProjector();
+        eventBus = new ApplicationEventBus();
+        return new EditorCanvasViewModel(
+            runService,
+            eventBus,
+            projector,
+            new TestEditorCanvasSession(),
+            new DefaultHitTester(),
+            new ForwardingCanvasHost(),
             interactionService);
     }
 
@@ -1155,6 +1218,40 @@ public sealed class EditorCanvasViewModelForwardingTests
         }
 
         public void OnDragAborted() { }
+    }
+
+    private sealed class SlowCommitInteractionService : IEditorInteractionService
+    {
+        private readonly TaskCompletionSource<DragCommitResult> _slowCommitTcs;
+        public int CommitCallCount { get; private set; }
+        public bool OnDragAbortedCalled { get; private set; }
+
+        public SlowCommitInteractionService(TaskCompletionSource<DragCommitResult> slowCommitTcs)
+        {
+            _slowCommitTcs = slowCommitTcs;
+        }
+
+        public void BeginPlaceCabinet(string cabinetTypeId, Length nominalWidth, Length nominalDepth, double screenX, double screenY) { }
+
+        public void BeginMoveCabinet(CabinetId cabinetId, double screenX, double screenY) { }
+
+        public void BeginResizeCabinet(CabinetId cabinetId, double screenX, double screenY) { }
+
+        public DragPreviewResult OnDragMoved(double screenX, double screenY)
+        {
+            return new DragPreviewResult(true, null, null);
+        }
+
+        public Task<DragCommitResult> OnDragCommittedAsync(CancellationToken ct = default)
+        {
+            CommitCallCount++;
+            return _slowCommitTcs.Task;
+        }
+
+        public void OnDragAborted()
+        {
+            OnDragAbortedCalled = true;
+        }
     }
 
     private sealed class ForwardingCanvasHost : IEditorCanvasHost

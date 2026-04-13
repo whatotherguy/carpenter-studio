@@ -35,6 +35,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     private Guid? _pendingDragCabinetId;
     private HitTestTarget _pendingDragTarget;
     private bool _isDragActive;
+    private bool _isCommitInFlight;
 
     public EditorCanvasViewModel(
         IRunService runService,
@@ -164,6 +165,15 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     public void OnMouseDown(double screenX, double screenY)
     {
+        // Guard: if a drag commit is still in flight, abort the session before accepting new input.
+        if (_isCommitInFlight || _isDragActive)
+        {
+            _isDragActive = false;
+            _isCommitInFlight = false;
+            _pendingDragCabinetId = null;
+            _interactionService.OnDragAborted();
+        }
+
         if (Scene is null)
         {
             return;
@@ -452,6 +462,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     private async Task CommitDragAsync()
     {
+        _isCommitInFlight = true;
         BeginBusy();
         try
         {
@@ -487,6 +498,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            _isCommitInFlight = false;
             EndBusy();
             RefreshScene();
         }
