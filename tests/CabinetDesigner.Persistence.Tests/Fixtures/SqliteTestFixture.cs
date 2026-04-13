@@ -30,22 +30,34 @@ public sealed class SqliteTestFixture : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await Task.Delay(25).ConfigureAwait(false);
         // Return pooled connections to the pool and close all physical handles so
         // the database file (and its WAL/SHM companions) can be deleted on all
         // platforms.  Without this call the pool may still hold an open file
         // handle and File.Delete will throw on Windows.
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        DeleteIfExists(DatabasePath);
-        DeleteIfExists($"{DatabasePath}-wal");
-        DeleteIfExists($"{DatabasePath}-shm");
+        await DeleteWithRetryAsync(DatabasePath).ConfigureAwait(false);
+        await DeleteWithRetryAsync($"{DatabasePath}-wal").ConfigureAwait(false);
+        await DeleteWithRetryAsync($"{DatabasePath}-shm").ConfigureAwait(false);
     }
 
-    private static void DeleteIfExists(string path)
+    private static async Task DeleteWithRetryAsync(string path)
     {
-        if (File.Exists(path))
+        if (!File.Exists(path))
         {
-            File.Delete(path);
+            return;
+        }
+
+        for (var i = 0; i < 10; i++)
+        {
+            try
+            {
+                File.Delete(path);
+                break;
+            }
+            catch (IOException) when (i < 9)
+            {
+                await Task.Yield();
+            }
         }
     }
 
