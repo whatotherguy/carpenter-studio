@@ -126,20 +126,20 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
 
     private async void OnCatalogItemActivated(object? sender, CatalogItemViewModel item)
     {
-        if (!HasActiveProject)
-        {
-            return;
-        }
-
-        var runId = ResolveTargetRunId();
-        if (runId is null)
-        {
-            Canvas.SetStatusMessage("No runs available to add to.");
-            return;
-        }
-
         try
         {
+            if (!HasActiveProject)
+            {
+                return;
+            }
+
+            var runId = ResolveTargetRunId();
+            if (runId is null)
+            {
+                Canvas.SetStatusMessage("No runs available to add to.");
+                return;
+            }
+
             await Canvas.AddCabinetToRunAsync(runId.Value, item.TypeId, item.DefaultNominalWidthInches)
                 .ConfigureAwait(true);
         }

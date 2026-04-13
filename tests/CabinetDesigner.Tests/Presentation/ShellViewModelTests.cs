@@ -380,6 +380,87 @@ public sealed class ShellViewModelTests
         Assert.False(exceptionThrown);
     }
 
+    [Fact]
+    public async Task OnCatalogItemActivated_WhenAddCabinetThrows_CatchesExceptionAndDisplaysErrorMessage()
+    {
+        // Setup: Create shell with run service that will throw
+        var projectService = new RecordingProjectService();
+        var eventBus = new ApplicationEventBus();
+        var throwingRunService = new ThrowingRunService();
+        var currentState = new CurrentWorkingRevisionSource(new InMemoryDesignStateStore());
+        var projector = new RecordingSceneProjector();
+
+        var canvas = new EditorCanvasViewModel(
+            throwingRunService,
+            eventBus,
+            projector,
+            new TestEditorCanvasSession(),
+            new DefaultHitTester(),
+            new RecordingCanvasHost(),
+            new NoOpInteractionService());
+
+        var catalog = new CatalogPanelViewModel(new CatalogService());
+        var propertyInspector = new PropertyInspectorViewModel(throwingRunService, eventBus);
+        var validationService = new RecordingValidationSummaryService();
+        var stateStore = new InMemoryDesignStateStore();
+        var runSummary = new RunSummaryPanelViewModel(new RunSummaryService(currentState, stateStore), currentState, eventBus);
+        var statusBar = new StatusBarViewModel(eventBus, validationService);
+        var issuePanel = new IssuePanelViewModel(validationService, eventBus);
+
+        using var shell = new ShellViewModel(
+            projectService,
+            new RecordingUndoRedoService(),
+            eventBus,
+            canvas,
+            catalog,
+            propertyInspector,
+            runSummary,
+            issuePanel,
+            statusBar,
+            new StubDialogService());
+
+        // Setup: Open a project with a run so ResolveTargetRunId doesn't early-exit
+        var project = new ProjectSummaryDto(Guid.NewGuid(), "Test Project", "C:\\test.cab", DateTimeOffset.UtcNow, "Rev 1", false);
+        projectService.SeedCurrentProject(project);
+        eventBus.Publish(new ProjectOpenedEvent(project));
+
+        SeedRunSummaryState(currentState);
+
+        // Create a run for the test - this is needed so ResolveTargetRunId doesn't return null
+        var runId = Guid.NewGuid();
+        projector.Scene = new RenderSceneDto(
+            [],
+            [
+                new RunRenderDto(
+                    runId,
+                    new LineSegment2D(Point2D.Origin, new Point2D(96m, 0m)),
+                    new Rect2D(Point2D.Origin, Length.FromInches(96m), Length.FromInches(24m)),
+                    true)
+            ],
+            [],
+            null,
+            new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "layout.update", true, [], [], [])));
+
+        // Act: Create a catalog item and trigger the ItemActivated event through ActivateItem
+        var catalogItem = new CatalogItemViewModel(
+            "base-36",
+            "Base Cabinet 36\"",
+            "Base",
+            "Base cabinet 36 inches wide",
+            "36\"",
+            36m);
+
+        // Call ActivateItem which raises the ItemActivated event that OnCatalogItemActivated subscribes to
+        catalog.ActivateItem(catalogItem);
+
+        // Wait for the async void handler to complete
+        await Task.Delay(200);
+
+        // Assert: Error message was set without throwing unhandled exception
+        Assert.StartsWith("Failed to add cabinet:", statusBar.StatusMessage);
+    }
+
     private static ShellViewModel CreateShellViewModel(
         out RecordingProjectService projectService,
         out RecordingUndoRedoService undoRedoService,
@@ -642,5 +723,25 @@ public sealed class ShellViewModelTests
         public string? ShowSaveFileDialog(string title, string filter, string defaultFileName) => null;
 
         public bool ShowYesNoDialog(string title, string message) => false;
+    }
+
+    private sealed class ThrowingRunService : IRunService
+    {
+        public Task<CommandResultDto> CreateRunAsync(CreateRunRequestDto request) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> DeleteRunAsync(RunId runId) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> AddCabinetAsync(AddCabinetRequestDto request) =>
+            throw new InvalidOperationException("Simulated error when adding cabinet to run");
+
+        public Task<CommandResultDto> InsertCabinetAsync(InsertCabinetRequestDto request) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> MoveCabinetAsync(MoveCabinetRequestDto request) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> ResizeCabinetAsync(ResizeCabinetRequestDto request) => throw new NotImplementedException();
+
+        public Task<CommandResultDto> SetCabinetOverrideAsync(SetCabinetOverrideRequestDto request) => throw new NotImplementedException();
+
+        public RunSummaryDto GetRunSummary(RunId runId) => throw new NotImplementedException();
     }
 }
