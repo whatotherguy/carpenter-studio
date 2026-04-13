@@ -16,13 +16,17 @@ internal static class ValidationIssueMapper
         SuggestedFixJson = record.SuggestedFixJson
     };
 
-    public static ValidationIssueRecord ToRecord(ValidationIssueRow row) => new(
-        new ValidationIssueId(row.RuleCode, JsonSerializer.Deserialize<IReadOnlyList<string>>(row.AffectedEntityIds, SqliteJson.Options) ?? []),
-        new RevisionId(Guid.Parse(row.RevisionId)),
-        DateTimeOffset.Parse(row.RunAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-        Enum.Parse<ValidationSeverity>(row.Severity, ignoreCase: true),
-        row.RuleCode,
-        row.Message,
-        JsonSerializer.Deserialize<IReadOnlyList<string>>(row.AffectedEntityIds, SqliteJson.Options) ?? [],
-        row.SuggestedFixJson);
+    public static ValidationIssueRecord ToRecord(ValidationIssueRow row)
+    {
+        var affectedIds = JsonSerializer.Deserialize<IReadOnlyList<string>>(row.AffectedEntityIds, SqliteJson.Options) ?? [];
+        return new(
+            new ValidationIssueId(row.RuleCode, affectedIds),
+            new RevisionId(Guid.Parse(row.RevisionId)),
+            DateTimeOffset.Parse(row.RunAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            Enum.Parse<ValidationSeverity>(row.Severity, ignoreCase: true),
+            row.RuleCode,
+            row.Message,
+            affectedIds,
+            row.SuggestedFixJson);
+    }
 }
