@@ -571,6 +571,34 @@ public sealed class EditorCanvasViewModelTests
         Assert.Equal(expected, viewModel.StatusMessage);
     }
 
+    [Fact]
+    public void OnMouseUp_WhenCommitDragThrows_ProperlyHandlesExceptionAsAsyncVoid()
+    {
+        var logger = new CapturingAppLogger();
+        var throwingInteraction = new ThrowingOnCommitInteractionService();
+        using var viewModel = CreateViewModelWithLogger(new RecordingRunService(), throwingInteraction, logger, out var projector, out var eventBus);
+        var cabinetId = Guid.NewGuid();
+        projector.Scene = MakeSingleCabinetScene(cabinetId);
+        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
+
+        // Start a drag then commit it; the commit will throw.
+        viewModel.OnMouseDown(5d, 5d);
+        viewModel.OnMouseMove(10d, 5d); // start drag
+        viewModel.OnMouseUp(10d, 5d);   // triggers CommitDragAsync as async void
+
+        // Wait for exception handling to complete (status message will be set).
+        // CommitDragAsync catches exceptions and sets "Drag failed." message.
+        var completed = SpinWait.SpinUntil(() => viewModel.StatusMessage == "Drag failed.", TimeSpan.FromSeconds(5));
+        Assert.True(completed, "Timed out waiting for CommitDragAsync exception to be handled.");
+
+        // Verify IsBusy is not stuck due to unbalanced BeginBusy/EndBusy.
+        // CommitDragAsync calls EndBusy() in its finally block even when exceptions occur.
+        Assert.False(viewModel.IsBusy, "IsBusy should be false after CommitDragAsync completes.");
+
+        // Verify status message indicates drag failed
+        Assert.Equal("Drag failed.", viewModel.StatusMessage);
+    }
+
     private static EditorCanvasViewModel CreateViewModelWithLogger(
         RecordingRunService runService,
         IEditorInteractionService interactionService,

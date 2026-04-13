@@ -262,7 +262,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void OnMouseUp(double screenX, double screenY)
+    public async void OnMouseUp(double screenX, double screenY)
     {
         // Discard any pending drag that never exceeded the threshold — the mouse-down
         // already handled selection, so no further action is needed.
@@ -273,7 +273,23 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
         if (wasDragActive)
         {
-            _ = CommitDragAsync();
+            try
+            {
+                await CommitDragAsync().ConfigureAwait(true);
+            }
+            catch (Exception exception)
+            {
+                _logger?.Log(new LogEntry
+                {
+                    Level = LogLevel.Error,
+                    Category = "EditorCanvasViewModel",
+                    Message = "Unhandled exception escaping CommitDragAsync.",
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Exception = exception
+                });
+                StatusMessage = "Drag failed unexpectedly.";
+                RefreshScene();
+            }
         }
     }
 

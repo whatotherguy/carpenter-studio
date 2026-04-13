@@ -13,6 +13,8 @@ namespace CabinetDesigner.Editor;
 
 public sealed class EditorInteractionService : IEditorInteractionService
 {
+    private static readonly Length MinimumCabinetWidth = Length.FromInches(1m);
+
     private readonly EditorSession _session;
     private readonly IEditorSceneGraph _sceneGraph;
     private readonly ISnapResolver _snapResolver;
@@ -251,7 +253,8 @@ public sealed class EditorInteractionService : IEditorInteractionService
 
         var rightEdge = winner?.SnapPoint ?? drag.CandidateRefPoint;
         var (distanceAlongAxis, _) = RunAxisProjection.ProjectOntoAxis(rightEdge, drag.FixedLeftEdgeWorld.Value, run.Axis);
-        var newWidth = Length.FromInches(Math.Max(0m, distanceAlongAxis));
+        var rawWidth = Length.FromInches(Math.Max(0m, distanceAlongAxis));
+        var newWidth = rawWidth < MinimumCabinetWidth ? MinimumCabinetWidth : rawWidth;
 
         return new ResizeCabinetCommand(
             drag.SubjectCabinetId.Value,

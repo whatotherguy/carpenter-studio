@@ -22,6 +22,7 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
     private Action<double, double>? _panMoveHandler;
     private Action? _panEndHandler;
     private System.Windows.Point? _middleDragOrigin;
+    private bool _isLeftDragActive;
     private bool _disposed;
 
     public WpfEditorCanvasHost(EditorCanvas canvas)
@@ -79,6 +80,7 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
             return;
         }
         _disposed = true;
+        _isLeftDragActive = false;
         _canvas.MouseDown -= OnCanvasMouseDown;
         _canvas.MouseMove -= OnCanvasMouseMove;
         _canvas.MouseUp -= OnCanvasMouseUp;
@@ -96,9 +98,10 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
             var pos = e.GetPosition(_canvas);
             _canvas.Focus();
             _canvas.CaptureMouse();
+            _isLeftDragActive = true;
             _mouseDownHandler?.Invoke(pos.X, pos.Y);
         }
-        else if (e.ChangedButton == MouseButton.Middle)
+        else if (e.ChangedButton == MouseButton.Middle && !_isLeftDragActive)
         {
             _middleDragOrigin = e.GetPosition(_canvas);
             _canvas.CaptureMouse();
@@ -130,6 +133,7 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         }
         if (e.ChangedButton == MouseButton.Left)
         {
+            _isLeftDragActive = false;
             var pos = e.GetPosition(_canvas);
             if (!_middleDragOrigin.HasValue)
             {

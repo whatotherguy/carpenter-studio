@@ -3,6 +3,7 @@ using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
+using CabinetDesigner.Domain.Commands.Modification;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Editor;
@@ -483,6 +484,163 @@ public sealed class EditorInteractionServiceTests
         Assert.True(preview.IsValid);
         var previewCommand = Assert.IsType<AddCabinetToRunCommand>(preview.PreviewCommand);
         Assert.Equal(CabinetCategory.Tall, previewCommand.Category);
+    }
+
+    [Fact]
+    public void OnDragMoved_ResizeWithZeroDistance_EnforcesMinimumCabinetWidth()
+    {
+        var runId = RunId.New();
+        var cabinetId = CabinetId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        cabinetId,
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(24m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var previewHandler = new RecordingPreviewCommandExecutor();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            previewHandler,
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        // Start resize at the left edge (fixed at origin)
+        service.BeginResizeCabinet(cabinetId, 0d, 0d);
+
+        // Drag to the same position (distance = 0), which would create a zero-width cabinet
+        var preview = service.OnDragMoved(0d, 0d);
+
+        Assert.True(preview.IsValid);
+        var resizeCommand = Assert.IsType<ResizeCabinetCommand>(preview.PreviewCommand);
+        // Width should be >= 1 inch (MinimumCabinetWidth)
+        Assert.True(resizeCommand.NewNominalWidth >= Length.FromInches(1m));
+    }
+
+    [Fact]
+    public void OnDragMoved_ResizeWithNegativeDistance_EnforcesMinimumCabinetWidth()
+    {
+        var runId = RunId.New();
+        var cabinetId = CabinetId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        cabinetId,
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(24m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var previewHandler = new RecordingPreviewCommandExecutor();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            previewHandler,
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        // Start resize at the left edge (fixed at origin)
+        service.BeginResizeCabinet(cabinetId, 0d, 0d);
+
+        // Drag far past the left edge (distance = -5 inches), which would try to create a negative-width cabinet
+        var preview = service.OnDragMoved(-5d, 0d);
+
+        Assert.True(preview.IsValid);
+        var resizeCommand = Assert.IsType<ResizeCabinetCommand>(preview.PreviewCommand);
+        // Width should be >= 1 inch (MinimumCabinetWidth), not zero or negative
+        Assert.True(resizeCommand.NewNominalWidth >= Length.FromInches(1m));
+    }
+
+    [Fact]
+    public void OnDragMoved_ResizeWithValidDistance_PreservesRequestedWidth()
+    {
+        var runId = RunId.New();
+        var cabinetId = CabinetId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [
+                    new CabinetSceneView(
+                        cabinetId,
+                        runId,
+                        0,
+                        Length.FromInches(24m),
+                        Length.FromInches(24m),
+                        Point2D.Origin,
+                        new Point2D(24m, 0m))
+                ])
+        ]);
+
+        var session = new EditorSession();
+        var previewHandler = new RecordingPreviewCommandExecutor();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            previewHandler,
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        // Start resize at the left edge (fixed at origin)
+        service.BeginResizeCabinet(cabinetId, 0d, 0d);
+
+        // Drag to create a 36-inch-wide cabinet. With default viewport of 10 pixels per inch,
+        // 36 inches = 360 screen pixels
+        var preview = service.OnDragMoved(360d, 0d);
+
+        Assert.True(preview.IsValid);
+        var resizeCommand = Assert.IsType<ResizeCabinetCommand>(preview.PreviewCommand);
+        // Width should equal the requested width when valid
+        Assert.Equal(Length.FromInches(36m), resizeCommand.NewNominalWidth);
     }
 
     private sealed class StubSceneGraph : IEditorSceneGraph
