@@ -599,6 +599,31 @@ public sealed class EditorCanvasViewModelTests
         Assert.Equal("Drag failed.", viewModel.StatusMessage);
     }
 
+    [Fact]
+    public void Dispose_CallsDisposeOnCanvasHost()
+    {
+        var mockCanvasHost = new DisposableCanvasHostMock();
+        var eventBus = new ApplicationEventBus();
+        var projector = new RecordingSceneProjector();
+        var interactionService = new RecordingInteractionService();
+
+        var viewModel = new EditorCanvasViewModel(
+            new RecordingRunService(),
+            eventBus,
+            projector,
+            new TestEditorCanvasSession(),
+            new DefaultHitTester(),
+            mockCanvasHost,
+            interactionService);
+
+        Assert.False(mockCanvasHost.DisposeCalled);
+
+        viewModel.Dispose();
+
+        Assert.True(mockCanvasHost.DisposeCalled);
+        Assert.Equal(1, mockCanvasHost.DisposeCallCount);
+    }
+
     private static EditorCanvasViewModel CreateViewModelWithLogger(
         RecordingRunService runService,
         IEditorInteractionService interactionService,
@@ -808,6 +833,55 @@ public sealed class EditorCanvasViewModelTests
 
         public void SetMiddleButtonDragHandler(Action<double, double> onStart, Action<double, double> onMove, Action onEnd)
         {
+        }
+    }
+
+    private sealed class DisposableCanvasHostMock : IEditorCanvasHost, IDisposable
+    {
+        public object View => new();
+
+        public bool IsCtrlHeld { get; set; }
+
+        public double CanvasWidth { get; set; } = 800.0;
+
+        public double CanvasHeight { get; set; } = 600.0;
+
+        public bool DisposeCalled { get; private set; }
+
+        public int DisposeCallCount { get; private set; }
+
+        public RenderSceneDto? Scene { get; private set; }
+
+        public ViewportTransform Viewport { get; private set; } = ViewportTransform.Default;
+
+        public void UpdateScene(RenderSceneDto scene) => Scene = scene;
+
+        public void UpdateViewport(ViewportTransform viewport) => Viewport = viewport;
+
+        public void SetMouseDownHandler(Action<double, double> handler)
+        {
+        }
+
+        public void SetMouseMoveHandler(Action<double, double> handler)
+        {
+        }
+
+        public void SetMouseUpHandler(Action<double, double> handler)
+        {
+        }
+
+        public void SetMouseWheelHandler(Action<double, double, double> handler)
+        {
+        }
+
+        public void SetMiddleButtonDragHandler(Action<double, double> onStart, Action<double, double> onMove, Action onEnd)
+        {
+        }
+
+        public void Dispose()
+        {
+            DisposeCalled = true;
+            DisposeCallCount++;
         }
     }
 

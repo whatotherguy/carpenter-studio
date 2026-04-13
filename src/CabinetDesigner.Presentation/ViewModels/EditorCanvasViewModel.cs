@@ -354,6 +354,10 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<UndoAppliedEvent>(OnUndoApplied);
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnRedoApplied);
         _eventBus.Unsubscribe<ProjectClosedEvent>(OnProjectClosed);
+        if (_canvasHost is IDisposable disposableHost)
+        {
+            disposableHost.Dispose();
+        }
     }
 
     private void ExecuteResetZoom()
