@@ -2,6 +2,21 @@ namespace CabinetDesigner.Persistence.Migrations;
 
 public sealed class V2_RepairSchemaDrift : ISchemaMigration
 {
+    private static readonly IReadOnlySet<string> AllowedTableNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "projects",
+        "revisions",
+        "cabinets",
+    };
+
+    private static readonly IReadOnlySet<string> AllowedColumnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "file_path",
+        "approval_notes",
+        "category",
+        "construction_method",
+    };
+
     public int Version => 2;
 
     public string Description => "Repairs schema drift for persistence columns and snapshot immutability guards.";
@@ -30,6 +45,11 @@ public sealed class V2_RepairSchemaDrift : ISchemaMigration
 
     private static void EnsureColumn(IDbConnection connection, IDbTransaction transaction, string tableName, string columnName, string columnDefinition)
     {
+        if (!AllowedTableNames.Contains(tableName))
+            throw new ArgumentException($"Table name '{tableName}' is not on the schema migration allowlist.", nameof(tableName));
+        if (!AllowedColumnNames.Contains(columnName))
+            throw new ArgumentException($"Column name '{columnName}' is not on the schema migration allowlist.", nameof(columnName));
+
         using var schemaCommand = connection.CreateCommand();
         schemaCommand.Transaction = transaction;
         schemaCommand.CommandText = $"PRAGMA table_info({tableName});";
