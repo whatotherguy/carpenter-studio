@@ -209,6 +209,79 @@ public sealed class WhyEngineTests
         Assert.Equal([firstId, secondId, thirdId], nodes.Select(node => node.Id));
     }
 
+    [Fact]
+    public async Task ConcurrentWrites_NoExceptionThrown_AllNodesRecorded()
+    {
+        var engine = new WhyEngine();
+        var tasks = new List<Task>();
+
+        for (int i = 0; i < 4; i++)
+        {
+            int taskIndex = i;
+            var task = Task.Run(() =>
+            {
+                var command = CreateCommand($"Command {taskIndex}", [$"entity-{taskIndex}"]);
+                var deltas = new[]
+                {
+                    new StateDelta($"entity-{taskIndex}", "TestEntity", DeltaOperation.Created),
+                    new StateDelta($"entity-{taskIndex}", "TestEntity", DeltaOperation.Modified)
+                };
+
+                engine.RecordCommand(command, deltas);
+            });
+            tasks.Add(task);
+        }
+
+        await Task.WhenAll(tasks);
+
+        var allNodes = engine.GetAllNodes();
+        // 4 tasks * (1 command root + 2 deltas) = 12 nodes total
+        Assert.Equal(12, allNodes.Count);
+    }
+
+    [Fact]
+    public async Task ConcurrentReadWrite_NoCollectionModifiedException_NoExceptionThrown()
+    {
+        var engine = new WhyEngine();
+        var command = CreateCommand("Concurrent test", ["entity-1"]);
+        var exceptionThrown = false;
+
+        var writeTask = Task.Run(() =>
+        {
+            for (int i = 0; i < 50; i++)
+            {
+                try
+                {
+                    var deltas = new[] { new StateDelta($"entity-{i}", "TestEntity", DeltaOperation.Created) };
+                    engine.RecordCommand(command, deltas);
+                }
+                catch (InvalidOperationException)
+                {
+                    exceptionThrown = true;
+                }
+            }
+        });
+
+        var readTask = Task.Run(() =>
+        {
+            for (int i = 0; i < 50; i++)
+            {
+                try
+                {
+                    _ = engine.GetAllNodes();
+                }
+                catch (InvalidOperationException)
+                {
+                    exceptionThrown = true;
+                }
+            }
+        });
+
+        await Task.WhenAll(writeTask, readTask);
+
+        Assert.False(exceptionThrown, "No InvalidOperationException should be thrown during concurrent read/write");
+    }
+
     private static TestDesignCommand CreateCommand(string intentDescription, IReadOnlyList<string> affectedEntityIds) =>
         new(CommandMetadata.Create(DateTimeOffset.UnixEpoch, CommandOrigin.User, intentDescription, affectedEntityIds));
 

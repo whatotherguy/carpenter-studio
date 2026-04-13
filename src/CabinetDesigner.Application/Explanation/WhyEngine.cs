@@ -27,63 +27,67 @@ public sealed class WhyEngine : IWhyEngine
     private readonly Dictionary<string, List<ExplanationNodeId>> _ruleIndex = [];
     private readonly ExplanationStatusProjection _statusProjection = new();
     private long _nextSequence;
+    private readonly object _lock = new();
 
     public IReadOnlyList<ExplanationNodeId> RecordCommand(IDesignCommand command, IReadOnlyList<StateDelta> deltas)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(deltas);
 
-        var rootNodeId = ExplanationNodeId.New();
-        var commandId = command.Metadata.CommandId;
-        var rootNode = new ExplanationNode
+        lock (_lock)
         {
-            Id = rootNodeId,
-            NodeType = ExplanationNodeType.CommandRoot,
-            CommandId = commandId,
-            Timestamp = NextTimestamp(),
-            DecisionType = command.CommandType,
-            Description = command.Metadata.IntentDescription,
-            AffectedEntityIds = NormalizeStrings(command.Metadata.AffectedEntityIds),
-            Edges = BuildCommandRootEdges(rootNodeId, commandId),
-            Context = BuildCommandContext(command),
-            Rule = null
-        };
-
-        AppendNode(rootNode);
-        _commandRoots[commandId] = rootNodeId;
-
-        var createdNodeIds = new List<ExplanationNodeId>(deltas.Count + 1) { rootNodeId };
-        foreach (var delta in deltas)
-        {
-            var deltaNodeId = ExplanationNodeId.New();
-            var deltaNode = new ExplanationNode
+            var rootNodeId = ExplanationNodeId.New();
+            var commandId = command.Metadata.CommandId;
+            var rootNode = new ExplanationNode
             {
-                Id = deltaNodeId,
-                NodeType = ExplanationNodeType.DeltaReference,
+                Id = rootNodeId,
+                NodeType = ExplanationNodeType.CommandRoot,
                 CommandId = commandId,
                 Timestamp = NextTimestamp(),
-                DecisionType = $"delta.{delta.Operation.ToString().ToLowerInvariant()}",
-                Description = BuildDeltaDescription(delta),
-                AffectedEntityIds = NormalizeStrings([delta.EntityId]),
-                Edges =
-                [
-                    new ExplanationEdge
-                    {
-                        SourceNodeId = deltaNodeId,
-                        TargetNodeId = rootNodeId,
-                        EdgeType = ExplanationEdgeType.ChildOf,
-                        Label = "command_root"
-                    }
-                ],
-                Context = BuildDeltaContext(delta),
+                DecisionType = command.CommandType,
+                Description = command.Metadata.IntentDescription,
+                AffectedEntityIds = NormalizeStrings(command.Metadata.AffectedEntityIds),
+                Edges = BuildCommandRootEdges(rootNodeId, commandId),
+                Context = BuildCommandContext(command),
                 Rule = null
             };
 
-            AppendNode(deltaNode);
-            createdNodeIds.Add(deltaNodeId);
-        }
+            AppendNode(rootNode);
+            _commandRoots[commandId] = rootNodeId;
 
-        return createdNodeIds;
+            var createdNodeIds = new List<ExplanationNodeId>(deltas.Count + 1) { rootNodeId };
+            foreach (var delta in deltas)
+            {
+                var deltaNodeId = ExplanationNodeId.New();
+                var deltaNode = new ExplanationNode
+                {
+                    Id = deltaNodeId,
+                    NodeType = ExplanationNodeType.DeltaReference,
+                    CommandId = commandId,
+                    Timestamp = NextTimestamp(),
+                    DecisionType = $"delta.{delta.Operation.ToString().ToLowerInvariant()}",
+                    Description = BuildDeltaDescription(delta),
+                    AffectedEntityIds = NormalizeStrings([delta.EntityId]),
+                    Edges =
+                    [
+                        new ExplanationEdge
+                        {
+                            SourceNodeId = deltaNodeId,
+                            TargetNodeId = rootNodeId,
+                            EdgeType = ExplanationEdgeType.ChildOf,
+                            Label = "command_root"
+                        }
+                    ],
+                    Context = BuildDeltaContext(delta),
+                    Rule = null
+                };
+
+                AppendNode(deltaNode);
+                createdNodeIds.Add(deltaNodeId);
+            }
+
+            return createdNodeIds;
+        }
     }
 
     public ExplanationNodeId RecordDecision(
@@ -93,16 +97,21 @@ public sealed class WhyEngine : IWhyEngine
         string description,
         IReadOnlyList<string>? affectedEntityIds = null,
         IReadOnlyDictionary<string, string>? context = null,
-        ExplanationRuleRecord? rule = null) =>
-        RecordDecisionInternal(
-            commandId,
-            stageNumber,
-            decisionType,
-            description,
-            [],
-            affectedEntityIds,
-            context,
-            rule);
+        ExplanationRuleRecord? rule = null)
+    {
+        lock (_lock)
+        {
+            return RecordDecisionInternal(
+                commandId,
+                stageNumber,
+                decisionType,
+                description,
+                [],
+                affectedEntityIds,
+                context,
+                rule);
+        }
+    }
 
     public ExplanationNodeId RecordDecisionWithEdges(
         CommandId commandId,
@@ -112,16 +121,21 @@ public sealed class WhyEngine : IWhyEngine
         IReadOnlyList<ExplanationEdge> edges,
         IReadOnlyList<string>? affectedEntityIds = null,
         IReadOnlyDictionary<string, string>? context = null,
-        ExplanationRuleRecord? rule = null) =>
-        RecordDecisionInternal(
-            commandId,
-            stageNumber,
-            decisionType,
-            description,
-            edges,
-            affectedEntityIds,
-            context,
-            rule);
+        ExplanationRuleRecord? rule = null)
+    {
+        lock (_lock)
+        {
+            return RecordDecisionInternal(
+                commandId,
+                stageNumber,
+                decisionType,
+                description,
+                edges,
+                affectedEntityIds,
+                context,
+                rule);
+        }
+    }
 
     public IReadOnlyList<ExplanationNodeId> RecordUndo(
         CommandMetadata commandMetadata,
@@ -131,34 +145,37 @@ public sealed class WhyEngine : IWhyEngine
         ArgumentNullException.ThrowIfNull(commandMetadata);
         ArgumentNullException.ThrowIfNull(priorExplanationNodeIds);
 
-        var affectedNodeIds = OrderNodeIds(priorExplanationNodeIds).ToArray();
-        _statusProjection.MarkUndone(affectedNodeIds);
-
-        var markerNodeId = ExplanationNodeId.New();
-        var markerNode = new ExplanationNode
+        lock (_lock)
         {
-            Id = markerNodeId,
-            NodeType = ExplanationNodeType.UndoMarker,
-            CommandId = commandMetadata.CommandId,
-            Timestamp = NextTimestamp(),
-            DecisionType = "undo",
-            Description = $"Undo applied for '{commandMetadata.IntentDescription}'.",
-            AffectedEntityIds = NormalizeStrings(commandMetadata.AffectedEntityIds),
-            Edges = affectedNodeIds
-                .Select(targetId => new ExplanationEdge
-                {
-                    SourceNodeId = markerNodeId,
-                    TargetNodeId = targetId,
-                    EdgeType = ExplanationEdgeType.Supersedes,
-                    Label = "undo"
-                })
-                .ToArray(),
-            Context = BuildUndoRedoContext(commandMetadata, deltas, "undo"),
-            Rule = null
-        };
+            var affectedNodeIds = OrderNodeIds(priorExplanationNodeIds).ToArray();
+            _statusProjection.MarkUndone(affectedNodeIds);
 
-        AppendNode(markerNode);
-        return [markerNodeId];
+            var markerNodeId = ExplanationNodeId.New();
+            var markerNode = new ExplanationNode
+            {
+                Id = markerNodeId,
+                NodeType = ExplanationNodeType.UndoMarker,
+                CommandId = commandMetadata.CommandId,
+                Timestamp = NextTimestamp(),
+                DecisionType = "undo",
+                Description = $"Undo applied for '{commandMetadata.IntentDescription}'.",
+                AffectedEntityIds = NormalizeStrings(commandMetadata.AffectedEntityIds),
+                Edges = affectedNodeIds
+                    .Select(targetId => new ExplanationEdge
+                    {
+                        SourceNodeId = markerNodeId,
+                        TargetNodeId = targetId,
+                        EdgeType = ExplanationEdgeType.Supersedes,
+                        Label = "undo"
+                    })
+                    .ToArray(),
+                Context = BuildUndoRedoContext(commandMetadata, deltas, "undo"),
+                Rule = null
+            };
+
+            AppendNode(markerNode);
+            return [markerNodeId];
+        }
     }
 
     public IReadOnlyList<ExplanationNodeId> RecordRedo(
@@ -169,122 +186,159 @@ public sealed class WhyEngine : IWhyEngine
         ArgumentNullException.ThrowIfNull(commandMetadata);
         ArgumentNullException.ThrowIfNull(priorExplanationNodeIds);
 
-        var affectedNodeIds = OrderNodeIds(priorExplanationNodeIds).ToArray();
-        _statusProjection.MarkRedone(affectedNodeIds);
-
-        var markerNodeId = ExplanationNodeId.New();
-        var markerNode = new ExplanationNode
+        lock (_lock)
         {
-            Id = markerNodeId,
-            NodeType = ExplanationNodeType.RedoMarker,
-            CommandId = commandMetadata.CommandId,
-            Timestamp = NextTimestamp(),
-            DecisionType = "redo",
-            Description = $"Redo applied for '{commandMetadata.IntentDescription}'.",
-            AffectedEntityIds = NormalizeStrings(commandMetadata.AffectedEntityIds),
-            Edges = affectedNodeIds
-                .Select(targetId => new ExplanationEdge
-                {
-                    SourceNodeId = markerNodeId,
-                    TargetNodeId = targetId,
-                    EdgeType = ExplanationEdgeType.TriggeredBy,
-                    Label = "redo"
-                })
-                .ToArray(),
-            Context = BuildUndoRedoContext(commandMetadata, deltas, "redo"),
-            Rule = null
-        };
+            var affectedNodeIds = OrderNodeIds(priorExplanationNodeIds).ToArray();
+            _statusProjection.MarkRedone(affectedNodeIds);
 
-        AppendNode(markerNode);
-        return [markerNodeId];
+            var markerNodeId = ExplanationNodeId.New();
+            var markerNode = new ExplanationNode
+            {
+                Id = markerNodeId,
+                NodeType = ExplanationNodeType.RedoMarker,
+                CommandId = commandMetadata.CommandId,
+                Timestamp = NextTimestamp(),
+                DecisionType = "redo",
+                Description = $"Redo applied for '{commandMetadata.IntentDescription}'.",
+                AffectedEntityIds = NormalizeStrings(commandMetadata.AffectedEntityIds),
+                Edges = affectedNodeIds
+                    .Select(targetId => new ExplanationEdge
+                    {
+                        SourceNodeId = markerNodeId,
+                        TargetNodeId = targetId,
+                        EdgeType = ExplanationEdgeType.TriggeredBy,
+                        Label = "redo"
+                    })
+                    .ToArray(),
+                Context = BuildUndoRedoContext(commandMetadata, deltas, "redo"),
+                Rule = null
+            };
+
+            AppendNode(markerNode);
+            return [markerNodeId];
+        }
     }
 
     public IReadOnlyList<ExplanationNode> GetEntityHistory(string entityId)
     {
-        if (!_entityIndex.TryGetValue(entityId, out var nodeIds))
+        lock (_lock)
         {
-            return [];
-        }
+            if (!_entityIndex.TryGetValue(entityId, out var nodeIds))
+            {
+                return [];
+            }
 
-        return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+            return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+        }
     }
 
     public IReadOnlyList<ExplanationNode> GetCommandExplanation(CommandId commandId)
     {
-        if (!_commandIndex.TryGetValue(commandId, out var nodeIds))
+        lock (_lock)
         {
-            return [];
-        }
+            if (!_commandIndex.TryGetValue(commandId, out var nodeIds))
+            {
+                return [];
+            }
 
-        return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+            return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+        }
     }
 
-    public ExplanationNode? GetCommandRoot(CommandId commandId) =>
-        _commandRoots.TryGetValue(commandId, out var nodeId)
-            ? GetNode(nodeId)
-            : null;
+    public ExplanationNode? GetCommandRoot(CommandId commandId)
+    {
+        lock (_lock)
+        {
+            return _commandRoots.TryGetValue(commandId, out var nodeId)
+                ? GetNode(nodeId)
+                : null;
+        }
+    }
 
     public IReadOnlyList<ExplanationNode> GetStageDecisions(int stageNumber)
     {
-        if (!_stageIndex.TryGetValue(stageNumber, out var nodeIds))
+        lock (_lock)
         {
-            return [];
-        }
+            if (!_stageIndex.TryGetValue(stageNumber, out var nodeIds))
+            {
+                return [];
+            }
 
-        return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+            return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+        }
     }
 
     public IReadOnlyList<ExplanationNode> GetDecisionsByRule(string ruleId)
     {
-        if (!_ruleIndex.TryGetValue(ruleId, out var nodeIds))
+        lock (_lock)
         {
-            return [];
-        }
+            if (!_ruleIndex.TryGetValue(ruleId, out var nodeIds))
+            {
+                return [];
+            }
 
-        return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+            return OrderNodeIds(nodeIds).Select(GetNode).ToArray();
+        }
     }
 
     public IReadOnlyList<ExplanationNode> GetDecisionTrail(string entityId)
     {
-        if (!_entityIndex.TryGetValue(entityId, out var startingNodeIds))
+        lock (_lock)
         {
-            return [];
+            if (!_entityIndex.TryGetValue(entityId, out var startingNodeIds))
+            {
+                return [];
+            }
+
+            var visited = new HashSet<ExplanationNodeId>();
+            var orderedTrail = new List<ExplanationNode>();
+
+            foreach (var nodeId in OrderNodeIds(startingNodeIds))
+            {
+                VisitDecisionTrail(nodeId, visited, orderedTrail);
+            }
+
+            return orderedTrail;
         }
-
-        var visited = new HashSet<ExplanationNodeId>();
-        var orderedTrail = new List<ExplanationNode>();
-
-        foreach (var nodeId in OrderNodeIds(startingNodeIds))
-        {
-            VisitDecisionTrail(nodeId, visited, orderedTrail);
-        }
-
-        return orderedTrail;
     }
 
     public ExplanationNode? GetPropertyExplanation(string entityId, string propertyName)
     {
-        if (!_entityIndex.TryGetValue(entityId, out var nodeIds))
+        lock (_lock)
         {
-            return null;
+            if (!_entityIndex.TryGetValue(entityId, out var nodeIds))
+            {
+                return null;
+            }
+
+            var directKey = propertyName;
+            var prefixedKey = $"property:{propertyName}";
+
+            return OrderNodeIds(nodeIds)
+                .Select(GetNode)
+                .Where(node =>
+                    _statusProjection.GetStatus(node.Id) != ExplanationNodeStatus.Undone &&
+                    node.Context is not null &&
+                    (node.Context.ContainsKey(directKey) || node.Context.ContainsKey(prefixedKey)))
+                .LastOrDefault();
         }
-
-        var directKey = propertyName;
-        var prefixedKey = $"property:{propertyName}";
-
-        return OrderNodeIds(nodeIds)
-            .Select(GetNode)
-            .Where(node =>
-                _statusProjection.GetStatus(node.Id) != ExplanationNodeStatus.Undone &&
-                node.Context is not null &&
-                (node.Context.ContainsKey(directKey) || node.Context.ContainsKey(prefixedKey)))
-            .LastOrDefault();
     }
 
-    public IReadOnlyList<ExplanationNode> GetNodesByStatus(ExplanationNodeStatus status) =>
-        _nodes.Where(node => _statusProjection.GetStatus(node.Id) == status).ToArray();
+    public IReadOnlyList<ExplanationNode> GetNodesByStatus(ExplanationNodeStatus status)
+    {
+        lock (_lock)
+        {
+            return _nodes.Where(node => _statusProjection.GetStatus(node.Id) == status).ToArray();
+        }
+    }
 
-    public IReadOnlyList<ExplanationNode> GetAllNodes() => _nodes.ToArray();
+    public IReadOnlyList<ExplanationNode> GetAllNodes()
+    {
+        lock (_lock)
+        {
+            return _nodes.ToArray();
+        }
+    }
 
     private ExplanationNodeId RecordDecisionInternal(
         CommandId commandId,
