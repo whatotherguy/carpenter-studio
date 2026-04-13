@@ -55,33 +55,28 @@ public sealed class Wall
         Length height,
         Length sillHeight)
     {
-        var opening = new WallOpening(WallOpeningId.New(), Id, type, offsetFromStart, width, height, sillHeight);
-
+        // Guards first:
         if ((offsetFromStart + width) > Length)
             throw new InvalidOperationException("Opening extends beyond wall length.");
 
-        if (HasOverlappingOpening(opening))
+        if (HasOverlappingOpeningAt(offsetFromStart, width))
             throw new InvalidOperationException("Opening overlaps with an existing opening.");
 
+        // Object construction after validation:
+        var opening = new WallOpening(WallOpeningId.New(), Id, type, offsetFromStart, width, height, sillHeight);
         _openings.Add(opening);
         return opening;
     }
 
-    private bool HasOverlappingOpening(WallOpening candidate)
+    private bool HasOverlappingOpeningAt(Length offsetFromStart, Length width)
     {
+        var candidateEnd = offsetFromStart + width;
         foreach (var existing in _openings)
         {
             var existingEnd = existing.OffsetFromWallStart + existing.Width;
-            var candidateEnd = candidate.OffsetFromWallStart + candidate.Width;
-
-            var overlaps =
-                candidate.OffsetFromWallStart.Inches < existingEnd.Inches &&
-                candidateEnd.Inches > existing.OffsetFromWallStart.Inches;
-
-            if (overlaps)
+            if (offsetFromStart < existingEnd && candidateEnd > existing.OffsetFromWallStart)
                 return true;
         }
-
         return false;
     }
 }

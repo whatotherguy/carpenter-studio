@@ -62,6 +62,29 @@ public sealed class WallTests
         Assert.Equal(Length.FromInches(70m), wall.AvailableLength);
     }
 
+    [Fact]
+    public void AddOpening_BoundsValidationThrowsBeforeConstructing()
+    {
+        var wall = CreateWall();
+
+        Assert.Throws<InvalidOperationException>(() =>
+            wall.AddOpening(WallOpeningType.Window, Length.FromInches(100m), Length.FromInches(30m), Length.FromInches(40m), Length.FromInches(36m)));
+
+        Assert.Empty(wall.Openings);
+    }
+
+    [Fact]
+    public void AddOpening_OverlapValidationThrowsBeforeConstructing()
+    {
+        var wall = CreateWall();
+        wall.AddOpening(WallOpeningType.Window, Length.FromInches(10m), Length.FromInches(30m), Length.FromInches(40m), Length.FromInches(36m));
+
+        Assert.Throws<InvalidOperationException>(() =>
+            wall.AddOpening(WallOpeningType.Door, Length.FromInches(25m), Length.FromInches(20m), Length.FromInches(80m), Length.Zero));
+
+        Assert.Single(wall.Openings);
+    }
+
     private static Wall CreateWall(Point2D? start = null, Point2D? end = null)
         => new(
             WallId.New(),
