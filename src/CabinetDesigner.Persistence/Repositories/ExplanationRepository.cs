@@ -48,7 +48,7 @@ internal sealed class ExplanationRepository : SqliteRepositoryBase, IExplanation
             FROM explanation_nodes n
             INNER JOIN explanation_entity_index e ON e.node_id = n.id
             WHERE e.entity_id = @entityId AND n.revision_id = @revisionId
-            ORDER BY n.created_at;
+            ORDER BY n.created_at ASC, n.id ASC;
             """,
             ct,
             ("@entityId", entityId),
@@ -59,7 +59,7 @@ internal sealed class ExplanationRepository : SqliteRepositoryBase, IExplanation
             SELECT id, revision_id, command_id, stage_number, node_type, decision_type, description, affected_entity_ids, parent_node_id, edge_type, status, created_at
             FROM explanation_nodes
             WHERE command_id = @commandId
-            ORDER BY created_at;
+            ORDER BY created_at ASC, id ASC;
             """,
             ct,
             ("@commandId", commandId.Value.ToString()));
