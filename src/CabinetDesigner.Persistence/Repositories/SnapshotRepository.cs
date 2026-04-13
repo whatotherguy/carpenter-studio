@@ -14,18 +14,16 @@ internal sealed class SnapshotRepository : SqliteRepositoryBase, ISnapshotReposi
     public Task WriteAsync(ApprovedSnapshot snapshot, CancellationToken ct = default) =>
         WithConnectionAsync(async (connection, transaction) =>
         {
-            using var exists = CreateCommand(connection, transaction, "SELECT COUNT(*) FROM approved_snapshots WHERE revision_id = @revisionId;");
-            exists.Parameters.AddWithValue("@revisionId", snapshot.RevisionId.Value.ToString());
-            var count = Convert.ToInt32(await exists.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture);
-            if (count > 0)
-            {
-                throw new InvalidOperationException($"Revision {snapshot.RevisionId} already has an approved snapshot.");
-            }
-
             var row = SnapshotMapper.ToRow(snapshot);
             using var command = CreateCommand(connection, transaction, """
-                INSERT INTO approved_snapshots(revision_id, snapshot_schema_ver, approved_at, approved_by, design_blob, parts_blob, manufacturing_blob, install_blob, estimate_blob, validation_blob, explanation_blob)
-                VALUES(@revisionId, @snapshotSchemaVer, @approvedAt, @approvedBy, @designBlob, @partsBlob, @manufacturingBlob, @installBlob, @estimateBlob, @validationBlob, @explanationBlob);
+                INSERT OR IGNORE INTO approved_snapshots(
+                    revision_id, snapshot_schema_ver, approved_at, approved_by,
+                    design_blob, parts_blob, manufacturing_blob, install_blob,
+                    estimate_blob, validation_blob, explanation_blob)
+                VALUES(
+                    @revisionId, @snapshotSchemaVer, @approvedAt, @approvedBy,
+                    @designBlob, @partsBlob, @manufacturingBlob, @installBlob,
+                    @estimateBlob, @validationBlob, @explanationBlob);
                 """);
             command.Parameters.AddWithValue("@revisionId", row.RevisionId);
             command.Parameters.AddWithValue("@snapshotSchemaVer", row.SnapshotSchemaVer);
@@ -38,7 +36,11 @@ internal sealed class SnapshotRepository : SqliteRepositoryBase, ISnapshotReposi
             command.Parameters.AddWithValue("@estimateBlob", row.EstimateBlob);
             command.Parameters.AddWithValue("@validationBlob", row.ValidationBlob);
             command.Parameters.AddWithValue("@explanationBlob", row.ExplanationBlob);
-            await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            var rowsAffected = await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            if (rowsAffected == 0)
+            {
+                throw new InvalidOperationException($"Revision {snapshot.RevisionId} already has an approved snapshot.");
+            }
         }, ct);
 
     public Task<ApprovedSnapshot?> ReadAsync(RevisionId revisionId, CancellationToken ct = default) =>
