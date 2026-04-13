@@ -199,7 +199,7 @@ public sealed class ProjectService : IProjectService
         CurrentProject = CurrentProject with
         {
             CurrentRevisionLabel = label,
-            HasUnsavedChanges = true
+            HasUnsavedChanges = false
         };
         _logger?.Log(new LogEntry
         {

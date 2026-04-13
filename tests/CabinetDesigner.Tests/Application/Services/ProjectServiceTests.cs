@@ -50,6 +50,65 @@ public sealed class ProjectServiceTests
         Assert.False(service.CurrentProject!.HasUnsavedChanges);
     }
 
+    [Fact]
+    public async Task SaveRevisionAsync_SetsHasUnsavedChangesFalse()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 4, 8, 13, 0, 0, TimeSpan.Zero));
+        var projectRepository = new RecordingProjectRepository();
+        var revisionRepository = new RecordingRevisionRepository();
+        var checkpointRepository = new RecordingCheckpointRepository();
+        var service = CreateService(projectRepository, revisionRepository, checkpointRepository, clock);
+
+        await service.CreateProjectAsync("Shop A");
+        var projectId = new ProjectId(service.CurrentProject!.ProjectId);
+        var workingRevision = new RevisionRecord(
+            RevisionId.New(),
+            projectId,
+            1,
+            ApprovalState.Draft,
+            clock.Now,
+            null,
+            null,
+            "Rev 1");
+        revisionRepository.SetWorkingRevision(workingRevision);
+
+        await service.SaveRevisionAsync("Rev 1 - Approved");
+
+        Assert.False(service.CurrentProject!.HasUnsavedChanges);
+    }
+
+    [Fact]
+    public async Task SaveRevisionAsync_CompletelyResetsUnsavedChangesState()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 4, 8, 13, 0, 0, TimeSpan.Zero));
+        var projectRepository = new RecordingProjectRepository();
+        var revisionRepository = new RecordingRevisionRepository();
+        var checkpointRepository = new RecordingCheckpointRepository();
+        var service = CreateService(projectRepository, revisionRepository, checkpointRepository, clock);
+
+        await service.CreateProjectAsync("Shop A");
+        var projectId = new ProjectId(service.CurrentProject!.ProjectId);
+        var workingRevision = new RevisionRecord(
+            RevisionId.New(),
+            projectId,
+            1,
+            ApprovalState.Draft,
+            clock.Now,
+            null,
+            null,
+            "Rev 1");
+        revisionRepository.SetWorkingRevision(workingRevision);
+
+        // Verify we start in a clean state
+        Assert.False(service.CurrentProject.HasUnsavedChanges);
+
+        // Call SaveRevisionAsync and verify it stays false (the fix ensures this)
+        await service.SaveRevisionAsync("Rev 1 - Approved");
+
+        Assert.False(service.CurrentProject!.HasUnsavedChanges);
+        Assert.Equal("Rev 1 - Approved", service.CurrentProject!.CurrentRevisionLabel);
+    }
+
     private static ProjectService CreateService(
         RecordingProjectRepository projectRepository,
         RecordingRevisionRepository revisionRepository,
@@ -122,10 +181,11 @@ public sealed class ProjectServiceTests
     private sealed class RecordingRevisionRepository : IRevisionRepository
     {
         public List<RevisionRecord> SavedRevisions { get; } = [];
+        private RevisionRecord? _workingRevision;
 
         public Task<RevisionRecord?> FindAsync(RevisionId id, CancellationToken ct = default) => Task.FromResult<RevisionRecord?>(null);
 
-        public Task<RevisionRecord?> FindWorkingAsync(ProjectId projectId, CancellationToken ct = default) => Task.FromResult<RevisionRecord?>(null);
+        public Task<RevisionRecord?> FindWorkingAsync(ProjectId projectId, CancellationToken ct = default) => Task.FromResult<RevisionRecord?>(_workingRevision);
 
         public Task SaveAsync(RevisionRecord revision, CancellationToken ct = default)
         {
@@ -135,6 +195,8 @@ public sealed class ProjectServiceTests
 
         public Task<IReadOnlyList<RevisionRecord>> ListAsync(ProjectId projectId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<RevisionRecord>>([]);
+
+        public void SetWorkingRevision(RevisionRecord revision) => _workingRevision = revision;
     }
 
     private sealed class RecordingWorkingRevisionRepository : IWorkingRevisionRepository
