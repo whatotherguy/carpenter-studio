@@ -1,5 +1,6 @@
 using System.Threading;
 using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
 using CabinetDesigner.Domain.Geometry;
@@ -403,6 +404,85 @@ public sealed class EditorInteractionServiceTests
 
         Assert.False(result.IsValid);
         Assert.Equal("Drag the handle along the run to set the cabinet width.", result.RejectionReason);
+    }
+
+    [Fact]
+    public void OnDragMoved_PlacingWallCabinet_InfersCategoryAsWall()
+    {
+        var runId = RunId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [])
+        ]);
+
+        var session = new EditorSession();
+        var previewHandler = new RecordingPreviewCommandExecutor();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            previewHandler,
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        service.BeginPlaceCabinet("wall-36", Length.FromInches(36m), Length.FromInches(12m), 238d, 0d);
+
+        var preview = service.OnDragMoved(238d, 0d);
+
+        Assert.True(preview.IsValid);
+        var previewCommand = Assert.IsType<AddCabinetToRunCommand>(preview.PreviewCommand);
+        Assert.Equal(CabinetCategory.Wall, previewCommand.Category);
+        Assert.Equal(ConstructionMethod.Frameless, previewCommand.Construction);
+    }
+
+    [Fact]
+    public void OnDragMoved_PlacingTallCabinet_InfersCategoryAsTall()
+    {
+        var runId = RunId.New();
+        var scene = new EditorSceneSnapshot(
+        [
+            new RunSceneView(
+                runId,
+                Point2D.Origin,
+                new Point2D(120m, 0m),
+                Vector2D.UnitX,
+                Length.FromInches(120m),
+                [])
+        ]);
+
+        var session = new EditorSession();
+        var previewHandler = new RecordingPreviewCommandExecutor();
+        var service = new EditorInteractionService(
+            session,
+            new StubSceneGraph(scene, runId),
+            new DefaultSnapResolver(
+            [
+                new RunEndpointSnapCandidateSource(),
+                new CabinetFaceSnapCandidateSource(),
+                new GridSnapCandidateSource()
+            ]),
+            previewHandler,
+            new RecordingCommitCommandExecutor(),
+            new StubClock());
+
+        service.BeginPlaceCabinet("tall-24", Length.FromInches(24m), Length.FromInches(24m), 238d, 0d);
+
+        var preview = service.OnDragMoved(238d, 0d);
+
+        Assert.True(preview.IsValid);
+        var previewCommand = Assert.IsType<AddCabinetToRunCommand>(preview.PreviewCommand);
+        Assert.Equal(CabinetCategory.Tall, previewCommand.Category);
     }
 
     private sealed class StubSceneGraph : IEditorSceneGraph

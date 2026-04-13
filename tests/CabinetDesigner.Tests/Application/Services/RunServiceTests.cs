@@ -5,6 +5,7 @@ using CabinetDesigner.Application.Handlers;
 using CabinetDesigner.Application.Services;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
 using CabinetDesigner.Domain.Commands.Modification;
@@ -207,6 +208,43 @@ public sealed class RunServiceTests
 
         Assert.Contains("1", ex.Message);
         Assert.Equal(0, handler.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task AddCabinetAsync_WithWallCabinet_InfersCategoryAsWall()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        await service.AddCabinetAsync(new AddCabinetRequestDto(Guid.NewGuid(), "wall-36", 36m, "EndOfRun"));
+
+        var command = Assert.IsType<AddCabinetToRunCommand>(handler.LastCommand);
+        Assert.Equal(CabinetCategory.Wall, command.Category);
+        Assert.Equal(ConstructionMethod.Frameless, command.Construction);
+    }
+
+    [Fact]
+    public async Task AddCabinetAsync_WithTallCabinet_InfersCategoryAsTall()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        await service.AddCabinetAsync(new AddCabinetRequestDto(Guid.NewGuid(), "tall-24", 24m, "EndOfRun"));
+
+        var command = Assert.IsType<AddCabinetToRunCommand>(handler.LastCommand);
+        Assert.Equal(CabinetCategory.Tall, command.Category);
+    }
+
+    [Fact]
+    public async Task AddCabinetAsync_WithBaseCabinet_InfersCategoryAsBase()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        await service.AddCabinetAsync(new AddCabinetRequestDto(Guid.NewGuid(), "base-30", 30m, "EndOfRun"));
+
+        var command = Assert.IsType<AddCabinetToRunCommand>(handler.LastCommand);
+        Assert.Equal(CabinetCategory.Base, command.Category);
     }
 
     private sealed class RecordingDesignCommandHandler : IDesignCommandHandler
