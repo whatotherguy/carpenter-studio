@@ -11,6 +11,7 @@ public sealed class TextFileAppLogger : IAppLogger
 
     private readonly string _logDirectory;
     private readonly bool _mirrorToDebug;
+    private readonly object _fileLock = new();
 
     public TextFileAppLogger()
         : this(
@@ -48,7 +49,11 @@ public sealed class TextFileAppLogger : IAppLogger
 
             var filePath = Path.Combine(_logDirectory, $"app-{entry.Timestamp.UtcDateTime:yyyyMMdd}.log");
             var line = Format(entry);
-            File.AppendAllText(filePath, line + Environment.NewLine, Encoding.UTF8);
+
+            lock (_fileLock)
+            {
+                File.AppendAllText(filePath, line + Environment.NewLine, Encoding.UTF8);
+            }
 
             if (_mirrorToDebug)
             {
