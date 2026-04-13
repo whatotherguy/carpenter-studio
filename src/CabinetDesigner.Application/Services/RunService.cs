@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
 using CabinetDesigner.Domain.Commands.Modification;
@@ -47,6 +48,8 @@ public sealed class RunService : IRunService
         ArgumentNullException.ThrowIfNull(request);
 
         var placement = ParseRunPlacement(request.Placement, nameof(request.Placement));
+        var category = InferCategoryFromTypeId(request.CabinetTypeId);
+        var construction = InferConstructionFromTypeId(request.CabinetTypeId);
 
         var command = new AddCabinetToRunCommand(
             new RunId(request.RunId),
@@ -55,7 +58,9 @@ public sealed class RunService : IRunService
             placement,
             CommandOrigin.User,
             $"Add {request.NominalWidthInches}\" {request.CabinetTypeId} to run",
-            _clock.Now);
+            _clock.Now,
+            category: category,
+            construction: construction);
 
         return _handler.ExecuteAsync(command);
     }
@@ -155,5 +160,22 @@ public sealed class RunService : IRunService
         }
 
         return Enum.Parse<RunPlacement>(value, ignoreCase: true);
+    }
+
+    private static CabinetCategory InferCategoryFromTypeId(string cabinetTypeId) =>
+        cabinetTypeId.StartsWith("base-", StringComparison.OrdinalIgnoreCase) ? CabinetCategory.Base
+        : cabinetTypeId.StartsWith("wall-", StringComparison.OrdinalIgnoreCase) ? CabinetCategory.Wall
+        : cabinetTypeId.StartsWith("tall-", StringComparison.OrdinalIgnoreCase) ? CabinetCategory.Tall
+        : cabinetTypeId.StartsWith("vanity-", StringComparison.OrdinalIgnoreCase) ? CabinetCategory.Vanity
+        : cabinetTypeId.StartsWith("specialty-", StringComparison.OrdinalIgnoreCase) ? CabinetCategory.Specialty
+        : CabinetCategory.Base;
+
+    private static ConstructionMethod InferConstructionFromTypeId(string cabinetTypeId)
+    {
+        // Convention: if the typeId contains "faceframe", treat as FaceFrame; otherwise default to Frameless
+        // This is extensible for future naming conventions
+        return cabinetTypeId.Contains("faceframe", StringComparison.OrdinalIgnoreCase)
+            ? ConstructionMethod.FaceFrame
+            : ConstructionMethod.Frameless;
     }
 }
