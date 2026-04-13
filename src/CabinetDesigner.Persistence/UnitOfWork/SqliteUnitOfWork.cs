@@ -9,6 +9,7 @@ internal sealed class SqliteUnitOfWork : IUnitOfWork
 
     private SqliteConnection? _connection;
     private SqliteTransaction? _transaction;
+    private bool _committed;
 
     public SqliteUnitOfWork(IDbConnectionFactory connectionFactory, SqliteSessionAccessor sessionAccessor)
     {
@@ -36,6 +37,7 @@ internal sealed class SqliteUnitOfWork : IUnitOfWork
         }
 
         await _transaction.CommitAsync(ct).ConfigureAwait(false);
+        _committed = true;
         await DisposeSessionAsync().ConfigureAwait(false);
     }
 
@@ -52,6 +54,18 @@ internal sealed class SqliteUnitOfWork : IUnitOfWork
 
     public async ValueTask DisposeAsync()
     {
+        if (!_committed && _transaction is not null)
+        {
+            try
+            {
+                await _transaction.RollbackAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+                // Rollback failure during dispose must not throw.
+            }
+        }
+
         await DisposeSessionAsync().ConfigureAwait(false);
     }
 
