@@ -111,6 +111,35 @@ public sealed class CabinetRunTests
         Assert.Equal(2, run.CabinetCount);
     }
 
+    [Fact]
+    public void IsOverCapacity_ReturnsFalseWhenUnderCapacity()
+    {
+        var run = CreateRun(Length.FromInches(120m));
+        run.AppendCabinet(CabinetId.New(), Length.FromInches(30m));
+        run.AppendCabinet(CabinetId.New(), Length.FromInches(40m));
+
+        Assert.False(run.IsOverCapacity);
+        Assert.Equal(Length.FromInches(50m), run.RemainingLength);
+        Assert.Equal(Length.Zero, run.OverCapacityAmount);
+    }
+
+    [Fact]
+    public void IsOverCapacity_DependsOnOccupiedVsCapacity()
+    {
+        var capacity = Length.FromInches(100m);
+        var runId = RunId.New();
+        var wallId = WallId.New();
+
+        // Test by creating slots programmatically that equal capacity exactly
+        var slot = RunSlot.ForCabinet(RunSlotId.New(), runId, CabinetId.New(), Length.FromInches(100m), 0);
+        var run = CabinetRun.Reconstitute(runId, wallId, capacity, [slot]);
+
+        // Exactly at capacity is not over capacity
+        Assert.False(run.IsOverCapacity);
+        Assert.Equal(Length.Zero, run.RemainingLength);
+        Assert.Equal(Length.Zero, run.OverCapacityAmount);
+    }
+
     private static CabinetRun CreateRun(Length? capacity = null)
         => new(RunId.New(), WallId.New(), capacity ?? Length.FromInches(120m));
 }

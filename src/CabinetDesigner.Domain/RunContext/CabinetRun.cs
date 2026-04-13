@@ -18,15 +18,15 @@ public sealed class CabinetRun
     public IReadOnlyList<RunSlot> Slots => _slots;
     public Length OccupiedLength => _slots.Aggregate(Length.Zero, (sum, slot) => sum + slot.OccupiedWidth);
 
-    public Length RemainingLength
-    {
-        get
-        {
-            return OccupiedLength <= Capacity
-                ? (Capacity - OccupiedLength).Abs()
-                : Length.Zero;
-        }
-    }
+    public bool IsOverCapacity => OccupiedLength > Capacity;
+
+    public Length RemainingLength => IsOverCapacity
+        ? Length.Zero
+        : Length.FromInches(Capacity.Inches - OccupiedLength.Inches);
+
+    public Length OverCapacityAmount => IsOverCapacity
+        ? Length.FromInches(OccupiedLength.Inches - Capacity.Inches)
+        : Length.Zero;
 
     public int CabinetCount => _slots.Count(slot => slot.SlotType == RunSlotType.Cabinet);
 
