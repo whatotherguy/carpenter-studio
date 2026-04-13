@@ -356,6 +356,30 @@ public sealed class ShellViewModelTests
         Assert.False(exceptionThrown);
     }
 
+    [Fact]
+    public async Task ProjectClosedEvent_FromBackgroundThread_DoesNotThrow()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out var eventBus, out _);
+
+        var exceptionThrown = false;
+
+        // Simulate publishing ProjectClosedEvent from a background thread
+        await Task.Run(() =>
+        {
+            try
+            {
+                eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception during background event: {ex}");
+                exceptionThrown = true;
+            }
+        });
+
+        Assert.False(exceptionThrown);
+    }
+
     private static ShellViewModel CreateShellViewModel(
         out RecordingProjectService projectService,
         out RecordingUndoRedoService undoRedoService,
