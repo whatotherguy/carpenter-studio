@@ -16,7 +16,7 @@ public sealed class Project
     public DateTimeOffset CreatedAt { get; }
     public DateTimeOffset LastModifiedAt { get; private set; }
     public IReadOnlyList<Revision> Revisions => _revisions;
-    public Revision CurrentRevision => _revisions.OrderByDescending(revision => revision.CreatedAt).First();
+    public Revision? CurrentRevision => _revisions.MaxBy(r => r.VersionNumber);
 
     public Project(ProjectId id, string name, DateTimeOffset createdAt)
     {

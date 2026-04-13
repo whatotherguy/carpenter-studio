@@ -15,6 +15,7 @@ public sealed class ProjectTests
         var project = new Project(ProjectId.New(), "Kitchen Remodel", createdAt);
 
         Assert.Single(project.Revisions);
+        Assert.NotNull(project.CurrentRevision);
         Assert.Equal(ApprovalState.Draft, project.CurrentRevision.State);
         Assert.Equal(1, project.CurrentRevision.VersionNumber);
         Assert.Equal(createdAt, project.LastModifiedAt);
@@ -27,6 +28,7 @@ public sealed class ProjectTests
         var project = new Project(ProjectId.New(), "Kitchen Remodel", createdAt);
         var latest = project.CreateNewRevision(createdAt.AddHours(2));
 
+        Assert.NotNull(project.CurrentRevision);
         Assert.Equal(latest.Id, project.CurrentRevision.Id);
     }
 
@@ -62,5 +64,19 @@ public sealed class ProjectTests
         var project = new Project(ProjectId.New(), "Kitchen Remodel", DateTimeOffset.UnixEpoch);
 
         Assert.NotEmpty(project.Revisions);
+    }
+
+    [Fact]
+    public void CurrentRevision_WithMultipleRevisions_ReturnsHighestVersionNumber()
+    {
+        var createdAt = DateTimeOffset.UnixEpoch;
+        var project = new Project(ProjectId.New(), "Kitchen Remodel", createdAt);
+
+        var revision2 = project.CreateNewRevision(createdAt.AddHours(1));
+        var revision3 = project.CreateNewRevision(createdAt.AddHours(2));
+
+        Assert.Equal(3, project.Revisions.Count);
+        Assert.Equal(revision3.Id, project.CurrentRevision?.Id);
+        Assert.Equal(3, project.CurrentRevision?.VersionNumber);
     }
 }
