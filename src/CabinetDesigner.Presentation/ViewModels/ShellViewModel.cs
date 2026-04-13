@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Windows;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
@@ -278,18 +279,18 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         await _projectService.CloseAsync().ConfigureAwait(false);
     }
 
-    private void OnProjectOpened(ProjectOpenedEvent @event) => SetActiveProject(@event.Project);
+    private void OnProjectOpened(ProjectOpenedEvent @event) =>
+        DispatchIfNeeded(() => SetActiveProject(@event.Project));
 
-    private void OnProjectClosed(ProjectClosedEvent _)
-    {
-        SetActiveProject(null);
-        RefreshSelectionDrivenPanels();
-    }
+    private void OnProjectClosed(ProjectClosedEvent _) =>
+        DispatchIfNeeded(() =>
+        {
+            SetActiveProject(null);
+            RefreshSelectionDrivenPanels();
+        });
 
-    private void OnDesignChanged(DesignChangedEvent _)
-    {
-        SetActiveProject(_projectService.CurrentProject);
-    }
+    private void OnDesignChanged(DesignChangedEvent _) =>
+        DispatchIfNeeded(() => SetActiveProject(_projectService.CurrentProject));
 
     private void OnCanvasPropertyChanged(object? _, PropertyChangedEventArgs e)
     {
@@ -311,7 +312,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void OnUndoRedoApplied<TEvent>(TEvent _) where TEvent : IApplicationEvent => RefreshCommandStates();
+    private void OnUndoRedoApplied<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
+        DispatchIfNeeded(() => RefreshCommandStates());
 
     private void OnCommandPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -359,5 +361,27 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     {
         PropertyInspector.OnSelectionChanged(Canvas.SelectedCabinetIds, Canvas.Scene);
         RunSummary.OnSelectionChanged(Canvas.SelectedCabinetIds);
+    }
+
+    private void DispatchIfNeeded(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            // No dispatcher available (e.g., in unit tests), execute directly
+            action();
+            return;
+        }
+
+        // Check if we're already on the UI thread
+        if (dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            // We're on a background thread, dispatch to UI thread
+            dispatcher.Invoke(action);
+        }
     }
 }

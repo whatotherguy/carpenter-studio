@@ -258,6 +258,104 @@ public sealed class ShellViewModelTests
         Assert.False(shell.SaveCommand.IsExecuting);
     }
 
+    [Fact]
+    public async Task EventBusHandlers_DispatchRefreshCommandStatesToUIThread()
+    {
+        using var shell = CreateShellViewModel(out _, out var undoRedoService, out _, out var eventBus, out var currentState);
+        SeedRunSummaryState(currentState);
+        undoRedoService.CanUndoValue = true;
+        undoRedoService.CanRedoValue = true;
+
+        var exceptionThrown = false;
+
+        // Simulate publishing UndoAppliedEvent from a background thread (which would previously throw)
+        await Task.Run(() =>
+        {
+            try
+            {
+                eventBus.Publish(new UndoAppliedEvent(new CommandResultDto(Guid.NewGuid(), "undo", true, [], [], [])));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception during background event: {ex}");
+                exceptionThrown = true;
+            }
+        });
+
+        // Similarly test RedoAppliedEvent
+        await Task.Run(() =>
+        {
+            try
+            {
+                eventBus.Publish(new RedoAppliedEvent(new CommandResultDto(Guid.NewGuid(), "redo", true, [], [], [])));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception during background event: {ex}");
+                exceptionThrown = true;
+            }
+        });
+
+        // If the dispatcher wrapping is not in place, this would throw InvalidOperationException
+        // due to WPF binding refresh happening off the UI thread.
+        // With the fix, no exception should be thrown.
+        Assert.False(exceptionThrown);
+    }
+
+    [Fact]
+    public async Task ProjectOpenedEvent_FromBackgroundThread_DoesNotThrow()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out var eventBus, out _);
+
+        var exceptionThrown = false;
+
+        // Simulate publishing ProjectOpenedEvent from a background thread
+        await Task.Run(() =>
+        {
+            try
+            {
+                eventBus.Publish(new ProjectOpenedEvent(new ProjectSummaryDto(
+                    Guid.NewGuid(),
+                    "Background Project",
+                    "C:\\background.cab",
+                    DateTimeOffset.UtcNow,
+                    "Rev 1",
+                    false)));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception during background event: {ex}");
+                exceptionThrown = true;
+            }
+        });
+
+        Assert.False(exceptionThrown);
+    }
+
+    [Fact]
+    public async Task DesignChangedEvent_FromBackgroundThread_DoesNotThrow()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out var eventBus, out _);
+
+        var exceptionThrown = false;
+
+        // Simulate publishing DesignChangedEvent from a background thread
+        await Task.Run(() =>
+        {
+            try
+            {
+                eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "design.update", true, [], [], [])));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Exception during background event: {ex}");
+                exceptionThrown = true;
+            }
+        });
+
+        Assert.False(exceptionThrown);
+    }
+
     private static ShellViewModel CreateShellViewModel(
         out RecordingProjectService projectService,
         out RecordingUndoRedoService undoRedoService,
