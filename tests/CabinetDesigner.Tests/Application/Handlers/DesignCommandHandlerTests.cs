@@ -15,9 +15,14 @@ namespace CabinetDesigner.Tests.Application.Handlers;
 public sealed class DesignCommandHandlerTests
 {
     [Fact]
-    public async Task Execute_WithBlockingStructuralIssue_ReturnsRejectedDto_WithoutCallingOrchestrator()
+    public async Task Execute_WithBlockingStructuralIssue_ReturnsRejectedDto_ViaOrchestrator()
     {
-        var orchestrator = new RecordingOrchestrator();
+        var orchestrator = new RecordingOrchestrator
+        {
+            ExecuteResult = CommandResult.Rejected(
+                CreateMetadata(),
+                [new ValidationIssue(ValidationSeverity.Error, "INVALID", "Invalid command.")])
+        };
         var eventBus = new RecordingEventBus();
         var persistence = new RecordingPersistencePort();
         var handler = new DesignCommandHandler(orchestrator, eventBus, persistence);
@@ -29,9 +34,33 @@ public sealed class DesignCommandHandlerTests
 
         Assert.False(result.Success);
         Assert.Equal("layout.test", result.CommandType);
-        Assert.Equal(0, orchestrator.ExecuteCalls);
+        Assert.Equal(1, orchestrator.ExecuteCalls);
         Assert.Equal(0, persistence.CommitCalls);
         Assert.Equal(0, orchestrator.PreviewCalls);
+        Assert.Empty(eventBus.PublishedEvents);
+    }
+
+    [Fact]
+    public async Task Execute_WithStructuralIssueInCommand_OrchestratorPerformsValidation_Regression()
+    {
+        var structuralIssue = new ValidationIssue(ValidationSeverity.Error, "STRUCT_ERROR", "Structural issue in command");
+        var orchestrator = new RecordingOrchestrator
+        {
+            ExecuteResult = CommandResult.Rejected(
+                CreateMetadata(),
+                [structuralIssue])
+        };
+        var eventBus = new RecordingEventBus();
+        var persistence = new RecordingPersistencePort();
+        var handler = new DesignCommandHandler(orchestrator, eventBus, persistence);
+        var command = new TestDesignCommand("layout.test", [structuralIssue]);
+
+        var result = await handler.ExecuteAsync(command);
+
+        Assert.False(result.Success);
+        Assert.Equal("STRUCT_ERROR", Assert.Single(result.Issues).Code);
+        Assert.Equal(1, orchestrator.ExecuteCalls);
+        Assert.Equal(0, persistence.CommitCalls);
         Assert.Empty(eventBus.PublishedEvents);
     }
 

@@ -27,12 +27,6 @@ public sealed class DesignCommandHandler : IDesignCommandHandler
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        var structureIssues = command.ValidateStructure();
-        if (structureIssues.Any(issue => issue.Severity >= ValidationSeverity.Error))
-        {
-            return CommandResultDto.Rejected(command.Metadata, command.CommandType, structureIssues);
-        }
-
         var result = _orchestrator.Execute(command);
         var dto = CommandResultDto.From(result, command.CommandType);
 
