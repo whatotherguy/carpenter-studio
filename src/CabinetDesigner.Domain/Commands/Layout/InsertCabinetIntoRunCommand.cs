@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
 
@@ -15,11 +16,17 @@ public sealed record InsertCabinetIntoRunCommand : DesignCommandBase
 
     public Length NominalWidth { get; }
 
+    public Length NominalDepth { get; }
+
     public int InsertAtIndex { get; }
 
     public CabinetId LeftNeighborId { get; }
 
     public CabinetId RightNeighborId { get; }
+
+    public CabinetCategory Category { get; }
+
+    public ConstructionMethod Construction { get; }
 
     public InsertCabinetIntoRunCommand(
         RunId runId,
@@ -30,7 +37,10 @@ public sealed record InsertCabinetIntoRunCommand : DesignCommandBase
         CabinetId rightNeighborId,
         CommandOrigin origin,
         string intentDescription,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        Length? nominalDepth = null,
+        CabinetCategory category = CabinetCategory.Base,
+        ConstructionMethod construction = ConstructionMethod.Frameless)
         : base(CommandMetadata.Create(
             timestamp,
             origin,
@@ -40,9 +50,12 @@ public sealed record InsertCabinetIntoRunCommand : DesignCommandBase
         RunId = runId;
         CabinetTypeId = cabinetTypeId;
         NominalWidth = nominalWidth;
+        NominalDepth = nominalDepth ?? Length.FromInches(24m);
         InsertAtIndex = insertAtIndex;
         LeftNeighborId = leftNeighborId;
         RightNeighborId = rightNeighborId;
+        Category = category;
+        Construction = construction;
     }
 
     public override IReadOnlyList<ValidationIssue> ValidateStructure()
@@ -55,6 +68,14 @@ public sealed record InsertCabinetIntoRunCommand : DesignCommandBase
                 ValidationSeverity.Error,
                 "INVALID_WIDTH",
                 "Cabinet width must be greater than zero."));
+        }
+
+        if (NominalDepth <= Length.Zero)
+        {
+            issues.Add(new ValidationIssue(
+                ValidationSeverity.Error,
+                "INVALID_DEPTH",
+                "Cabinet depth must be greater than zero."));
         }
 
         if (string.IsNullOrWhiteSpace(CabinetTypeId))

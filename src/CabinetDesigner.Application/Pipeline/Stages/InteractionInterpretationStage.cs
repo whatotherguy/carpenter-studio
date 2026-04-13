@@ -42,6 +42,7 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             {
                 CreateRunCommand createRun => ExecuteCreateRun(createRun, context),
                 AddCabinetToRunCommand addCabinet => ExecuteAddCabinet(addCabinet, context),
+                InsertCabinetIntoRunCommand insertCabinet => ExecuteInsertCabinet(insertCabinet, context),
                 MoveCabinetCommand moveCabinet => ExecuteMoveCabinet(moveCabinet, context),
                 ResizeCabinetCommand resizeCabinet => ExecuteResizeCabinet(resizeCabinet, context),
                 _ => [new DomainOperation.None()]
@@ -89,6 +90,42 @@ public sealed class InteractionInterpretationStage : IResolutionStage
         var slot = command.Placement == DomainRunPlacement.AtIndex && command.InsertAtIndex is int insertIndex
             ? run.InsertCabinetAt(insertIndex, cabinetId, command.NominalWidth)
             : run.AppendCabinet(cabinetId, command.NominalWidth);
+        var cabinet = new CabinetStateRecord(
+            cabinetId,
+            command.CabinetTypeId,
+            command.NominalWidth,
+            command.NominalDepth,
+            run.Id,
+            slot.Id,
+            command.Category,
+            command.Construction);
+        _stateStore.AddCabinet(cabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            run.Id.Value.ToString(),
+            "CabinetRun",
+            DeltaOperation.Modified,
+            previousRunValues,
+            _stateStore.CaptureRunValues(run)));
+        _deltaTracker.RecordDelta(new StateDelta(
+            cabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Created,
+            null,
+            _stateStore.CaptureCabinetValues(cabinet)));
+
+        return [new DomainOperation.InsertSlot(run.Id, cabinetId, slot.SlotIndex)];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteInsertCabinet(InsertCabinetIntoRunCommand command, ResolutionContext context)
+    {
+        var run = _stateStore.GetRun(command.RunId)
+            ?? throw new InvalidOperationException($"Run {command.RunId} not found.");
+
+        var previousRunValues = _stateStore.CaptureRunValues(run);
+        var cabinetId = CabinetId.New();
+        var slot = run.InsertCabinetAt(command.InsertAtIndex, cabinetId, command.NominalWidth);
+
         var cabinet = new CabinetStateRecord(
             cabinetId,
             command.CabinetTypeId,
