@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Threading;
 using CabinetDesigner.Application;
 using CabinetDesigner.Domain.Explanation;
 using CabinetDesigner.Application.Pipeline;
@@ -364,6 +366,91 @@ public sealed class ResolutionOrchestratorTests
         Assert.Null(orchestrator.Redo());
     }
 
+    [Fact]
+    public void Execute_RecursionDepthReturnsToZeroAfterSuccess()
+    {
+        // Test that after a successful Execute, the depth counter is restored to 0.
+        var command = new TestDesignCommand([]);
+        var orchestrator = CreateOrchestrator(
+            new RecordingDeltaTracker(),
+            new RecordingWhyEngine(),
+            new RecordingUndoStack(),
+            new RecordingStateManager(),
+            CreatePipeline());
+
+        var result = orchestrator.Execute(command);
+
+        Assert.True(result.Success);
+
+        // Use reflection to read the private _currentRecursionDepth field
+        var depthField = typeof(ResolutionOrchestrator).GetField(
+            "_currentRecursionDepth",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(depthField);
+        var depth = (int)depthField!.GetValue(orchestrator)!;
+        Assert.Equal(0, depth);
+    }
+
+    [Fact]
+    public void Execute_RecursionDepthReturnsToZeroAfterFailure()
+    {
+        // Test that after a failed Execute (due to recursion), the depth counter is restored to 0.
+        var command = new TestDesignCommand([]);
+        ResolutionOrchestrator? orchestrator = null;
+        var stages = new IResolutionStage[]
+        {
+            new RecursiveStage(1, () => orchestrator!, command)
+        };
+        orchestrator = CreateOrchestrator(new RecordingDeltaTracker(), new RecordingWhyEngine(), new RecordingUndoStack(), new RecordingStateManager(), stages);
+
+        var result = orchestrator.Execute(command);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Issues, issue => issue.Code == "MAX_RECURSION");
+
+        // Use reflection to read the private _currentRecursionDepth field
+        var depthField = typeof(ResolutionOrchestrator).GetField(
+            "_currentRecursionDepth",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(depthField);
+        var depth = (int)depthField!.GetValue(orchestrator)!;
+        Assert.Equal(0, depth);
+    }
+
+    [Fact]
+    public void Execute_RecursionDepthDoesNotGoNegative()
+    {
+        // Ensure that exception handling in nested calls doesn't cause the depth to go negative
+        var command = new TestDesignCommand([]);
+        ResolutionOrchestrator? orchestrator = null;
+
+        var stages = new IResolutionStage[]
+        {
+            new RecursiveStageWithException(1, () => orchestrator!, command)
+        };
+
+        orchestrator = CreateOrchestrator(
+            new RecordingDeltaTracker(),
+            new RecordingWhyEngine(),
+            new RecordingUndoStack(),
+            new RecordingStateManager(),
+            stages);
+
+        // Call Execute; it will fail due to exception, but depth should not go negative
+        var result = orchestrator.Execute(command);
+
+        // Use reflection to read the private _currentRecursionDepth field
+        var depthField = typeof(ResolutionOrchestrator).GetField(
+            "_currentRecursionDepth",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(depthField);
+        var depth = (int)depthField!.GetValue(orchestrator)!;
+        Assert.True(depth >= 0, "Recursion depth should never be negative");
+    }
+
     private static ResolutionOrchestrator CreateOrchestrator(
         IDeltaTracker deltaTracker,
         IWhyEngine whyEngine,
@@ -704,6 +791,34 @@ public sealed class ResolutionOrchestratorTests
         public bool ShouldExecute(ResolutionMode mode) => true;
 
         public StageResult Execute(ResolutionContext context) => throw new InvalidOperationException("boom");
+    }
+
+    private sealed class RecursiveStageWithException(
+        int stageNumber,
+        Func<ResolutionOrchestrator> getOrchestrator,
+        IDesignCommand command) : IResolutionStage
+    {
+        private int _executionCount;
+
+        public int StageNumber => stageNumber;
+        public string StageName => "RecursiveWithException";
+        public bool ShouldExecute(ResolutionMode mode) => true;
+
+        public StageResult Execute(ResolutionContext context)
+        {
+            var count = Interlocked.Increment(ref _executionCount);
+            if (count == 1)
+            {
+                // Make a recursive call on the first invocation
+                var orchestrator = getOrchestrator();
+                _ = orchestrator.Execute(command);
+
+                // Throw an exception after the recursive call
+                throw new InvalidOperationException("Test exception in recursive stage");
+            }
+
+            return StageResult.Succeeded(stageNumber);
+        }
     }
 }
 

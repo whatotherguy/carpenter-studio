@@ -1,3 +1,4 @@
+using System.Threading;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.Stages;
 using CabinetDesigner.Application.State;
@@ -52,14 +53,17 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (_currentRecursionDepth >= MaxRecursionDepth)
+        var depth = Interlocked.Increment(ref _currentRecursionDepth);
+        if (depth > MaxRecursionDepth)
         {
+            Interlocked.Decrement(ref _currentRecursionDepth);
             return CommandResult.Failed(command.Metadata, [CreateRecursionIssue()]);
         }
 
         var structureIssues = command.ValidateStructure();
         if (HasBlockingIssues(structureIssues))
         {
+            Interlocked.Decrement(ref _currentRecursionDepth);
             return CommandResult.Rejected(command.Metadata, structureIssues);
         }
 
@@ -68,7 +72,6 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
 
         try
         {
-            _currentRecursionDepth++;
             _deltaTracker.Begin();
             deltaTrackingStarted = true;
 
@@ -101,7 +104,7 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         }
         finally
         {
-            _currentRecursionDepth--;
+            Interlocked.Decrement(ref _currentRecursionDepth);
         }
     }
 
@@ -109,14 +112,17 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (_currentRecursionDepth >= MaxRecursionDepth)
+        var depth = Interlocked.Increment(ref _currentRecursionDepth);
+        if (depth > MaxRecursionDepth)
         {
+            Interlocked.Decrement(ref _currentRecursionDepth);
             return PreviewResult.Failed(command.Metadata, [CreateRecursionIssue()]);
         }
 
         var structureIssues = command.ValidateStructure();
         if (HasBlockingIssues(structureIssues))
         {
+            Interlocked.Decrement(ref _currentRecursionDepth);
             return PreviewResult.Failed(command.Metadata, structureIssues);
         }
 
@@ -124,8 +130,6 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
 
         try
         {
-            _currentRecursionDepth++;
-
             if (!ExecuteStages(context))
             {
                 return PreviewResult.Failed(command.Metadata, context.AccumulatedIssues.ToArray());
@@ -143,7 +147,7 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         }
         finally
         {
-            _currentRecursionDepth--;
+            Interlocked.Decrement(ref _currentRecursionDepth);
         }
     }
 
