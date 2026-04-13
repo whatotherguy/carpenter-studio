@@ -395,7 +395,13 @@ public sealed class ValidationStageTests
     {
         public IReadOnlyList<IValidationRule> RegisteredRules => [];
 
-        public FullValidationResult Validate(ValidationContext context) => validate(context);
+        public FullValidationResult Validate(ValidationContext context, IReadOnlyList<ValidationIssue>? contextualIssues = null)
+        {
+            var result = validate(context);
+            return contextualIssues is not null && contextualIssues.Count > 0
+                ? result with { ContextualIssues = contextualIssues }
+                : result;
+        }
 
         public IReadOnlyList<ValidationIssue> ValidatePreview(ValidationContext context) => [];
 

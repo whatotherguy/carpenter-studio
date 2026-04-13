@@ -145,6 +145,46 @@ public sealed class ValidationEngineTests
         Assert.Equal(new[] { "z.rule", "a.rule", "context.warning" }, codes);
     }
 
+    [Fact]
+    public void Validate_WithContextualIssuesParameter_IncludesThemInResult()
+    {
+        var engine = new ValidationEngineBuilder().Build();
+        var contextualIssues = new[]
+        {
+            CreateIssue(ValidationSeverity.Warning, "context.issue.1", "First contextual issue", []),
+            CreateIssue(ValidationSeverity.Error, "context.issue.2", "Second contextual issue", [])
+        };
+
+        var result = engine.Validate(CreateContext(), contextualIssues);
+
+        Assert.Equal(2, result.ContextualIssues.Count);
+        Assert.Equal("context.issue.1", result.ContextualIssues[0].Code);
+        Assert.Equal("context.issue.2", result.ContextualIssues[1].Code);
+    }
+
+    [Fact]
+    public void Validate_WithBlockerContextualIssue_MakesResultInvalid()
+    {
+        var engine = new ValidationEngineBuilder().Build();
+        var blockerIssue = new[] { CreateIssue(ValidationSeverity.ManufactureBlocker, "blocker", "Manufacture blocker", []) };
+
+        var result = engine.Validate(CreateContext(), blockerIssue);
+
+        Assert.False(result.IsValid);
+        Assert.Single(result.ContextualIssues);
+        Assert.Equal(ValidationSeverity.ManufactureBlocker, result.ContextualIssues[0].Severity);
+    }
+
+    [Fact]
+    public void Validate_WithoutContextualIssuesParameter_DefaultsToEmpty()
+    {
+        var engine = new ValidationEngineBuilder().Build();
+
+        var result = engine.Validate(CreateContext());
+
+        Assert.Empty(result.ContextualIssues);
+    }
+
     private static ValidationContext CreateContext(ValidationMode mode = ValidationMode.Full) =>
         new()
         {

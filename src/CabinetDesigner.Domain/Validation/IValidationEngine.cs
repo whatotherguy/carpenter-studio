@@ -5,7 +5,7 @@ namespace CabinetDesigner.Domain.Validation;
 
 public interface IValidationEngine
 {
-    FullValidationResult Validate(ValidationContext context);
+    FullValidationResult Validate(ValidationContext context, IReadOnlyList<ValidationIssue>? contextualIssues = null);
 
     IReadOnlyList<ValidationIssue> ValidatePreview(ValidationContext context);
 

@@ -31,11 +31,7 @@ public sealed class ValidationStage : IResolutionStage
     public StageResult Execute(ResolutionContext context)
     {
         var validationContext = BuildContext(context);
-        var engineResult = _engine.Validate(validationContext);
-        var result = engineResult with
-        {
-            ContextualIssues = context.AccumulatedIssues.ToArray()
-        };
+        var result = _engine.Validate(validationContext, context.AccumulatedIssues.ToArray());
 
         context.ValidationResult = new ValidationResult
         {

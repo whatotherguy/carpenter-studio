@@ -32,11 +32,11 @@ public sealed class ValidationEngine : IValidationEngine
 
     public IReadOnlyList<IValidationRule> RegisteredRules => _rules;
 
-    public FullValidationResult Validate(ValidationContext context) =>
+    public FullValidationResult Validate(ValidationContext context, IReadOnlyList<ValidationIssue>? contextualIssues = null) =>
         new()
         {
             CrossCuttingIssues = EvaluateRules(_rules, context),
-            ContextualIssues = []
+            ContextualIssues = contextualIssues ?? []
         };
 
     public IReadOnlyList<ValidationIssue> ValidatePreview(ValidationContext context) =>
