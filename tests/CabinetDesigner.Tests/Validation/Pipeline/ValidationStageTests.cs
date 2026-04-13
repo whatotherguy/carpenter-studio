@@ -90,6 +90,204 @@ public sealed class ValidationStageTests
         Assert.Equal("existing.warning", Assert.Single(result.Issues).Code);
     }
 
+    [Fact]
+    public void BuildCabinetPositions_UsesCabinetIdNotSlotId()
+    {
+        // Regression test: ensure CabinetPositionSnapshot.CabinetId contains the cabinet ID, not the slot ID
+        var cabinetId = CabinetId.New();
+        var slotId = RunSlotId.New();
+        var runId = RunId.New();
+
+        var spatialResult = new SpatialResolutionResult
+        {
+            SlotPositionUpdates =
+            [
+                new SlotPositionUpdate(
+                    slotId,
+                    cabinetId,
+                    runId,
+                    0,
+                    Point2D.Origin,
+                    Length.FromInches(24m))
+            ],
+            AdjacencyChanges = [],
+            RunSummaries =
+            [
+                new RunSummary(
+                    runId,
+                    Length.FromInches(120m),
+                    Length.FromInches(24m),
+                    Length.FromInches(96m),
+                    1)
+            ],
+            Placements = []
+        };
+
+        ValidationContext? capturedContext = null;
+        var engine = new StubValidationEngine(ctx =>
+        {
+            capturedContext = ctx;
+            return EmptyResult();
+        });
+
+        var stage = new ValidationStage(engine);
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand(),
+            Mode = ResolutionMode.Full,
+            SpatialResult = spatialResult,
+            EngineeringResult = new EngineeringResolutionResult
+            {
+                Assemblies = [],
+                FillerRequirements = [],
+                EndConditionUpdates = [new EndConditionUpdate(runId, EndCondition.Open(), EndCondition.AgainstWall())]
+            },
+            ConstraintResult = new ConstraintPropagationResult { MaterialAssignments = [], HardwareAssignments = [], Violations = [] },
+            PartResult = new PartGenerationResult { Parts = [] },
+            ManufacturingResult = new ManufacturingPlanResult
+            {
+                Plan = new ManufacturingPlan
+                {
+                    MaterialGroups = [],
+                    CutList = [],
+                    Operations = [],
+                    EdgeBandingRequirements = [],
+                    Readiness = new ManufacturingReadinessResult { IsReady = true, Blockers = [] }
+                }
+            },
+            InstallResult = new InstallPlanResult
+            {
+                Plan = new InstallPlan
+                {
+                    Steps = [],
+                    Dependencies = [],
+                    FasteningRequirements = [],
+                    Readiness = new InstallReadinessResult { IsReady = true, Blockers = [] }
+                }
+            },
+            CostingResult = new CostingResult
+            {
+                MaterialCost = 0m,
+                HardwareCost = 0m,
+                LaborCost = 0m,
+                InstallCost = 0m,
+                Subtotal = 0m,
+                Markup = 0m,
+                Tax = 0m,
+                Total = 0m,
+                CabinetBreakdowns = []
+            }
+        };
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedContext);
+        var cabinetSnapshot = Assert.Single(capturedContext.CabinetPositions);
+        Assert.Equal(cabinetId.ToString(), cabinetSnapshot.CabinetId);
+    }
+
+    [Fact]
+    public void BuildCabinetPositions_CabinetIdDifferentFromSlotId()
+    {
+        // Distinction test: explicitly verify that CabinetId and SlotId are different
+        var cabinetId = CabinetId.New();
+        var slotId = RunSlotId.New();
+        var runId = RunId.New();
+
+        // Ensure they are actually different
+        Assert.NotEqual(cabinetId.ToString(), slotId.ToString());
+
+        var spatialResult = new SpatialResolutionResult
+        {
+            SlotPositionUpdates =
+            [
+                new SlotPositionUpdate(
+                    slotId,
+                    cabinetId,
+                    runId,
+                    0,
+                    Point2D.Origin,
+                    Length.FromInches(24m))
+            ],
+            AdjacencyChanges = [],
+            RunSummaries =
+            [
+                new RunSummary(
+                    runId,
+                    Length.FromInches(120m),
+                    Length.FromInches(24m),
+                    Length.FromInches(96m),
+                    1)
+            ],
+            Placements = []
+        };
+
+        ValidationContext? capturedContext = null;
+        var engine = new StubValidationEngine(ctx =>
+        {
+            capturedContext = ctx;
+            return EmptyResult();
+        });
+
+        var stage = new ValidationStage(engine);
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand(),
+            Mode = ResolutionMode.Full,
+            SpatialResult = spatialResult,
+            EngineeringResult = new EngineeringResolutionResult
+            {
+                Assemblies = [],
+                FillerRequirements = [],
+                EndConditionUpdates = [new EndConditionUpdate(runId, EndCondition.Open(), EndCondition.AgainstWall())]
+            },
+            ConstraintResult = new ConstraintPropagationResult { MaterialAssignments = [], HardwareAssignments = [], Violations = [] },
+            PartResult = new PartGenerationResult { Parts = [] },
+            ManufacturingResult = new ManufacturingPlanResult
+            {
+                Plan = new ManufacturingPlan
+                {
+                    MaterialGroups = [],
+                    CutList = [],
+                    Operations = [],
+                    EdgeBandingRequirements = [],
+                    Readiness = new ManufacturingReadinessResult { IsReady = true, Blockers = [] }
+                }
+            },
+            InstallResult = new InstallPlanResult
+            {
+                Plan = new InstallPlan
+                {
+                    Steps = [],
+                    Dependencies = [],
+                    FasteningRequirements = [],
+                    Readiness = new InstallReadinessResult { IsReady = true, Blockers = [] }
+                }
+            },
+            CostingResult = new CostingResult
+            {
+                MaterialCost = 0m,
+                HardwareCost = 0m,
+                LaborCost = 0m,
+                InstallCost = 0m,
+                Subtotal = 0m,
+                Markup = 0m,
+                Tax = 0m,
+                Total = 0m,
+                CabinetBreakdowns = []
+            }
+        };
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedContext);
+        var cabinetSnapshot = Assert.Single(capturedContext.CabinetPositions);
+        Assert.NotEqual(slotId.ToString(), cabinetSnapshot.CabinetId);
+        Assert.Equal(cabinetId.ToString(), cabinetSnapshot.CabinetId);
+    }
+
     private static FullValidationResult EmptyResult() =>
         new()
         {
@@ -111,6 +309,7 @@ public sealed class ValidationStageTests
             [
                 new SlotPositionUpdate(
                     RunSlotId.New(),
+                    CabinetId.New(),
                     RunId.New(),
                     0,
                     Point2D.Origin,

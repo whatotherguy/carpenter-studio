@@ -16,6 +16,7 @@ public sealed record SpatialResolutionResult
 
 public sealed record SlotPositionUpdate(
     RunSlotId SlotId,
+    CabinetId CabinetId,
     RunId RunId,
     int NewIndex,
     Point2D WorldPosition,

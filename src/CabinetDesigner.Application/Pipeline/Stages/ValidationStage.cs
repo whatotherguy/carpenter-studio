@@ -77,7 +77,7 @@ public sealed class ValidationStage : IResolutionStage
     private static IReadOnlyList<CabinetPositionSnapshot> BuildCabinetPositions(SpatialResolutionResult spatialResult) =>
         spatialResult.SlotPositionUpdates
             .Select(update => new CabinetPositionSnapshot(
-                CabinetId: update.SlotId.ToString(),
+                CabinetId: update.CabinetId.ToString(),
                 RunId: update.RunId.ToString(),
                 BoundingBox: new Rect2D(update.WorldPosition, update.OccupiedWidth, Length.Zero),
                 SlotIndex: update.NewIndex))

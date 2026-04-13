@@ -66,7 +66,7 @@ public sealed class SpatialResolutionStage : IResolutionStage
                 var leftEdge = spatialInfo.StartWorld + wall.Direction * run.SlotOffset(index).Inches;
                 var bounds = SceneProjectionGeometry.CreateWorldBounds(leftEdge, wall.Direction, slot.OccupiedWidth, cabinet.NominalDepth);
 
-                slotPositionUpdates.Add(new SlotPositionUpdate(slot.Id, run.Id, slot.SlotIndex, leftEdge, slot.OccupiedWidth));
+                slotPositionUpdates.Add(new SlotPositionUpdate(slot.Id, cabinetId, run.Id, slot.SlotIndex, leftEdge, slot.OccupiedWidth));
                 adjacencyChanges.Add(new AdjacencyChange(
                     cabinetId,
                     FindAdjacentCabinetId(run.Slots, index - 1),
