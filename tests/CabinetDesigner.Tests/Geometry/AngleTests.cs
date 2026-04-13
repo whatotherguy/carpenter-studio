@@ -19,7 +19,10 @@ public sealed class AngleTests
     public void Straight_IsDegrees180() => Assert.Equal(180m, Angle.Straight.Degrees);
 
     [Fact]
-    public void Full_NormalizesTo0() => Assert.Equal(0m, Angle.Full.Degrees);
+    public void FromDegrees360EqualsZero() => Assert.Equal(Angle.Zero, Angle.FromDegrees(360m));
+
+    [Fact]
+    public void FromDegrees360_Degrees_IsZero() => Assert.Equal(0m, Angle.FromDegrees(360m).Degrees);
 
     // ── Normalization ─────────────────────────────────────────────────
 
@@ -73,7 +76,7 @@ public sealed class AngleTests
     [Fact]
     public void Add_NinetyPlusThreeHundredSixty_IsNinety()
     {
-        Assert.Equal(90m, (Angle.Right + Angle.Full).Degrees);
+        Assert.Equal(90m, (Angle.Right + Angle.FromDegrees(360m)).Degrees);
     }
 
     [Fact]

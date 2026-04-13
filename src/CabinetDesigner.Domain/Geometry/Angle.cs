@@ -23,7 +23,6 @@ public readonly record struct Angle : IComparable<Angle>
     public static readonly Angle Zero     = new(0m);
     public static readonly Angle Right    = new(90m);
     public static readonly Angle Straight = new(180m);
-    public static readonly Angle Full     = new(360m);  // normalizes to 0
 
     // ── Conversion ────────────────────────────────────────────────────
 
