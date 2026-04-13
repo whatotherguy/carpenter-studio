@@ -5,6 +5,7 @@ using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Persistence.Repositories;
 using CabinetDesigner.Persistence.Tests.Fixtures;
+using CabinetDesigner.Persistence.UnitOfWork;
 using Xunit;
 
 namespace CabinetDesigner.Persistence.Tests.Integration;
@@ -67,6 +68,53 @@ public sealed class CommandPersistenceServiceTests
         Assert.Single(workingRevisionRepository.SavedRevisions);
         Assert.Single(commandJournalRepository.Entries);
         Assert.Empty(checkpointRepository.SavedCheckpoints);
+    }
+
+    [Fact]
+    public async Task CommitCommandAsync_WhenSecondWriteFails_RollsBackAllWritesToDatabase()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+        var tupleState = TestData.CreatePersistedState();
+        var state = new PersistedProjectState(tupleState.Project, tupleState.Revision, tupleState.WorkingRevision, tupleState.Checkpoint);
+
+        var unitOfWork = new SqliteUnitOfWork(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var workingRevisionRepository = new WorkingRevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var commandJournalRepository = new CommandJournalRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var explanationRepository = new ExplanationRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var validationHistoryRepository = new ThrowingValidationHistoryRepository();
+        var checkpointRepository = new AutosaveCheckpointRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+
+        var service = CreateService(
+            unitOfWork,
+            new RecordingWorkingRevisionSource(state),
+            projectRepository,
+            revisionRepository,
+            workingRevisionRepository,
+            commandJournalRepository,
+            explanationRepository,
+            validationHistoryRepository,
+            checkpointRepository,
+            new RecordingWhyEngine(),
+            logger: null);
+
+        var command = new TestDesignCommand();
+        var result = CommandResult.Succeeded(command.Metadata, [], []);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CommitCommandAsync(command, result));
+
+        // Verify no data was persisted: all writes should have been rolled back.
+        var projectsCount = await CountRowsAsync(fixture, "SELECT COUNT(*) FROM projects;");
+        var revisionsCount = await CountRowsAsync(fixture, "SELECT COUNT(*) FROM revisions;");
+        var commandJournalCount = await CountRowsAsync(fixture, "SELECT COUNT(*) FROM command_journal;");
+        var checkpointsCount = await CountRowsAsync(fixture, "SELECT COUNT(*) FROM autosave_checkpoints;");
+
+        Assert.Equal(0, projectsCount);
+        Assert.Equal(0, revisionsCount);
+        Assert.Equal(0, commandJournalCount);
+        Assert.Equal(0, checkpointsCount);
     }
 
     private static ICommandPersistencePort CreateService(DependencyGraph graph, RecordingAppLogger logger)
@@ -343,5 +391,14 @@ public sealed class CommandPersistenceServiceTests
         public string CommandType => "test.commit";
 
         public IReadOnlyList<ValidationIssue> ValidateStructure() => [];
+    }
+
+    private static async Task<int> CountRowsAsync(SqliteTestFixture fixture, string query)
+    {
+        await using var connection = (Microsoft.Data.Sqlite.SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = query;
+        var result = await cmd.ExecuteScalarAsync();
+        return Convert.ToInt32(result, System.Globalization.CultureInfo.InvariantCulture);
     }
 }
