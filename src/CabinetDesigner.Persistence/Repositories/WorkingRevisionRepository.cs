@@ -25,12 +25,11 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
                 var rooms = await LoadRoomsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
                 var walls = await LoadWallsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
                 var runs = await LoadRunsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
-                var cabinets = await LoadCabinetsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
+                var (cabinets, cabinetRows) = await LoadCabinetsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
                 var parts = await LoadPartsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
 
                 var runsById = runs.ToDictionary(run => run.Id);
                 var cabinetsById = cabinets.ToDictionary(cabinet => cabinet.Id);
-                var cabinetRows = await LoadCabinetRowsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
 
                 foreach (var row in cabinetRows.OrderBy(row => row.SlotIndex))
                 {
@@ -221,10 +220,11 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
         return runs;
     }
 
-    private static async Task<IReadOnlyList<Cabinet>> LoadCabinetsAsync(SqliteConnection connection, SqliteTransaction? transaction, RevisionId revisionId, CancellationToken ct)
+    private static async Task<(IReadOnlyList<Cabinet> Cabinets, List<CabinetRow> Rows)> LoadCabinetsAsync(SqliteConnection connection, SqliteTransaction? transaction, RevisionId revisionId, CancellationToken ct)
     {
         var rows = await LoadCabinetRowsAsync(connection, transaction, revisionId, ct).ConfigureAwait(false);
-        return rows.Select(CabinetMapper.ToDomain).ToArray();
+        var cabinets = rows.Select(CabinetMapper.ToDomain).ToArray();
+        return (cabinets, rows);
     }
 
     private static async Task<List<CabinetRow>> LoadCabinetRowsAsync(SqliteConnection connection, SqliteTransaction? transaction, RevisionId revisionId, CancellationToken ct)
