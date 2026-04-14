@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"c:/Users/whato/repos/carpenter-studio/.worktrees/pre-user-testing-fixes\" -type f -name \"*.cs\" -exec grep -l \"GetRevisionHistory\" {} \\\\;)",
+      "Bash(cat)",
+      "Bash(csc /tmp/test_delegate.csx)",
+      "Bash(find . -name \"*.cs\" -type f -exec grep -l \"record WorkingRevision\\\\|class WorkingRevision\" {} \\\\;)",
+      "Bash(xargs grep:*)",
+      "Bash(find tests:*)",
+      "Bash(sed -n '54,64p' src/CabinetDesigner.Application/Services/RunService.cs)",
+      "Bash(sed -n '197,209p' src/CabinetDesigner.Editor/EditorInteractionService.cs)",
+      "Bash(tee /tmp/build_log.txt)",
+      "Bash(dotnet clean:*)",
+      "Bash(rm -rf \"/c/Users/whato/repos/carpenter-studio/.worktrees/pre-user-testing-fixes/tests/CabinetDesigner.Tests/bin\")",
+      "Bash(rm -rf \"/c/Users/whato/repos/carpenter-studio/.worktrees/pre-user-testing-fixes/tests/CabinetDesigner.Tests/obj\")",
+      "Bash(dotnet test:*)",
+      "Read(//tmp/**)"
+    ]
+  }
+}
