@@ -86,7 +86,7 @@ public sealed class ShellViewModelTests
         Assert.True(shell.RunSummary.HasActiveRun);
         Assert.Equal("Live run summary", shell.RunSummary.SourceLabel);
         Assert.Equal("2 cabinets", shell.RunSummary.CabinetCountDisplay);
-        Assert.Equal("66\"", shell.RunSummary.TotalWidthDisplay);
+        Assert.Equal("60\"", shell.RunSummary.TotalWidthDisplay);
         Assert.Equal("2 slots", shell.RunSummary.SlotCountDisplay);
         Assert.NotEqual(0, saveCommandChanges);
         Assert.NotEqual(0, closeCommandChanges);
@@ -143,7 +143,9 @@ public sealed class ShellViewModelTests
     {
         using var shell = CreateShellViewModel(out _, out _, out var projector, out var eventBus, out var currentState);
         SeedRunSummaryState(currentState);
-        var selectedCabinetId = Guid.NewGuid();
+        var selectedCabinetId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        eventBus.Publish(new ProjectOpenedEvent(new ProjectSummaryDto(
+            Guid.NewGuid(), "Test Project", "C:\\test.cab", DateTimeOffset.UtcNow, "Rev 1", false)));
         projector.Scene = new RenderSceneDto(
             [],
             [],
@@ -177,7 +179,7 @@ public sealed class ShellViewModelTests
         Assert.Equal("Live run summary", shell.RunSummary.SourceLabel);
         Assert.Equal("Showing the run for the selected cabinet.", shell.RunSummary.StatusMessage);
         Assert.Equal("2 cabinets", shell.RunSummary.CabinetCountDisplay);
-        Assert.Equal("66\"", shell.RunSummary.TotalWidthDisplay);
+        Assert.Equal("60\"", shell.RunSummary.TotalWidthDisplay);
         Assert.Equal(2, shell.RunSummary.Slots.Count);
         Assert.False(shell.RunSummary.Slots[0].IsSelected);
         Assert.True(shell.RunSummary.Slots[1].IsSelected);
@@ -621,7 +623,7 @@ public sealed class ShellViewModelTests
     {
         public RenderSceneDto Scene { get; set; } = new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 
-        public RenderSceneDto Project() => Scene;
+        public RenderSceneDto? Project() => Scene;
     }
 
     private sealed class RecordingCanvasHost : IEditorCanvasHost

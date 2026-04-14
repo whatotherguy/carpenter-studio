@@ -16,7 +16,7 @@ public sealed class SceneProjector : ISceneProjector
         _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
     }
 
-    public RenderSceneDto Project()
+    public RenderSceneDto? Project()
     {
         var walls = new List<WallRenderDto>();
         var runs = new List<RunRenderDto>();

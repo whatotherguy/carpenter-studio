@@ -291,7 +291,8 @@ public sealed class EditorCanvasViewModelTests
     {
         // Scene is null when no project is open. BeginPan must not be called to avoid
         // corrupting the session mode (e.g. PanningViewport with no active content).
-        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out var eventBus, out _, out _);
+        eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
 
         viewModel.OnPanStart(0d, 0d);
 
@@ -301,8 +302,8 @@ public sealed class EditorCanvasViewModelTests
     [Fact]
     public void ResetZoomCommand_WhenSceneIsNull_DoesNotRepopulateScene()
     {
-        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out var canvasHost, out _);
-        // Deliberately leave Scene null (no project open).
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out var eventBus, out var canvasHost, out _);
+        eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
 
         viewModel.ResetZoomCommand.Execute(null);
 
@@ -358,8 +359,8 @@ public sealed class EditorCanvasViewModelTests
     [Fact]
     public void FitToViewCommand_WhenSceneIsNull_DoesNothing()
     {
-        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out var canvasHost, out _);
-        // Scene is null — no project open.
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out var eventBus, out var canvasHost, out _);
+        eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
 
         viewModel.FitToViewCommand.Execute(null);
 
@@ -431,8 +432,8 @@ public sealed class EditorCanvasViewModelTests
     [Fact]
     public void SelectAllCommand_WhenSceneIsNull_CannotExecute()
     {
-        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
-        // Scene is null — no project open.
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out var eventBus, out _, out _);
+        eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
 
         Assert.False(viewModel.SelectAllCommand.CanExecute(null));
     }
@@ -480,7 +481,8 @@ public sealed class EditorCanvasViewModelTests
     [Fact]
     public void SelectNoneCommand_WhenSceneIsNull_CannotExecute()
     {
-        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out _, out _, out _);
+        using var viewModel = CreateViewModel(new RecordingRunService(), out _, out var eventBus, out _, out _);
+        eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
 
         Assert.False(viewModel.SelectNoneCommand.CanExecute(null));
     }
@@ -766,9 +768,9 @@ public sealed class EditorCanvasViewModelTests
 
     private sealed class RecordingSceneProjector : ISceneProjector
     {
-        public RenderSceneDto Scene { get; set; } = new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        public RenderSceneDto? Scene { get; set; } = new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 
-        public RenderSceneDto Project() => Scene;
+        public RenderSceneDto? Project() => Scene;
     }
 
     private sealed class RecordingRunService : IRunService
@@ -1210,9 +1212,9 @@ public sealed class EditorCanvasViewModelForwardingTests
 
     private sealed class RecordingSceneProjector : ISceneProjector
     {
-        public RenderSceneDto Scene { get; set; } = new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
+        public RenderSceneDto? Scene { get; set; } = new([], [], [], null, new GridSettingsDto(false, Length.FromInches(12m), Length.FromInches(3m)));
 
-        public RenderSceneDto Project() => Scene;
+        public RenderSceneDto? Project() => Scene;
     }
 
     private sealed class RecordingRunService : IRunService

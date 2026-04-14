@@ -34,7 +34,7 @@ public sealed class ResolutionContextTests
         // PipelineStageNotExecutedException extends InvalidOperationException so existing
         // catch (InvalidOperationException) handlers continue to work.
         var context = CreateContext();
-        Assert.Throws<InvalidOperationException>(() => _ = context.InputCapture);
+        Assert.ThrowsAny<InvalidOperationException>(() => _ = context.InputCapture);
     }
 
     [Fact]

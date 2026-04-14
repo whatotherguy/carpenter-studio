@@ -19,6 +19,7 @@ public sealed class SceneProjectorTests
 
         var scene = projector.Project();
 
+        Assert.NotNull(scene);
         Assert.Empty(scene.Walls);
         Assert.Empty(scene.Runs);
         Assert.Empty(scene.Cabinets);
@@ -38,6 +39,7 @@ public sealed class SceneProjectorTests
 
         var scene = new SceneProjector(store).Project();
 
+        Assert.NotNull(scene);
         var projectedWall = Assert.Single(scene.Walls);
         var projectedRun = Assert.Single(scene.Runs);
         var cabinet = Assert.Single(scene.Cabinets);
@@ -66,6 +68,7 @@ public sealed class SceneProjectorTests
 
         var scene = new SceneProjector(store).Project();
 
+        Assert.NotNull(scene);
         Assert.Equal(2, scene.Cabinets.Count);
         Assert.True(scene.Cabinets[1].WorldBounds.Origin.X > scene.Cabinets[0].WorldBounds.Origin.X);
         Assert.True(scene.Cabinets[1].WorldBounds.Origin.Y > scene.Cabinets[0].WorldBounds.Origin.Y);

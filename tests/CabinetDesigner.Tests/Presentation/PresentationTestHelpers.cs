@@ -42,8 +42,16 @@ internal sealed class CapturingAppLogger : IAppLogger
     /// </summary>
     public async Task<LogEntry> WaitForEntryAsync(TimeSpan timeout)
     {
-        var tcs = new TaskCompletionSource<LogEntry>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _waiters.Enqueue(tcs);
+        TaskCompletionSource<LogEntry> tcs;
+        lock (_syncRoot)
+        {
+            // Return immediately if the entry was already written (e.g. synchronous completion).
+            if (_entries.Count > 0)
+                return _entries[^1];
+
+            tcs = new TaskCompletionSource<LogEntry>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _waiters.Enqueue(tcs);
+        }
 
         using var cts = new CancellationTokenSource(timeout);
         await using var registration = cts.Token.Register(

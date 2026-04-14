@@ -549,8 +549,16 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     private void RefreshScene()
     {
+        var projected = _sceneProjector.Project();
+        if (projected is null)
+        {
+            Scene = null;
+            RefreshInteractionState();
+            return;
+        }
+
         Scene = RenderSceneComposer.ApplyInteractionState(
-            _sceneProjector.Project(),
+            projected,
             _editorSession.SelectedCabinetIds,
             _editorSession.HoveredCabinetId,
             _isResizingAtMinimum);

@@ -4,5 +4,5 @@ namespace CabinetDesigner.Presentation.Projection;
 
 public interface ISceneProjector
 {
-    RenderSceneDto Project();
+    RenderSceneDto? Project();
 }

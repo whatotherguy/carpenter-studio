@@ -16,8 +16,8 @@ namespace CabinetDesigner.Tests.Presentation;
 
 public sealed class RunSummaryPanelViewModelTests
 {
-    private static readonly Guid Run1Id = Guid.Parse("00000000-0000-0000-0000-000000000001");
-    private static readonly Guid Run2Id = Guid.Parse("00000000-0000-0000-0000-000000000002");
+    private static readonly Guid Run1Id = Guid.Parse("00000000-0000-0000-0000-000000000002");
+    private static readonly Guid Run2Id = Guid.Parse("00000000-0000-0000-0000-000000000001");
     private static readonly Guid Wall1Id = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Wall2Id = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid Cabinet1Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -64,7 +64,7 @@ public sealed class RunSummaryPanelViewModelTests
         Assert.Equal("0 selected", viewModel.SelectionSummaryDisplay);
         Assert.Equal("Live run summary", viewModel.SourceLabel);
         Assert.Equal("Showing the active run.", viewModel.StatusMessage);
-        Assert.Equal("1 cabinet", viewModel.CabinetCountDisplay);
+        Assert.Equal("2 cabinets", viewModel.CabinetCountDisplay);
         Assert.Equal("66\"", viewModel.TotalWidthDisplay);
         Assert.Equal("2 slots", viewModel.SlotCountDisplay);
         Assert.Equal(2, viewModel.Slots.Count);

@@ -77,9 +77,14 @@ public sealed class ExplanationRepositoryTests
         var commandId = CommandId.New();
         var sameTimestamp = DateTimeOffset.Parse("2026-04-08T17:00:00Z");
 
+        // Use fixed IDs that sort lexicographically as first < second < third
+        var firstId = new ExplanationNodeId(Guid.Parse("00000000-0000-0000-0000-000000000001"));
+        var secondId = new ExplanationNodeId(Guid.Parse("00000000-0000-0000-0000-000000000002"));
+        var thirdId = new ExplanationNodeId(Guid.Parse("00000000-0000-0000-0000-000000000003"));
+
         // Create three nodes with the same timestamp
         var firstNode = new ExplanationNodeRecord(
-            ExplanationNodeId.New(),
+            firstId,
             state.Revision.Id,
             commandId,
             1,
@@ -92,7 +97,7 @@ public sealed class ExplanationRepositoryTests
             ExplanationNodeStatus.Active,
             sameTimestamp);
         var secondNode = new ExplanationNodeRecord(
-            ExplanationNodeId.New(),
+            secondId,
             state.Revision.Id,
             commandId,
             2,
@@ -105,7 +110,7 @@ public sealed class ExplanationRepositoryTests
             ExplanationNodeStatus.Active,
             sameTimestamp);
         var thirdNode = new ExplanationNodeRecord(
-            ExplanationNodeId.New(),
+            thirdId,
             state.Revision.Id,
             commandId,
             3,
@@ -148,9 +153,14 @@ public sealed class ExplanationRepositoryTests
         var commandId = CommandId.New();
         var sameTimestamp = DateTimeOffset.Parse("2026-04-08T17:00:00Z");
 
+        // Use fixed IDs that sort lexicographically as first < second < third
+        var firstId = new ExplanationNodeId(Guid.Parse("00000000-0000-0000-0000-000000000001"));
+        var secondId = new ExplanationNodeId(Guid.Parse("00000000-0000-0000-0000-000000000002"));
+        var thirdId = new ExplanationNodeId(Guid.Parse("00000000-0000-0000-0000-000000000003"));
+
         // Create three nodes with the same timestamp for the same command
         var firstNode = new ExplanationNodeRecord(
-            ExplanationNodeId.New(),
+            firstId,
             state.Revision.Id,
             commandId,
             1,
@@ -163,7 +173,7 @@ public sealed class ExplanationRepositoryTests
             ExplanationNodeStatus.Active,
             sameTimestamp);
         var secondNode = new ExplanationNodeRecord(
-            ExplanationNodeId.New(),
+            secondId,
             state.Revision.Id,
             commandId,
             2,
@@ -176,7 +186,7 @@ public sealed class ExplanationRepositoryTests
             ExplanationNodeStatus.Active,
             sameTimestamp);
         var thirdNode = new ExplanationNodeRecord(
-            ExplanationNodeId.New(),
+            thirdId,
             state.Revision.Id,
             commandId,
             3,
