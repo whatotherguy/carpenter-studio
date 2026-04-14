@@ -10,6 +10,7 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
     private readonly IApplicationEventBus _eventBus;
     private readonly IValidationSummaryService _validationSummaryService;
     private readonly IAppLogger? _logger;
+    private ProjectSummaryDto? _summary;
     private string _revisionLabel = "No revision";
     private bool _hasUnsavedChanges;
     private string _statusMessage = "Ready";
@@ -94,8 +95,20 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
 
     public string ProjectSummaryDisplay => HasUnsavedChanges ? $"{RevisionLabel} - Unsaved" : RevisionLabel;
 
+    public ProjectSummaryDto? Summary
+    {
+        get => _summary;
+        private set
+        {
+            _summary = value;
+            OnPropertyChanged(nameof(Summary));  // always fire, not just when reference differs
+        }
+    }
+
     public void SetProjectSummary(ProjectSummaryDto? project)
     {
+        Summary = project;  // always fires PropertyChanged even when reference-equal
+
         if (project is null)
         {
             RevisionLabel = "No revision";

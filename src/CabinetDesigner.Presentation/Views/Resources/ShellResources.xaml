@@ -383,6 +383,7 @@
                             Command="{Binding DataContext.GoToEntityCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                             CommandParameter="{Binding}"
                             Style="{StaticResource ShellToolbarButtonStyle}"
+                            AutomationProperties.Name="Select Cabinet"
                             MinWidth="88"
                             Margin="0,6,0,0" />
                 </StackPanel>

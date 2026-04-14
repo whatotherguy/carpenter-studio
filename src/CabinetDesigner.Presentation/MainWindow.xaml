@@ -208,7 +208,8 @@
                                     Margin="14,0,14,14">
                                 <ContentControl Content="{Binding Canvas.CanvasView}"
                                                 HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch" />
+                                                VerticalAlignment="Stretch"
+                                                AutomationProperties.Name="Canvas" />
                             </Border>
                         </DockPanel>
                     </Border>
