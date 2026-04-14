@@ -7,6 +7,9 @@ public sealed record RunSummaryDto(
     int CabinetCount,
     bool HasFillers,
     bool HasValidationErrors,
+    bool IsOverCapacity,
+    decimal RemainingLengthInches,
+    decimal OverCapacityAmountInches,
     IReadOnlyList<RunSlotSummaryDto> Slots);
 
 public sealed record RunSlotSummaryDto(

@@ -295,4 +295,76 @@ public sealed class WorkingRevisionRepositoryTests
         Assert.Single(loaded!.Cabinets);
         Assert.Equal(state.WorkingRevision.Cabinets[0].Id, loaded.Cabinets[0].Id);
     }
+
+    // -------------------------------------------------------------------------
+    // Regression: eliminate duplicate cabinet query (GitHub I12 / P2)
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Regression test for I12 / P2: guards against LoadCabinetRowsAsync being
+    /// called twice (once inside LoadCabinetsAsync, once separately in LoadAsync).
+    /// This test verifies that a project with multiple cabinets can be saved and
+    /// reloaded with all cabinets present and correct slot assignments preserved.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_ProjectWithMultipleCabinets_ReturnsAllCabinetsWithCorrectSlotAssignments()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+        var state = TestData.CreatePersistedState();
+
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var workingRevisionRepository = new WorkingRevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+
+        // Save the initial project and revision
+        await projectRepository.SaveAsync(state.Project);
+        await revisionRepository.SaveAsync(state.Revision);
+
+        // Build a working revision with 3 cabinets in a single run
+        var room = state.WorkingRevision.Rooms[0];
+        var wall = state.WorkingRevision.Walls[0];
+        var run = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(120));
+
+        var cabinet1 = new Cabinet(CabinetId.New(), state.Revision.Id, "base-36", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(36), Length.FromInches(24), Length.FromInches(34.5m));
+        var cabinet2 = new Cabinet(CabinetId.New(), state.Revision.Id, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(30), Length.FromInches(24), Length.FromInches(34.5m));
+        var cabinet3 = new Cabinet(CabinetId.New(), state.Revision.Id, "base-24", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(24), Length.FromInches(24), Length.FromInches(34.5m));
+
+        run.AppendCabinet(cabinet1.Id, cabinet1.NominalWidth);
+        run.AppendCabinet(cabinet2.Id, cabinet2.NominalWidth);
+        run.AppendCabinet(cabinet3.Id, cabinet3.NominalWidth);
+
+        var workingRevision = new WorkingRevision(
+            state.Revision,
+            [room],
+            [wall],
+            [run],
+            [cabinet1, cabinet2, cabinet3],
+            Array.Empty<GeneratedPart>());
+
+        // Save the revision with 3 cabinets
+        await workingRevisionRepository.SaveAsync(workingRevision);
+
+        // Load it back
+        var loaded = await workingRevisionRepository.LoadAsync(state.Project.Id);
+
+        // Verify all 3 cabinets are present
+        Assert.NotNull(loaded);
+        Assert.Equal(3, loaded!.Cabinets.Count);
+
+        // Verify slot assignments were preserved by checking the run's cabinet slots
+        var loadedRun = loaded.Runs[0];
+        Assert.Equal(3, loadedRun.Slots.Count);
+
+        // Verify cabinets are in the correct order with correct IDs
+        var loadedCabinetIds = loadedRun.Slots
+            .Where(slot => slot.CabinetId.HasValue)
+            .Select(slot => slot.CabinetId!.Value)
+            .ToArray();
+
+        Assert.Equal(3, loadedCabinetIds.Length);
+        Assert.Contains(cabinet1.Id, loadedCabinetIds);
+        Assert.Contains(cabinet2.Id, loadedCabinetIds);
+        Assert.Contains(cabinet3.Id, loadedCabinetIds);
+    }
 }

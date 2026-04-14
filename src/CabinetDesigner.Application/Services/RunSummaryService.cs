@@ -77,6 +77,9 @@ public sealed class RunSummaryService : IRunSummaryService
             slots.Length,
             run.Slots.Any(slot => slot.SlotType == RunSlotType.Filler),
             run.OccupiedLength > run.Capacity,
+            run.IsOverCapacity,
+            run.RemainingLength.Inches,
+            run.OverCapacityAmount.Inches,
             slots);
     }
 }

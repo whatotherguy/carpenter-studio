@@ -38,6 +38,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <Border Grid.Column="0"
@@ -64,6 +65,17 @@
                     </Border>
 
                     <Border Grid.Column="2"
+                            Style="{StaticResource ShellStatusBadgeStyle}"
+                            Margin="3,0,3,0">
+                        <StackPanel>
+                            <TextBlock Text="Capacity"
+                                       Style="{StaticResource ShellMiniLabelStyle}" />
+                            <TextBlock Text="{Binding CapacityStatusDisplay}"
+                                       Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Column="3"
                             Style="{StaticResource ShellStatusBadgeStyle}"
                             Margin="6,0,0,0">
                         <StackPanel>

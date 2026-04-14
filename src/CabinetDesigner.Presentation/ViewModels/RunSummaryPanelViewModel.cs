@@ -22,6 +22,7 @@ public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
     private string _activeRunDisplay = "No active run selected";
     private string _totalWidthDisplay = "-";
     private string _cabinetCountDisplay = "-";
+    private string _capacityStatusDisplay = "-";
     private string _slotCountDisplay = "0 slots";
     private string _selectionSummaryDisplay = "0 selected";
     private string _statusMessage = NoProjectText;
@@ -84,6 +85,12 @@ public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
     {
         get => _cabinetCountDisplay;
         private set => SetProperty(ref _cabinetCountDisplay, value);
+    }
+
+    public string CapacityStatusDisplay
+    {
+        get => _capacityStatusDisplay;
+        private set => SetProperty(ref _capacityStatusDisplay, value);
     }
 
     public string SlotCountDisplay
@@ -176,6 +183,11 @@ public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
         ActiveRunDisplay = HasActiveRun ? "Active run" : "No active run selected";
         TotalWidthDisplay = HasActiveRun ? FormatInches(_activeRunSummary!.TotalNominalWidthInches) : "-";
         CabinetCountDisplay = HasActiveRun ? FormatCabinetCount(_activeRunSummary!.CabinetCount) : "-";
+        CapacityStatusDisplay = HasActiveRun
+            ? (_activeRunSummary!.IsOverCapacity
+                ? $"Over capacity by {FormatInches(_activeRunSummary!.OverCapacityAmountInches)}"
+                : $"{FormatInches(_activeRunSummary!.RemainingLengthInches)} remaining")
+            : "-";
         SlotCountDisplay = HasActiveRun ? FormatSlotCount(_activeRunSummary!.Slots.Count) : "0 slots";
         Slots = HasActiveRun
             ? _activeRunSummary!.Slots
