@@ -7,7 +7,8 @@ public static class RenderSceneComposer
     public static RenderSceneDto ApplyInteractionState(
         RenderSceneDto scene,
         IReadOnlyList<Guid> selectedCabinetIds,
-        Guid? hoveredCabinetId)
+        Guid? hoveredCabinetId,
+        bool resizeAtMinimum = false)
     {
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(selectedCabinetIds);
@@ -38,7 +39,7 @@ public static class RenderSceneComposer
         return scene with
         {
             Cabinets = cabinets,
-            Selection = SelectionOverlayFactory.Create(cabinets, selectedCabinetIds)
+            Selection = SelectionOverlayFactory.Create(cabinets, selectedCabinetIds, resizeAtMinimum)
         };
     }
 }

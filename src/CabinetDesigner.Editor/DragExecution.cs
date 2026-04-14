@@ -7,7 +7,8 @@ namespace CabinetDesigner.Editor;
 public sealed record DragPreviewResult(
     bool IsValid,
     IDesignCommand? PreviewCommand,
-    string? RejectionReason)
+    string? RejectionReason,
+    bool IsResizingAtMinimum = false)
 {
     public static DragPreviewResult Invalid(string rejectionReason) =>
         new(false, null, rejectionReason);

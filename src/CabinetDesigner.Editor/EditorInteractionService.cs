@@ -21,6 +21,7 @@ public sealed class EditorInteractionService : IEditorInteractionService
     private readonly IPreviewCommandExecutor _previewCommandExecutor;
     private readonly ICommitCommandExecutor _commitCommandExecutor;
     private readonly IClock _clock;
+    private bool _pendingResizeAtMinimum;
 
     public EditorInteractionService(
         EditorSession session,
@@ -117,10 +118,14 @@ public sealed class EditorInteractionService : IEditorInteractionService
         var command = BuildCommand(drag, resolution.Winner);
         if (command is null)
         {
+            _pendingResizeAtMinimum = false;
             return DragPreviewResult.Invalid(GetNoTargetReason(drag.DragType));
         }
 
-        return _previewCommandExecutor.Preview(command);
+        var result = _previewCommandExecutor.Preview(command);
+        var isAtMinimum = drag.DragType == DragType.ResizeCabinet && _pendingResizeAtMinimum;
+        _pendingResizeAtMinimum = false;
+        return result with { IsResizingAtMinimum = isAtMinimum };
     }
 
     /// <summary>
@@ -254,6 +259,7 @@ public sealed class EditorInteractionService : IEditorInteractionService
         var rightEdge = winner?.SnapPoint ?? drag.CandidateRefPoint;
         var (distanceAlongAxis, _) = RunAxisProjection.ProjectOntoAxis(rightEdge, drag.FixedLeftEdgeWorld.Value, run.Axis);
         var rawWidth = Length.FromInches(Math.Max(0m, distanceAlongAxis));
+        _pendingResizeAtMinimum = rawWidth < MinimumCabinetWidth;
         var newWidth = rawWidth < MinimumCabinetWidth ? MinimumCabinetWidth : rawWidth;
 
         return new ResizeCabinetCommand(

@@ -13,6 +13,7 @@ public sealed class SelectionOverlayLayer : IRenderLayer
     private static readonly Pen SelectionPen = CreateSelectionPen();
     private static readonly Pen MultiSelectionPen = CreateMultiSelectionPen();
     private static readonly Brush HandleFill = CreateHandleFill();
+    private static readonly Brush HandleFillAtMinimum = CreateHandleFillAtMinimum();
 
     public void Draw(DrawingContext drawingContext, RenderSceneDto scene, ViewportTransform viewport)
     {
@@ -40,6 +41,7 @@ public sealed class SelectionOverlayLayer : IRenderLayer
             drawingContext.DrawRectangle(null, MultiSelectionPen, new Rect(rect.X, rect.Y, rect.Width, rect.Height));
         }
 
+        var handleFill = scene.Selection.IsResizingAtMinimum ? HandleFillAtMinimum : HandleFill;
         for (var i = 0; i < scene.Selection.Handles.Count; i++)
         {
             var handle = scene.Selection.Handles[i];
@@ -49,7 +51,7 @@ public sealed class SelectionOverlayLayer : IRenderLayer
                 center.Y - (HandleSizePixels / 2d),
                 HandleSizePixels,
                 HandleSizePixels);
-            drawingContext.DrawRectangle(HandleFill, SelectionPen, rect);
+            drawingContext.DrawRectangle(handleFill, SelectionPen, rect);
         }
     }
 
@@ -73,6 +75,13 @@ public sealed class SelectionOverlayLayer : IRenderLayer
     private static Brush CreateHandleFill()
     {
         var brush = Brushes.White;
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Brush CreateHandleFillAtMinimum()
+    {
+        var brush = Brushes.Orange;
         brush.Freeze();
         return brush;
     }

@@ -6,7 +6,8 @@ public static class SelectionOverlayFactory
 {
     public static SelectionOverlayDto? Create(
         IReadOnlyList<CabinetRenderDto> cabinets,
-        IReadOnlyList<Guid> selectedCabinetIds)
+        IReadOnlyList<Guid> selectedCabinetIds,
+        bool resizeAtMinimum = false)
     {
         ArgumentNullException.ThrowIfNull(cabinets);
         ArgumentNullException.ThrowIfNull(selectedCabinetIds);
@@ -37,6 +38,7 @@ public static class SelectionOverlayFactory
         return new SelectionOverlayDto(
             selectedCabinetIds.Where(selectedSet.Contains).ToArray(),
             multiSelectionBounds,
-            handles);
+            handles,
+            resizeAtMinimum);
     }
 }

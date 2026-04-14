@@ -36,6 +36,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     private HitTestTarget _pendingDragTarget;
     private bool _isDragActive;
     private bool _isCommitInFlight;
+    private bool _isResizingAtMinimum;
 
     public EditorCanvasViewModel(
         IRunService runService,
@@ -170,6 +171,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         {
             _isDragActive = false;
             _isCommitInFlight = false;
+            _isResizingAtMinimum = false;
             _pendingDragCabinetId = null;
             _interactionService.OnDragAborted();
         }
@@ -257,7 +259,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         // Update the active drag preview.
         if (_isDragActive)
         {
-            _interactionService.OnDragMoved(screenX, screenY);
+            var previewResult = _interactionService.OnDragMoved(screenX, screenY);
+            _isResizingAtMinimum = previewResult.IsResizingAtMinimum;
             RefreshScene();
             return;
         }
@@ -280,6 +283,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
         var wasDragActive = _isDragActive;
         _isDragActive = false;
+        _isResizingAtMinimum = false;
 
         if (wasDragActive)
         {
@@ -548,7 +552,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         Scene = RenderSceneComposer.ApplyInteractionState(
             _sceneProjector.Project(),
             _editorSession.SelectedCabinetIds,
-            _editorSession.HoveredCabinetId);
+            _editorSession.HoveredCabinetId,
+            _isResizingAtMinimum);
         _canvasHost.UpdateScene(Scene);
         _canvasHost.UpdateViewport(_editorSession.Viewport);
         RefreshInteractionState();
