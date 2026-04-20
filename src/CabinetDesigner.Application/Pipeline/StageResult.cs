@@ -11,8 +11,8 @@ public sealed record StageResult
 
     /// <summary>
     /// <see langword="true"/> when the stage is a known skeleton that has not yet been
-    /// implemented.  The pipeline continues normally, but the orchestrator will surface a
-    /// diagnostic warning so developers and testers can identify which stages are still stubs.
+    /// implemented. The orchestrator decides whether that is a preview-only warning or a
+    /// blocking error based on pipeline mode.
     /// </summary>
     public bool IsNotImplemented { get; init; }
 

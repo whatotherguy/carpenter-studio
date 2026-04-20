@@ -16,17 +16,21 @@ public sealed class InstallProjectorTests
     [Fact]
     public void Project_SequenceGeneration_OrdersCabinetsByRunPosition()
     {
-        var runId = RunId.New();
-        var cabinetA = CabinetId.New();
-        var cabinetB = CabinetId.New();
-        var cabinetC = CabinetId.New();
+        var runId = new RunId(Guid.Parse("00000000-0000-0000-0000-000000000101"));
+        var cabinetA = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000201"));
+        var cabinetB = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000202"));
+        var cabinetC = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000203"));
 
         var plan = _projector.Project(
             CreateSpatialResult(
                 (runId, cabinetB, new Point2D(36m, 0m)),
                 (runId, cabinetC, new Point2D(72m, 0m)),
                 (runId, cabinetA, new Point2D(0m, 0m))),
-            CreateEngineeringResult(),
+            CreateEngineeringResult(
+                new AssemblyResolution(cabinetA, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+                new AssemblyResolution(cabinetB, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+                new AssemblyResolution(cabinetC, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+                new EndConditionUpdate(runId, CabinetDesigner.Domain.RunContext.EndCondition.Open(), CabinetDesigner.Domain.RunContext.EndCondition.Open())),
             CreateManufacturingResult(cabinetA, cabinetB, cabinetC));
 
         Assert.True(plan.Readiness.IsReady);
@@ -43,15 +47,19 @@ public sealed class InstallProjectorTests
     [Fact]
     public void Project_DependencyOrdering_FillerDependsOnCabinetsInRun()
     {
-        var runId = RunId.New();
-        var cabinetA = CabinetId.New();
-        var cabinetB = CabinetId.New();
+        var runId = new RunId(Guid.Parse("00000000-0000-0000-0000-000000000102"));
+        var cabinetA = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000204"));
+        var cabinetB = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000205"));
 
         var plan = _projector.Project(
             CreateSpatialResult(
                 (runId, cabinetA, new Point2D(0m, 0m)),
                 (runId, cabinetB, new Point2D(36m, 0m))),
-            CreateEngineeringResult(new FillerRequirement(runId, Length.FromInches(3m), "scribe gap")),
+            CreateEngineeringResult(
+                new AssemblyResolution(cabinetA, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+                new AssemblyResolution(cabinetB, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+                new EndConditionUpdate(runId, CabinetDesigner.Domain.RunContext.EndCondition.Open(), CabinetDesigner.Domain.RunContext.EndCondition.Open()),
+                new FillerRequirement(runId, Length.FromInches(3m), "scribe gap")),
             CreateManufacturingResult(cabinetA, cabinetB));
 
         var filler = Assert.Single(plan.Steps.Where(step => step.Kind == InstallStepKind.FillerInstall));
@@ -78,6 +86,11 @@ public sealed class InstallProjectorTests
             (runA, cabinet2, new Point2D(40m, 0m)),
             (runA, cabinet1, new Point2D(0m, 0m)));
         var engineering = CreateEngineeringResult(
+            new AssemblyResolution(cabinet1, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+            new AssemblyResolution(cabinet2, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+            new AssemblyResolution(cabinet3, "WallCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+            new EndConditionUpdate(runA, CabinetDesigner.Domain.RunContext.EndCondition.AgainstWall(), CabinetDesigner.Domain.RunContext.EndCondition.Open()),
+            new EndConditionUpdate(runB, CabinetDesigner.Domain.RunContext.EndCondition.Open(), CabinetDesigner.Domain.RunContext.EndCondition.Open()),
             new FillerRequirement(runA, Length.FromInches(2m), "left shim"),
             new FillerRequirement(runA, Length.FromInches(4m), "right shim"));
         var manufacturing = CreateManufacturingResult(cabinet1, cabinet2, cabinet3);
@@ -94,6 +107,54 @@ public sealed class InstallProjectorTests
         Assert.Equal(
             first.FasteningRequirements.Select(requirement => $"{requirement.CabinetId.Value:D}:{requirement.Requirements}").ToArray(),
             second.FasteningRequirements.Select(requirement => $"{requirement.CabinetId.Value:D}:{requirement.Requirements}").ToArray());
+    }
+
+    [Fact]
+    public void Project_WithMissingEngineeringAndManufacturingEvidence_EmitsExplicitBlockers()
+    {
+        var runId = new RunId(Guid.Parse("00000000-0000-0000-0000-000000000103"));
+        var cabinetId = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000206"));
+
+        var plan = _projector.Project(
+            CreateSpatialResult((runId, cabinetId, new Point2D(0m, 0m))),
+            CreateEngineeringResult(),
+            CreateManufacturingResult());
+
+        Assert.False(plan.Readiness.IsReady);
+        Assert.Equal(
+            new[]
+            {
+                InstallBlockerCode.MissingEngineeringAssembly,
+                InstallBlockerCode.MissingRunEndConditions,
+                InstallBlockerCode.MissingManufacturingCutList,
+                InstallBlockerCode.MissingCabinetManufacturingParts
+            },
+            plan.Readiness.Blockers.Select(blocker => blocker.Code).ToArray());
+        Assert.Empty(plan.Steps);
+    }
+
+    [Fact]
+    public void Project_OrdersIndependentRunsByPhysicalLocationBeforeIdentifier()
+    {
+        var runNorth = new RunId(Guid.Parse("00000000-0000-0000-0000-000000000200"));
+        var runSouth = new RunId(Guid.Parse("00000000-0000-0000-0000-000000000100"));
+        var cabinetNorth = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000207"));
+        var cabinetSouth = new CabinetId(Guid.Parse("00000000-0000-0000-0000-000000000208"));
+
+        var plan = _projector.Project(
+            CreateSpatialResult(
+                (runNorth, cabinetNorth, new Point2D(0m, 40m)),
+                (runSouth, cabinetSouth, new Point2D(0m, 0m))),
+            CreateEngineeringResult(
+                new AssemblyResolution(cabinetNorth, "WallCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+                new AssemblyResolution(cabinetSouth, "BaseCabinetAssembly", new Dictionary<string, string>(StringComparer.Ordinal)),
+                new EndConditionUpdate(runNorth, CabinetDesigner.Domain.RunContext.EndCondition.Open(), CabinetDesigner.Domain.RunContext.EndCondition.Open()),
+                new EndConditionUpdate(runSouth, CabinetDesigner.Domain.RunContext.EndCondition.Open(), CabinetDesigner.Domain.RunContext.EndCondition.Open())),
+            CreateManufacturingResult(cabinetNorth, cabinetSouth));
+
+        Assert.Equal(
+            new[] { cabinetSouth, cabinetNorth },
+            plan.Steps.OrderBy(step => step.Order).Select(step => step.CabinetId!.Value).ToArray());
     }
 
     private static SpatialResolutionResult CreateSpatialResult(
@@ -126,12 +187,12 @@ public sealed class InstallProjectorTests
         };
     }
 
-    private static EngineeringResolutionResult CreateEngineeringResult(params FillerRequirement[] fillers) =>
+    private static EngineeringResolutionResult CreateEngineeringResult(params object[] items) =>
         new()
         {
-            Assemblies = [],
-            FillerRequirements = fillers,
-            EndConditionUpdates = []
+            Assemblies = items.OfType<AssemblyResolution>().ToArray(),
+            FillerRequirements = items.OfType<FillerRequirement>().ToArray(),
+            EndConditionUpdates = items.OfType<EndConditionUpdate>().ToArray()
         };
 
     private static ManufacturingPlanResult CreateManufacturingResult(params CabinetId[] cabinetIds) =>

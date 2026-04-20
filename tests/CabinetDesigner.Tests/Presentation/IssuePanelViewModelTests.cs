@@ -10,20 +10,20 @@ namespace CabinetDesigner.Tests.Presentation;
 public sealed class IssuePanelViewModelTests
 {
     [Fact]
-    public void InitialState_ShowsEmptyStateWhenValidationIsUnavailable()
+    public void InitialState_ShowsEmptyStateWhenValidationServiceReturnsNoIssues()
     {
         var eventBus = new ApplicationEventBus();
-        using var viewModel = new IssuePanelViewModel(new ThrowingValidationSummaryService(), eventBus);
+        using var viewModel = new IssuePanelViewModel(new EmptyValidationSummaryService(), eventBus);
 
-        Assert.True(viewModel.IsPlaceholderData);
-        Assert.Equal("Placeholder validation data", viewModel.SourceLabel);
+        Assert.False(viewModel.IsPlaceholderData);
+        Assert.Equal("Validation service data", viewModel.SourceLabel);
         Assert.Equal("0E 0W 0I", viewModel.CountSummaryDisplay);
         Assert.False(viewModel.HasManufactureBlockers);
-        Assert.Equal("No validation issues are available yet.", viewModel.EmptyStateText);
+        Assert.Equal("No validation issues.", viewModel.EmptyStateText);
         Assert.Empty(viewModel.AllIssues);
         Assert.Empty(viewModel.FilteredIssues);
         Assert.False(viewModel.HasFilteredIssues);
-        Assert.Equal("Validation issues are not available yet.", viewModel.StatusMessage);
+        Assert.Equal("No validation issues.", viewModel.StatusMessage);
     }
 
     [Fact]
@@ -107,37 +107,6 @@ public sealed class IssuePanelViewModelTests
         Assert.Null(viewModel.SeverityFilter);
         Assert.Empty(viewModel.FilteredIssues);
         Assert.Equal("Validation issues are not available while no project is open.", viewModel.StatusMessage);
-    }
-
-    [Fact]
-    public void RefreshIssues_WhenServiceThrowsNotImplementedException_LogsWarningAndShowsPlaceholder()
-    {
-        var logger = new CapturingAppLogger();
-        var eventBus = new ApplicationEventBus();
-        using var viewModel = new IssuePanelViewModel(new ThrowingValidationSummaryService(), eventBus, logger);
-
-        Assert.True(viewModel.IsPlaceholderData);
-        Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Warning, logger.Entries[0].Level);
-        Assert.Equal("IssuePanelViewModel", logger.Entries[0].Category);
-        Assert.NotNull(logger.Entries[0].Exception);
-        Assert.IsType<NotImplementedException>(logger.Entries[0].Exception);
-    }
-
-    [Fact]
-    public void DesignChangedEvent_WhenServiceThrowsNotImplementedException_LogsWarningOnEachRefresh()
-    {
-        var logger = new CapturingAppLogger();
-        var eventBus = new ApplicationEventBus();
-        using var viewModel = new IssuePanelViewModel(new ThrowingValidationSummaryService(), eventBus, logger);
-
-        // Initial construction already triggers one refresh (one log entry already recorded).
-        var countAfterConstruct = logger.Entries.Count;
-
-        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
-
-        Assert.Equal(countAfterConstruct + 1, logger.Entries.Count);
-        Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
     }
 
     private sealed class EmptyValidationSummaryService : IValidationSummaryService

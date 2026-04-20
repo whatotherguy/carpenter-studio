@@ -1,4 +1,5 @@
 using CabinetDesigner.Application.Pipeline.StageResults;
+using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Geometry;
@@ -34,6 +35,8 @@ public interface IDesignStateStore
 
     void UpdateCabinet(CabinetStateRecord cabinet);
 
+    void RemoveRun(RunId runId);
+
     IReadOnlyDictionary<string, DeltaValue> CaptureRunValues(CabinetRun run);
 
     IReadOnlyDictionary<string, DeltaValue> CaptureCabinetValues(CabinetStateRecord cabinet);
@@ -51,11 +54,28 @@ public sealed record CabinetStateRecord(
     RunId RunId,
     RunSlotId SlotId,
     CabinetCategory Category,
-    ConstructionMethod Construction) : IDomainEntity
+    ConstructionMethod Construction,
+    Length NominalHeight = default,
+    IReadOnlyDictionary<string, OverrideValue>? Overrides = null) : IDomainEntity
 {
+    private static readonly IReadOnlyDictionary<string, OverrideValue> EmptyOverrides =
+        new Dictionary<string, OverrideValue>(StringComparer.Ordinal);
+
     public string EntityId => CabinetId.Value.ToString();
 
     public string EntityType => "Cabinet";
+
+    public Length EffectiveNominalHeight =>
+        NominalHeight > Length.Zero
+            ? NominalHeight
+            : Category switch
+            {
+                CabinetCategory.Wall => Length.FromInches(30m),
+                CabinetCategory.Tall => Length.FromInches(84m),
+                _ => Length.FromInches(34.5m)
+            };
+
+    public IReadOnlyDictionary<string, OverrideValue> EffectiveOverrides => Overrides ?? EmptyOverrides;
 }
 
 public sealed record ResolvedRunEntity(CabinetRun Run) : IDomainEntity

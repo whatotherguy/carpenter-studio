@@ -1,6 +1,9 @@
+using CabinetDesigner.Application.Costing;
 using System.Threading;
+using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.Stages;
+using CabinetDesigner.Application.Services;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Identifiers;
@@ -26,8 +29,11 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         IUndoStack undoStack,
         IStateManager stateManager,
         IResolutionOrchestratorLogger? logger = null,
-        IEnumerable<IResolutionStage>? stages = null)
-        : this(deltaTracker, whyEngine, undoStack, stateManager, stateStore: null, logger, stages)
+        IEnumerable<IResolutionStage>? stages = null,
+        ICatalogService? catalogService = null,
+        ICostingPolicy? costingPolicy = null,
+        IPackagingResultStore? packagingResultStore = null)
+        : this(deltaTracker, whyEngine, undoStack, stateManager, stateStore: null, logger, stages, validationResultStore: null, packagingResultStore, catalogService, costingPolicy, currentPersistedProjectState: null, previousCostLookup: null)
     {
     }
 
@@ -39,14 +45,19 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         IDesignStateStore? stateStore = null,
         IResolutionOrchestratorLogger? logger = null,
         IEnumerable<IResolutionStage>? stages = null,
-        IValidationResultStore? validationResultStore = null)
+        IValidationResultStore? validationResultStore = null,
+        IPackagingResultStore? packagingResultStore = null,
+        ICatalogService? catalogService = null,
+        ICostingPolicy? costingPolicy = null,
+        ICurrentPersistedProjectState? currentPersistedProjectState = null,
+        IPreviousApprovedCostLookup? previousCostLookup = null)
     {
         _deltaTracker = deltaTracker ?? throw new ArgumentNullException(nameof(deltaTracker));
         _whyEngine = whyEngine ?? throw new ArgumentNullException(nameof(whyEngine));
         _undoStack = undoStack ?? throw new ArgumentNullException(nameof(undoStack));
         _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
         _logger = logger ?? new NullResolutionOrchestratorLogger();
-        _stages = BuildStageList(stages ?? CreateDefaultStages(deltaTracker, stateStore, validationResultStore));
+        _stages = BuildStageList(stages ?? CreateDefaultStages(deltaTracker, stateStore, catalogService, costingPolicy, validationResultStore, packagingResultStore, currentPersistedProjectState, previousCostLookup));
     }
 
     public CommandResult Execute(IDesignCommand command)
@@ -195,24 +206,40 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
     private static IEnumerable<IResolutionStage> CreateDefaultStages(
         IDeltaTracker deltaTracker,
         IDesignStateStore? stateStore,
-        IValidationResultStore? validationResultStore = null)
+        ICatalogService? catalogService,
+        ICostingPolicy? costingPolicy,
+        IValidationResultStore? validationResultStore = null,
+        IPackagingResultStore? packagingResultStore = null,
+        ICurrentPersistedProjectState? currentPersistedProjectState = null,
+        IPreviousApprovedCostLookup? previousCostLookup = null)
     {
         if (stateStore is null)
         {
             throw new InvalidOperationException("Default resolution stages require an IDesignStateStore instance.");
         }
 
+        if (catalogService is null)
+        {
+            throw new InvalidOperationException("Default resolution stages require an ICatalogService instance.");
+        }
+
         yield return new InputCaptureStage(stateStore);
         yield return new InteractionInterpretationStage(deltaTracker, stateStore);
         yield return new SpatialResolutionStage(stateStore);
-        yield return new EngineeringResolutionStage();
-        yield return new ConstraintPropagationStage();
-        yield return new PartGenerationStage();
+        yield return new EngineeringResolutionStage(stateStore);
+        yield return new ConstraintPropagationStage(catalogService, stateStore);
+        yield return new PartGenerationStage(stateStore);
         yield return new ManufacturingPlanningStage();
         yield return new InstallPlanningStage();
-        yield return new CostingStage();
-        yield return new ValidationStage(resultStore: validationResultStore);
-        yield return new PackagingStage();
+        yield return new CostingStage(
+            catalogService,
+            costingPolicy ?? new DefaultCostingPolicy(),
+            previousCostLookup: previousCostLookup);
+        yield return new ValidationStage(resultStore: validationResultStore, projectState: currentPersistedProjectState);
+        yield return new PackagingStage(
+            currentPersistedProjectState as IWorkingRevisionSource ?? throw new InvalidOperationException("Default packaging stage requires an IWorkingRevisionSource instance."),
+            new SystemClock(),
+            packagingResultStore);
     }
 
     private static bool HasBlockingIssues(IEnumerable<ValidationIssue> issues) =>
@@ -256,9 +283,16 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
     private static ValidationIssue CreateInternalErrorIssue() =>
         new(ValidationSeverity.Error, "INTERNAL_ERROR", "Resolution failed due to an unexpected internal error.");
 
-    private static ValidationIssue CreateNotImplementedIssue(IResolutionStage stage) =>
-        new(ValidationSeverity.Warning, "STAGE_NOT_IMPLEMENTED",
-            $"Stage {stage.StageNumber} ({stage.StageName}) is not yet implemented. Results are placeholder values.");
+    private static ValidationIssue CreateNotImplementedIssue(IResolutionStage stage, ResolutionMode mode) =>
+        mode == ResolutionMode.Full
+            ? new ValidationIssue(
+                ValidationSeverity.Error,
+                "STAGE_NOT_IMPLEMENTED",
+                $"Stage {stage.StageNumber} ({stage.StageName}) is not yet implemented. Full runs are blocked because the result is a placeholder.")
+            : new ValidationIssue(
+                ValidationSeverity.Warning,
+                "STAGE_NOT_IMPLEMENTED",
+                $"Stage {stage.StageNumber} ({stage.StageName}) is not yet implemented. Preview mode returns preview-only placeholder results.");
 
     private bool ExecuteStages(ResolutionContext context)
     {
@@ -276,7 +310,12 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
 
             if (result.IsNotImplemented)
             {
-                context.AccumulatedIssues.Add(CreateNotImplementedIssue(stage));
+                context.AccumulatedIssues.Add(CreateNotImplementedIssue(stage, context.Mode));
+
+                if (context.Mode == ResolutionMode.Full)
+                {
+                    return false;
+                }
             }
 
             if (!result.Success || context.HasBlockingIssues)

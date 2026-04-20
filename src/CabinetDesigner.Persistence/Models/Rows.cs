@@ -116,6 +116,7 @@ internal sealed class ApprovedSnapshotRow
     public int SnapshotSchemaVer { get; set; }
     public string ApprovedAt { get; set; } = string.Empty;
     public string ApprovedBy { get; set; } = string.Empty;
+    public string ContentHash { get; set; } = string.Empty;
     public string DesignBlob { get; set; } = string.Empty;
     public string PartsBlob { get; set; } = string.Empty;
     public string ManufacturingBlob { get; set; } = string.Empty;

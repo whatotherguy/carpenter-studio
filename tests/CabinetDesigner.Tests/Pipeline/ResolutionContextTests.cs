@@ -142,7 +142,14 @@ public sealed class ResolutionContextTests
             RevisionId = default,
             CreatedAt = DateTimeOffset.UnixEpoch,
             ContentHash = "hash",
-            Summary = new SnapshotSummary(0, 0, 0, 0, 0m)
+            Summary = new SnapshotSummary(0, 0, 0, 0, 0m),
+            DesignBlob = "{}",
+            PartsBlob = "{}",
+            ManufacturingBlob = "{}",
+            InstallBlob = "{}",
+            EstimateBlob = "{}",
+            ValidationBlob = "{}",
+            ExplanationBlob = "{}"
         };
 
         context.InputCapture = inputCapture;

@@ -30,7 +30,7 @@ public partial class App : System.Windows.Application
             var orchestrator = _appScope.ServiceProvider.GetRequiredService<StartupOrchestrator>();
             await Task.Run(() => orchestrator.RunAsync()).ConfigureAwait(true);
 
-            var window = _appScope.ServiceProvider.GetRequiredService<CabinetDesigner.Presentation.MainWindow>();
+            var window = _appScope.ServiceProvider.GetRequiredService<MainWindow>();
             MainWindow = window;
             window.Show();
         }
@@ -75,7 +75,7 @@ public partial class App : System.Windows.Application
         services.AddPersistence(GetDatabasePath());
         services.AddPresentationServices();
         services.AddScoped<IDialogService, WpfDialogService>();
-        services.AddScoped<CabinetDesigner.Presentation.MainWindow>();
+        services.AddScoped<MainWindow>();
     }
 
     private static string GetDatabasePath()

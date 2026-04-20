@@ -158,6 +158,72 @@ public sealed class ManufacturingProjectorTests
         Assert.Equal(new[] { "valid" }, plan.CutList.Select(item => item.PartId).ToArray());
     }
 
+    [Fact]
+    public void Project_ConstraintViolationsBlockReadiness_WhenMaterialOrHardwareDataIsMissing()
+    {
+        var part = CreatePart("valid", "Valid", MaterialId.New(), Length.FromInches(18m), Length.FromInches(24m));
+
+        var plan = _projector.Project(
+            new PartGenerationResult { Parts = [part] },
+            new ConstraintPropagationResult
+            {
+                MaterialAssignments = [],
+                HardwareAssignments = [],
+                Violations =
+                [
+                    new ConstraintViolation(
+                        "NO_HARDWARE_CATALOG",
+                        "Opening hardware could not be resolved.",
+                        ValidationSeverity.Warning,
+                        ["opening:1"]),
+                    new ConstraintViolation(
+                        "MATERIAL_UNRESOLVED",
+                        "Part material could not be resolved.",
+                        ValidationSeverity.Error,
+                        ["valid"])
+                ]
+            });
+
+        Assert.False(plan.Readiness.IsReady);
+        Assert.Equal(
+            new[]
+            {
+                ManufacturingBlockerCode.MissingMaterial,
+                ManufacturingBlockerCode.MissingHardware
+            },
+            plan.Readiness.Blockers.Select(blocker => blocker.Code).Distinct().ToArray());
+    }
+
+    [Fact]
+    public void Project_InvalidDimensionsAndMalformedParts_AreBlocked()
+    {
+        var malformed = CreatePart(
+            partId: string.Empty,
+            label: string.Empty,
+            materialId: MaterialId.New(),
+            width: Length.FromInches(18m),
+            height: Length.FromInches(24m)) with
+        {
+            CabinetId = default
+        };
+        var impossible = CreatePart(
+            partId: "impossible",
+            label: "Impossible",
+            materialId: MaterialId.New(),
+            width: Length.Zero,
+            height: Length.FromInches(24m));
+        var valid = CreatePart("valid", "Valid", MaterialId.New(), Length.FromInches(18m), Length.FromInches(24m));
+
+        var plan = _projector.Project(
+            new PartGenerationResult { Parts = [valid, malformed, impossible] },
+            EmptyConstraints());
+
+        Assert.False(plan.Readiness.IsReady);
+        Assert.Contains(plan.Readiness.Blockers, blocker => blocker.Code == ManufacturingBlockerCode.MalformedPart);
+        Assert.Contains(plan.Readiness.Blockers, blocker => blocker.Code == ManufacturingBlockerCode.InvalidDimensions);
+        Assert.Equal(new[] { "valid" }, plan.CutList.Select(item => item.PartId).ToArray());
+    }
+
     private static ConstraintPropagationResult EmptyConstraints() =>
         new()
         {

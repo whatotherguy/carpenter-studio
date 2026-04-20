@@ -1,0 +1,235 @@
+using CabinetDesigner.Application.Pipeline;
+using CabinetDesigner.Application.Pipeline.StageResults;
+using CabinetDesigner.Application.Pipeline.Stages;
+using CabinetDesigner.Application.State;
+using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.CabinetContext;
+using CabinetDesigner.Domain.Commands;
+using CabinetDesigner.Domain.Geometry;
+using CabinetDesigner.Domain.Identifiers;
+using Xunit;
+
+namespace CabinetDesigner.Tests.Pipeline;
+
+public sealed class PartGenerationStageTests
+{
+    [Fact]
+    public void Execute_ForFramelessBase_Produces6CorePartsPlusShelves()
+    {
+        var cabinetId = CabinetId.New();
+        var store = CreateStore([
+            CreateCabinet(cabinetId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless, 30m, 24m, 34.5m)
+        ]);
+        var stage = new PartGenerationStage(store);
+        var context = CreateContext([CreatePlacement(cabinetId)]);
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        var parts = context.PartResult.Parts;
+        Assert.Equal(7, parts.Count);
+        Assert.Equal(
+            new[] { "AdjustableShelf", "Back", "Bottom", "LeftSide", "RightSide", "ToeKick", "Top" },
+            parts.Select(part => part.PartType).ToArray());
+
+        AssertPart(parts, "LeftSide", Length.FromInches(24m), Length.FromInches(34.5m));
+        AssertPart(parts, "Top", Length.FromInches(28.5m), Length.FromInches(24m));
+        AssertPart(parts, "Bottom", Length.FromInches(28.5m), Length.FromInches(23.25m));
+        AssertPart(parts, "Back", Length.FromInches(28.5m), Length.FromInches(33m));
+        AssertPart(parts, "AdjustableShelf", Length.FromInches(28.5m), Length.FromInches(23.25m));
+        AssertPart(parts, "ToeKick", Length.FromInches(28.5m), Length.FromInches(4m));
+    }
+
+    [Fact]
+    public void Execute_ForFaceFrameBase_AddsStilesRailsAndMullions()
+    {
+        var cabinetId = CabinetId.New();
+        var store = CreateStore([
+            CreateCabinet(cabinetId, "base-36-ff", CabinetCategory.Base, ConstructionMethod.FaceFrame, 36m, 24m, 34.5m)
+        ]);
+        var stage = new PartGenerationStage(store);
+        var context = CreateContext([CreatePlacement(cabinetId)]);
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        Assert.Equal(12, context.PartResult.Parts.Count);
+        Assert.Equal(2, context.PartResult.Parts.Count(part => part.PartType == "FrameStile"));
+        Assert.Equal(2, context.PartResult.Parts.Count(part => part.PartType == "FrameRail"));
+        Assert.Single(context.PartResult.Parts.Where(part => part.PartType == "FrameMullion"));
+    }
+
+    [Fact]
+    public void Execute_ForWallCabinet_ProducesCaseAndShelves()
+    {
+        var cabinetId = CabinetId.New();
+        var store = CreateStore([
+            CreateCabinet(cabinetId, "wall-30", CabinetCategory.Wall, ConstructionMethod.Frameless, 30m, 12m, 30m)
+        ]);
+        var stage = new PartGenerationStage(store);
+        var context = CreateContext([CreatePlacement(cabinetId)]);
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        var parts = context.PartResult.Parts;
+        Assert.Equal(7, parts.Count);
+        Assert.Equal(2, parts.Count(part => part.PartType == "AdjustableShelf"));
+        Assert.DoesNotContain(parts, part => part.PartType == "ToeKick");
+        AssertPart(parts, "Back", Length.FromInches(28.5m), Length.FromInches(28.5m));
+    }
+
+    [Fact]
+    public void Execute_DimensionsAreDeterministic_AcrossRepeatedRuns()
+    {
+        var firstCabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000001"));
+        var secondCabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000002"));
+        var store = CreateStore([
+            CreateCabinet(firstCabinetId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless, 30m, 24m, 34.5m),
+            CreateCabinet(secondCabinetId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless, 30m, 24m, 34.5m)
+        ]);
+        var stage = new PartGenerationStage(store);
+
+        var firstContext = CreateContext([CreatePlacement(firstCabinetId), CreatePlacement(secondCabinetId)]);
+        var secondContext = CreateContext([CreatePlacement(firstCabinetId), CreatePlacement(secondCabinetId)]);
+
+        var firstResult = stage.Execute(firstContext);
+        var secondResult = stage.Execute(secondContext);
+
+        Assert.True(firstResult.Success);
+        Assert.True(secondResult.Success);
+        Assert.Equal(firstContext.PartResult.Parts, secondContext.PartResult.Parts);
+        Assert.Equal(
+            new[]
+            {
+                "base-30-1-AdjustableShelf",
+                "base-30-1-Back",
+                "base-30-1-Bottom",
+                "base-30-1-LeftSide",
+                "base-30-1-RightSide",
+                "base-30-1-ToeKick",
+                "base-30-1-Top",
+                "base-30-2-AdjustableShelf",
+                "base-30-2-Back",
+                "base-30-2-Bottom",
+                "base-30-2-LeftSide",
+                "base-30-2-RightSide",
+                "base-30-2-ToeKick",
+                "base-30-2-Top"
+            },
+            firstContext.PartResult.Parts.Select(part => part.Label).ToArray());
+    }
+
+    [Fact]
+    public void Execute_WithEmptySpatialPlacements_Fails_WithPartGenEmpty()
+    {
+        var stage = new PartGenerationStage(new InMemoryDesignStateStore());
+        var context = CreateContext([]);
+
+        var result = stage.Execute(context);
+
+        var issue = Assert.Single(result.Issues);
+        Assert.False(result.Success);
+        Assert.Equal("PART_GEN_EMPTY", issue.Code);
+        Assert.Equal(ValidationSeverity.Error, issue.Severity);
+    }
+
+    [Fact]
+    public void Execute_WithUnsupportedCabinet_Fails_WithBlocker()
+    {
+        var cabinetId = CabinetId.New();
+        var store = CreateStore([
+            CreateCabinet(cabinetId, "specialty-weird", CabinetCategory.Specialty, ConstructionMethod.Frameless, 24m, 24m, 34.5m)
+        ]);
+        var stage = new PartGenerationStage(store);
+        var context = CreateContext([CreatePlacement(cabinetId)]);
+
+        var result = stage.Execute(context);
+
+        var issue = Assert.Single(result.Issues);
+        Assert.False(result.Success);
+        Assert.Equal("PART_GEN_UNSUPPORTED_CABINET", issue.Code);
+        Assert.Equal(ValidationSeverity.Error, issue.Severity);
+    }
+
+    private static InMemoryDesignStateStore CreateStore(IReadOnlyList<CabinetStateRecord> cabinets)
+    {
+        var store = new InMemoryDesignStateStore();
+        foreach (var cabinet in cabinets)
+        {
+            store.AddCabinet(cabinet);
+        }
+
+        return store;
+    }
+
+    private static CabinetStateRecord CreateCabinet(
+        CabinetId cabinetId,
+        string cabinetTypeId,
+        CabinetCategory category,
+        ConstructionMethod construction,
+        decimal widthInches,
+        decimal depthInches,
+        decimal heightInches,
+        IReadOnlyDictionary<string, OverrideValue>? overrides = null) =>
+        new(
+            cabinetId,
+            cabinetTypeId,
+            Length.FromInches(widthInches),
+            Length.FromInches(depthInches),
+            RunId.New(),
+            RunSlotId.New(),
+            category,
+            construction,
+            Length.FromInches(heightInches),
+            overrides);
+
+    private static RunPlacement CreatePlacement(CabinetId cabinetId, RunId? runId = null) =>
+        new(
+            runId ?? new RunId(Guid.Parse("20000000-0000-0000-0000-000000000001")),
+            cabinetId,
+            Point2D.Origin,
+            new Vector2D(1m, 0m),
+            new Rect2D(Point2D.Origin, Length.FromInches(1m), Length.FromInches(1m)),
+            Length.FromInches(24m));
+
+    private static ResolutionContext CreateContext(IReadOnlyList<RunPlacement> placements)
+    {
+        var context = new ResolutionContext
+        {
+            Command = new TestDesignCommand(),
+            Mode = ResolutionMode.Full
+        };
+
+        context.SpatialResult = new SpatialResolutionResult
+        {
+            SlotPositionUpdates = [],
+            AdjacencyChanges = [],
+            RunSummaries = [],
+            Placements = placements
+        };
+
+        return context;
+    }
+
+    private static void AssertPart(
+        IReadOnlyList<GeneratedPart> parts,
+        string partType,
+        Length width,
+        Length height)
+    {
+        var part = Assert.Single(parts.Where(candidate => candidate.PartType == partType));
+        Assert.Equal(width, part.Width);
+        Assert.Equal(height, part.Height);
+    }
+
+    private sealed record TestDesignCommand : IDesignCommand
+    {
+        public CommandMetadata Metadata { get; } =
+            CommandMetadata.Create(DateTimeOffset.UnixEpoch, CommandOrigin.User, "Part Generation Stage Test", []);
+
+        public string CommandType => "test.part_generation_stage";
+
+        public IReadOnlyList<ValidationIssue> ValidateStructure() => [];
+    }
+}

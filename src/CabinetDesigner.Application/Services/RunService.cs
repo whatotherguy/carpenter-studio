@@ -41,7 +41,11 @@ public sealed class RunService : IRunService
     }
 
     public Task<CommandResultDto> DeleteRunAsync(RunId runId) =>
-        throw new NotImplementedException("NOT IMPLEMENTED YET: DeleteRunCommand has not been introduced in the domain layer.");
+        _handler.ExecuteAsync(new DeleteRunCommand(
+            runId,
+            CommandOrigin.User,
+            $"Delete run {runId.Value}",
+            _clock.Now));
 
     public Task<CommandResultDto> AddCabinetAsync(AddCabinetRequestDto request)
     {
@@ -117,8 +121,20 @@ public sealed class RunService : IRunService
         return _handler.ExecuteAsync(command);
     }
 
-    public Task<CommandResultDto> SetCabinetOverrideAsync(SetCabinetOverrideRequestDto request) =>
-        throw new NotImplementedException("NOT IMPLEMENTED YET: SetCabinetOverrideCommand has not been introduced in the domain layer.");
+    public Task<CommandResultDto> SetCabinetOverrideAsync(SetCabinetOverrideRequestDto request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var command = new SetCabinetOverrideCommand(
+            new CabinetId(request.CabinetId),
+            request.ParameterKey,
+            MapOverrideValue(request.Value),
+            CommandOrigin.User,
+            $"Set cabinet override {request.ParameterKey} on cabinet {request.CabinetId}",
+            _clock.Now);
+
+        return _handler.ExecuteAsync(command);
+    }
 
     public RunSummaryDto GetRunSummary(RunId runId)
     {
@@ -181,4 +197,16 @@ public sealed class RunService : IRunService
             ? ConstructionMethod.FaceFrame
             : ConstructionMethod.Frameless;
     }
+
+    private static OverrideValue MapOverrideValue(OverrideValueDto value) =>
+        value switch
+        {
+            OverrideValueDto.OfDecimalInches length => new OverrideValue.OfLength(Length.FromInches(length.Inches)),
+            OverrideValueDto.OfString text => new OverrideValue.OfString(text.Value),
+            OverrideValueDto.OfBool boolean => new OverrideValue.OfBool(boolean.Value),
+            OverrideValueDto.OfInt integer => new OverrideValue.OfInt(integer.Value),
+            OverrideValueDto.OfMaterialId material => new OverrideValue.OfMaterialId(new MaterialId(material.MaterialId)),
+            OverrideValueDto.OfHardwareItemId hardware => new OverrideValue.OfHardwareItemId(new HardwareItemId(hardware.HardwareItemId)),
+            _ => throw new ArgumentOutOfRangeException(nameof(value), $"Unsupported override value type '{value.GetType().Name}'.")
+        };
 }

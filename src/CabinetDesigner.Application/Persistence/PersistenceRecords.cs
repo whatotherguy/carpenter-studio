@@ -59,6 +59,7 @@ public sealed record ApprovedSnapshot(
     DateTimeOffset ApprovedAt,
     string? ApprovedBy,
     string Label,
+    string ContentHash,
     string DesignBlob,
     string PartsBlob,
     string ManufacturingBlob,

@@ -99,6 +99,20 @@ public sealed class RunServiceTests
     }
 
     [Fact]
+    public async Task DeleteRunAsync_UsesDeleteRunCommand()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+        var runId = RunId.New();
+
+        await service.DeleteRunAsync(runId);
+
+        var command = Assert.IsType<DeleteRunCommand>(handler.LastCommand);
+        Assert.Equal(runId, command.RunId);
+        Assert.Equal(1, handler.ExecuteCalls);
+    }
+
+    [Fact]
     public async Task MoveCabinetAsync_UsesHandlerDispatchPath()
     {
         var handler = new RecordingDesignCommandHandler();
@@ -110,6 +124,43 @@ public sealed class RunServiceTests
         var command = Assert.IsType<MoveCabinetCommand>(handler.LastCommand);
         Assert.Equal(2, command.TargetIndex);
         Assert.Equal(1, handler.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task SetCabinetOverrideAsync_MapsDecimalInchesToLengthOverride()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+        var cabinetId = Guid.NewGuid();
+
+        await service.SetCabinetOverrideAsync(new SetCabinetOverrideRequestDto(
+            cabinetId,
+            "nominal_width",
+            new OverrideValueDto.OfDecimalInches(33.5m)));
+
+        var command = Assert.IsType<SetCabinetOverrideCommand>(handler.LastCommand);
+        Assert.Equal(new CabinetId(cabinetId), command.CabinetId);
+        Assert.Equal("nominal_width", command.OverrideKey);
+        var value = Assert.IsType<OverrideValue.OfLength>(command.Value);
+        Assert.Equal(33.5m, value.Value.Inches);
+        Assert.Equal(1, handler.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task SetCabinetOverrideAsync_UsesMaterialOverrideValue()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+        var materialId = Guid.NewGuid();
+
+        await service.SetCabinetOverrideAsync(new SetCabinetOverrideRequestDto(
+            Guid.NewGuid(),
+            "material.LeftSide",
+            new OverrideValueDto.OfMaterialId(materialId)));
+
+        var command = Assert.IsType<SetCabinetOverrideCommand>(handler.LastCommand);
+        var value = Assert.IsType<OverrideValue.OfMaterialId>(command.Value);
+        Assert.Equal(new MaterialId(materialId), value.Value);
     }
 
     [Fact]

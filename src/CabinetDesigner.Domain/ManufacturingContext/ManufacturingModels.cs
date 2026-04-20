@@ -149,8 +149,12 @@ public sealed record ManufacturingBlocker
 
 public enum ManufacturingBlockerCode
 {
+    NoPartsProduced,
     MissingMaterial,
+    MissingHardware,
     InvalidThickness,
+    InvalidDimensions,
+    MalformedPart,
     PartTooSmall,
     PartTooLarge
 }

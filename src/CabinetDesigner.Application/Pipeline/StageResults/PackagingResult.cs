@@ -13,6 +13,20 @@ public sealed record PackagingResult
     public required string ContentHash { get; init; }
 
     public required SnapshotSummary Summary { get; init; }
+
+    public required string DesignBlob { get; init; }
+
+    public required string PartsBlob { get; init; }
+
+    public required string ManufacturingBlob { get; init; }
+
+    public required string InstallBlob { get; init; }
+
+    public required string EstimateBlob { get; init; }
+
+    public required string ValidationBlob { get; init; }
+
+    public required string ExplanationBlob { get; init; }
 }
 
 public sealed record SnapshotSummary(

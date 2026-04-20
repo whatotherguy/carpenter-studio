@@ -458,7 +458,7 @@ public sealed class ResolutionOrchestratorTests
         IStateManager stateManager,
         IEnumerable<IResolutionStage> stages,
         IResolutionOrchestratorLogger? logger = null) =>
-        new(deltaTracker, whyEngine, undoStack, stateManager, logger, stages);
+        new(deltaTracker, whyEngine, undoStack, stateManager, (IResolutionOrchestratorLogger?)logger, stages);
 
     private static RecordingStage[] CreatePipeline()
     {
@@ -825,7 +825,7 @@ public sealed class ResolutionOrchestratorTests
 public sealed class ResolutionOrchestratorIncompleteStageTests
 {
     [Fact]
-    public void Execute_WithNotImplementedStage_SucceedsButAddsWarning()
+    public void Execute_NotImplementedStage_InFullMode_FailsPipeline()
     {
         var stages = new IResolutionStage[]
         {
@@ -835,28 +835,33 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
 
         var result = orchestrator.Execute(new TestDesignCommand([]));
 
-        Assert.True(result.Success);
-        Assert.Contains(result.Issues, issue => issue.Code == "STAGE_NOT_IMPLEMENTED");
+        Assert.False(result.Success);
+        var issue = Assert.Single(result.Issues, issue => issue.Code == "STAGE_NOT_IMPLEMENTED");
+        Assert.Equal(ValidationSeverity.Error, issue.Severity);
     }
 
     [Fact]
-    public void Execute_WithNotImplementedStage_WarningMessageContainsStageName()
+    public void Preview_NotImplementedStage_StillWarnsOnly()
     {
         var stages = new IResolutionStage[]
         {
+            new SpatialHelper(3, []),
             new NotImplementedStageHelper(4, "Engineering Resolution")
         };
         var orchestrator = CreateOrchestrator(stages);
 
-        var result = orchestrator.Execute(new TestDesignCommand([]));
+        var result = orchestrator.Preview(new TestDesignCommand([]));
 
+        Assert.True(result.Success);
         var warning = Assert.Single(result.Issues, issue => issue.Code == "STAGE_NOT_IMPLEMENTED");
+        Assert.Equal(ValidationSeverity.Warning, warning.Severity);
         Assert.Contains("4", warning.Message);
         Assert.Contains("Engineering Resolution", warning.Message);
+        Assert.Contains("preview-only", warning.Message);
     }
 
     [Fact]
-    public void Execute_WithMultipleNotImplementedStages_AddsOneWarningPerStage()
+    public void Preview_WithMultipleNotImplementedStages_AddsOneWarningPerStage()
     {
         var stages = new IResolutionStage[]
         {
@@ -866,10 +871,11 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
         };
         var orchestrator = CreateOrchestrator(stages);
 
-        var result = orchestrator.Execute(new TestDesignCommand([]));
+        var result = orchestrator.Preview(new TestDesignCommand([]));
 
         var warnings = result.Issues.Where(issue => issue.Code == "STAGE_NOT_IMPLEMENTED").ToArray();
         Assert.Equal(3, warnings.Length);
+        Assert.All(warnings, issue => Assert.Equal(ValidationSeverity.Warning, issue.Severity));
     }
 
     [Fact]
@@ -898,29 +904,13 @@ public sealed class ResolutionOrchestratorIncompleteStageTests
         Assert.Equal(ResolutionMode.Preview, ex.PipelineMode);
     }
 
-    [Fact]
-    public void Execute_NotImplementedWarning_DoesNotBlockPipeline()
-    {
-        // Even if every stage is "not implemented yet", the pipeline should still succeed
-        // (placeholder results are still set) and all warnings surface.
-        var stages = Enumerable.Range(1, 5)
-            .Select(n => (IResolutionStage)new NotImplementedStageHelper(n))
-            .ToArray();
-        var orchestrator = CreateOrchestrator(stages);
-
-        var result = orchestrator.Execute(new TestDesignCommand([]));
-
-        Assert.True(result.Success);
-        Assert.Equal(5, result.Issues.Count(i => i.Code == "STAGE_NOT_IMPLEMENTED"));
-    }
-
     private static ResolutionOrchestrator CreateOrchestrator(IEnumerable<IResolutionStage> stages) =>
         new(
             new SimpleRecordingDeltaTracker(),
             new SimpleRecordingWhyEngine(),
             new SimpleRecordingUndoStack(),
             new SimpleRecordingStateManager(),
-            logger: null,
+            (IResolutionOrchestratorLogger?)null,
             stages);
 
     private sealed record TestDesignCommand(IReadOnlyList<ValidationIssue> Issues) : IDesignCommand

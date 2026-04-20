@@ -77,6 +77,33 @@ public sealed class ValidationStageTests
     }
 
     [Fact]
+    public void Execute_WithMaterialConstraintViolation_DefaultRules_BlockValidation()
+    {
+        var stage = new ValidationStage();
+        var context = CreateResolutionContext();
+        context.ConstraintResult = new ConstraintPropagationResult
+        {
+            MaterialAssignments = [],
+            HardwareAssignments = [],
+            Violations =
+            [
+                new ConstraintViolation(
+                    "MATERIAL_UNRESOLVED",
+                    "Part material could not be resolved.",
+                    ValidationSeverity.Error,
+                    ["part:1"])
+            ]
+        };
+
+        var result = stage.Execute(context);
+
+        Assert.False(result.Success);
+        var issue = Assert.Single(result.Issues.Where(x => x.Code == "constraint.material_unresolved"));
+        Assert.Equal(ValidationSeverity.Error, issue.Severity);
+        Assert.Equal("constraint.material_unresolved", Assert.Single(context.ValidationResult.Result.CrossCuttingIssues).RuleCode);
+    }
+
+    [Fact]
     public void Execute_ThreadsAccumulatedIssuesIntoValidationResult()
     {
         var stage = new ValidationStage(new StubValidationEngine(_ => EmptyResult()));

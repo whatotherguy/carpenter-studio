@@ -141,52 +141,46 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
     }
 
     private void OnProjectOpened(ProjectOpenedEvent @event)
-    {
-        SetProjectSummary(@event.Project);
-        RefreshValidationCounts();
-    }
-
-    private void OnProjectClosed(ProjectClosedEvent _)
-    {
-        SetProjectSummary(null);
-        ErrorCount = 0;
-        WarningCount = 0;
-        InfoCount = 0;
-        HasManufactureBlockers = false;
-        OnPropertyChanged(nameof(IssueSummaryDisplay));
-    }
-
-    private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent
-    {
-        RefreshValidationCounts();
-    }
-
-    private void RefreshValidationCounts()
-    {
-        try
+        => DispatchIfNeeded(() =>
         {
-            var issues = _validationSummaryService.GetAllIssues();
-            ErrorCount = issues.Count(issue => string.Equals(issue.Severity, "Error", StringComparison.OrdinalIgnoreCase));
-            WarningCount = issues.Count(issue => string.Equals(issue.Severity, "Warning", StringComparison.OrdinalIgnoreCase));
-            InfoCount = issues.Count(issue => string.Equals(issue.Severity, "Info", StringComparison.OrdinalIgnoreCase));
-            HasManufactureBlockers = _validationSummaryService.HasManufactureBlockers;
-        }
-        catch (NotImplementedException notImplemented)
+            SetProjectSummary(@event.Project);
+            RefreshValidationCounts();
+        });
+
+    private void OnProjectClosed(ProjectClosedEvent _) =>
+        DispatchIfNeeded(() =>
         {
-            _logger?.Log(new LogEntry
-            {
-                Level = LogLevel.Warning,
-                Category = "StatusBarViewModel",
-                Message = "Validation summary service is not yet implemented; issue counts will be suppressed.",
-                Timestamp = DateTimeOffset.UtcNow,
-                Exception = notImplemented
-            });
+            SetProjectSummary(null);
             ErrorCount = 0;
             WarningCount = 0;
             InfoCount = 0;
             HasManufactureBlockers = false;
-        }
+            OnPropertyChanged(nameof(IssueSummaryDisplay));
+        });
+
+    private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
+        DispatchIfNeeded(RefreshValidationCounts);
+
+    private void RefreshValidationCounts()
+    {
+        var issues = _validationSummaryService.GetAllIssues();
+        ErrorCount = issues.Count(issue => string.Equals(issue.Severity, "Error", StringComparison.OrdinalIgnoreCase));
+        WarningCount = issues.Count(issue => string.Equals(issue.Severity, "Warning", StringComparison.OrdinalIgnoreCase));
+        InfoCount = issues.Count(issue => string.Equals(issue.Severity, "Info", StringComparison.OrdinalIgnoreCase));
+        HasManufactureBlockers = _validationSummaryService.HasManufactureBlockers;
 
         OnPropertyChanged(nameof(IssueSummaryDisplay));
+    }
+
+    private static void DispatchIfNeeded(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        dispatcher.Invoke(action);
     }
 }

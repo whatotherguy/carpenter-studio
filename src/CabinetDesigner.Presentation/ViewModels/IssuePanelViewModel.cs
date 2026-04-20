@@ -141,41 +141,25 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnDesignChanged);
     }
 
-    private void OnProjectOpened(ProjectOpenedEvent _) => RefreshIssues();
+    private void OnProjectOpened(ProjectOpenedEvent _) => DispatchIfNeeded(RefreshIssues);
 
-    private void OnProjectClosed(ProjectClosedEvent _)
-    {
-        ResetToPlaceholderState("Validation issues are not available while no project is open.");
-    }
+    private void OnProjectClosed(ProjectClosedEvent _) =>
+        DispatchIfNeeded(() =>
+            ResetToPlaceholderState("Validation issues are not available while no project is open."));
 
-    private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent => RefreshIssues();
+    private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
+        DispatchIfNeeded(RefreshIssues);
 
     private void RefreshIssues()
     {
-        try
-        {
-            var serviceIssues = _validationSummaryService.GetAllIssues();
-            SourceLabel = "Validation service data";
-            HasValidationData = true;
-            AllIssues = serviceIssues.Select(MapIssue).ToArray();
-            HasManufactureBlockers = _validationSummaryService.HasManufactureBlockers;
-            StatusMessage = AllIssues.Count == 0
-                ? "No validation issues."
-                : "Validation issues loaded from the service.";
-        }
-        catch (NotImplementedException notImplemented)
-        {
-            _logger?.Log(new LogEntry
-            {
-                Level = LogLevel.Warning,
-                Category = "IssuePanelViewModel",
-                Message = "Validation summary service is not yet implemented; issue panel will show placeholder state.",
-                Timestamp = DateTimeOffset.UtcNow,
-                Exception = notImplemented
-            });
-            ResetToPlaceholderState("Validation issues are not available yet.");
-            return;
-        }
+        var serviceIssues = _validationSummaryService.GetAllIssues();
+        SourceLabel = "Validation service data";
+        HasValidationData = true;
+        AllIssues = serviceIssues.Select(MapIssue).ToArray();
+        HasManufactureBlockers = _validationSummaryService.HasManufactureBlockers;
+        StatusMessage = AllIssues.Count == 0
+            ? "No validation issues."
+            : "Validation issues loaded from the service.";
 
         ErrorCount = AllIssues.Count(issue => string.Equals(issue.Severity, "Error", StringComparison.OrdinalIgnoreCase));
         WarningCount = AllIssues.Count(issue => string.Equals(issue.Severity, "Warning", StringComparison.OrdinalIgnoreCase));
@@ -264,4 +248,16 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
 
     private bool CanGoToEntity(IssueRowViewModel? issue) =>
         issue is not null && issue.AffectedEntityIds.Any(id => Guid.TryParse(id, out _));
+
+    private static void DispatchIfNeeded(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        dispatcher.Invoke(action);
+    }
 }

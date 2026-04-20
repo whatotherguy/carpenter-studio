@@ -53,14 +53,24 @@ public sealed class CurrentWorkingRevisionSource : IWorkingRevisionSource, ICurr
 
     private IReadOnlyList<Cabinet> BuildCabinets(RevisionId revisionId) =>
         _stateStore.GetAllCabinets()
-            .Select(cabinet => new Cabinet(
-                cabinet.CabinetId,
-                revisionId,
-                cabinet.CabinetTypeId,
-                cabinet.Category,
-                cabinet.Construction,
-                cabinet.NominalWidth,
-                cabinet.NominalDepth,
-                Length.FromInches(34.5m)))
+            .Select(cabinet =>
+            {
+                var rebuiltCabinet = new Cabinet(
+                    cabinet.CabinetId,
+                    revisionId,
+                    cabinet.CabinetTypeId,
+                    cabinet.Category,
+                    cabinet.Construction,
+                    cabinet.NominalWidth,
+                    cabinet.NominalDepth,
+                    cabinet.EffectiveNominalHeight);
+
+                foreach (var pair in cabinet.EffectiveOverrides.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                {
+                    rebuiltCabinet.SetOverride(pair.Key, pair.Value);
+                }
+
+                return rebuiltCabinet;
+            })
             .ToArray();
 }

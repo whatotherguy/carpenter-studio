@@ -148,11 +148,14 @@ public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnDesignChanged);
     }
 
-    private void OnProjectOpened(ProjectOpenedEvent _) => RefreshState(resetSelection: true);
+    private void OnProjectOpened(ProjectOpenedEvent _) =>
+        DispatchIfNeeded(() => RefreshState(resetSelection: true));
 
-    private void OnProjectClosed(ProjectClosedEvent _) => RefreshState(resetSelection: true);
+    private void OnProjectClosed(ProjectClosedEvent _) =>
+        DispatchIfNeeded(() => RefreshState(resetSelection: true));
 
-    private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent => RefreshState(resetSelection: false);
+    private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
+        DispatchIfNeeded(() => RefreshState(resetSelection: false));
 
     private void RefreshState(bool resetSelection = false)
     {
@@ -218,4 +221,16 @@ public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
     private static string FormatCabinetCount(int count) => count == 1 ? "1 cabinet" : $"{count} cabinets";
 
     private static string FormatSlotCount(int count) => count == 1 ? "1 slot" : $"{count} slots";
+
+    private static void DispatchIfNeeded(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        dispatcher.Invoke(action);
+    }
 }

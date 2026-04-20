@@ -1,8 +1,11 @@
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CabinetDesigner.Application.Diagnostics;
+using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Domain.ProjectContext;
 
 namespace CabinetDesigner.Application.Services;
@@ -16,6 +19,7 @@ public sealed class ProjectService : IProjectService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IApplicationEventBus _eventBus;
     private readonly ICurrentPersistedProjectState? _currentPersistedProjectState;
+    private readonly IWorkingRevisionSource? _workingRevisionSource;
     private readonly IClock _clock;
     private readonly IAppLogger? _logger;
 
@@ -37,6 +41,7 @@ public sealed class ProjectService : IProjectService
             eventBus,
             clock,
             null,
+            null,
             logger)
     {
     }
@@ -50,6 +55,7 @@ public sealed class ProjectService : IProjectService
         IApplicationEventBus eventBus,
         IClock clock,
         ICurrentPersistedProjectState? currentPersistedProjectState,
+        IWorkingRevisionSource? workingRevisionSource = null,
         IAppLogger? logger = null)
     {
         _projectRepository = projectRepository ?? throw new ArgumentNullException(nameof(projectRepository));
@@ -59,16 +65,36 @@ public sealed class ProjectService : IProjectService
         _unitOfWork = unitOfWork ?? throw new ArgumentNullException(nameof(unitOfWork));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _currentPersistedProjectState = currentPersistedProjectState;
+        _workingRevisionSource = workingRevisionSource;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger;
+
+        _eventBus.Subscribe<DesignChangedEvent>(OnDesignChanged);
     }
 
     public ProjectSummaryDto? CurrentProject { get; private set; }
 
     public async Task<ProjectSummaryDto> OpenProjectAsync(string filePath, CancellationToken ct = default)
     {
-        var project = (await _projectRepository.ListRecentAsync(1, ct).ConfigureAwait(false)).SingleOrDefault()
-            ?? throw new InvalidOperationException("No persisted project was found in the current cabinet file.");
+        var normalizedPath = NormalizeFilePath(filePath);
+        var projects = await _projectRepository.ListRecentAsync(2, ct).ConfigureAwait(false);
+        if (projects.Count == 0)
+        {
+            throw new InvalidOperationException("No persisted project was found in the selected cabinet file.");
+        }
+
+        if (projects.Count > 1)
+        {
+            throw new InvalidOperationException("Ambiguous project state; this cabinet file must contain exactly one project.");
+        }
+
+        var project = projects[0];
+        if (!string.Equals(project.FilePath, normalizedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            project = project with { FilePath = normalizedPath };
+            await _projectRepository.SaveAsync(project, ct).ConfigureAwait(false);
+        }
+
         var revision = await _revisionRepository.FindWorkingAsync(project.Id, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("No working revision was found for the persisted project.");
         var workingRevision = await _workingRevisionRepository.LoadAsync(project.Id, ct).ConfigureAwait(false)
@@ -76,7 +102,7 @@ public sealed class ProjectService : IProjectService
         var checkpoint = await _checkpointRepository.FindByProjectAsync(project.Id, ct).ConfigureAwait(false);
         _currentPersistedProjectState?.SetCurrentState(new PersistedProjectState(project, revision, workingRevision, checkpoint));
 
-        CurrentProject = ToSummary(project, revision, filePath, checkpoint is { IsClean: false });
+        CurrentProject = ToSummary(project, revision, normalizedPath, checkpoint is { IsClean: false });
         if (checkpoint is { IsClean: false })
         {
             _logger?.Log(new LogEntry
@@ -89,7 +115,7 @@ public sealed class ProjectService : IProjectService
                 {
                     ["projectId"] = project.Id.Value.ToString(),
                     ["revisionId"] = revision.Id.Value.ToString(),
-                    ["filePath"] = filePath
+                    ["filePath"] = normalizedPath
                 }
             });
         }
@@ -104,7 +130,7 @@ public sealed class ProjectService : IProjectService
             {
                 ["projectId"] = project.Id.Value.ToString(),
                 ["revisionId"] = revision.Id.Value.ToString(),
-                ["filePath"] = filePath,
+                ["filePath"] = normalizedPath,
                 ["dirty"] = (checkpoint is { IsClean: false }).ToString()
             }
         });
@@ -115,10 +141,10 @@ public sealed class ProjectService : IProjectService
     public async Task<ProjectSummaryDto> CreateProjectAsync(string name, CancellationToken ct = default)
     {
         var createdAt = _clock.Now;
-        var projectId = Domain.Identifiers.ProjectId.New();
+        var projectId = ProjectId.New();
         var project = new ProjectRecord(projectId, name, null, createdAt, createdAt, ApprovalState.Draft);
         var revision = new RevisionRecord(
-            Domain.Identifiers.RevisionId.New(),
+            RevisionId.New(),
             projectId,
             1,
             ApprovalState.Draft,
@@ -126,6 +152,7 @@ public sealed class ProjectService : IProjectService
             null,
             null,
             "Rev 1");
+        var workingRevision = new WorkingRevision(revision, [], [], [], [], []);
         var checkpoint = new AutosaveCheckpoint(Guid.NewGuid().ToString("N"), projectId, revision.Id, createdAt, null, true);
 
         await _unitOfWork.BeginAsync(ct).ConfigureAwait(false);
@@ -133,6 +160,7 @@ public sealed class ProjectService : IProjectService
         {
             await _projectRepository.SaveAsync(project, ct).ConfigureAwait(false);
             await _revisionRepository.SaveAsync(revision, ct).ConfigureAwait(false);
+            await _workingRevisionRepository.SaveAsync(workingRevision, ct).ConfigureAwait(false);
             await _checkpointRepository.SaveAsync(checkpoint, ct).ConfigureAwait(false);
             await _unitOfWork.CommitAsync(ct).ConfigureAwait(false);
         }
@@ -142,7 +170,6 @@ public sealed class ProjectService : IProjectService
             throw;
         }
 
-        var workingRevision = new WorkingRevision(revision, [], [], [], [], []);
         _currentPersistedProjectState?.SetCurrentState(new PersistedProjectState(project, revision, workingRevision, checkpoint));
         CurrentProject = ToSummary(project, revision, string.Empty, hasUnsavedChanges: false);
         _logger?.Log(new LogEntry
@@ -164,8 +191,10 @@ public sealed class ProjectService : IProjectService
     {
         EnsureCurrentProject();
         var savedAt = _clock.Now;
-        await _checkpointRepository.MarkCleanAsync(new Domain.Identifiers.ProjectId(CurrentProject!.ProjectId), savedAt, ct).ConfigureAwait(false);
-        CurrentProject = CurrentProject with { HasUnsavedChanges = false };
+        var projectId = new ProjectId(CurrentProject!.ProjectId);
+        await _checkpointRepository.MarkCleanAsync(projectId, savedAt, ct).ConfigureAwait(false);
+        CurrentProject = CurrentProject with { HasUnsavedChanges = false, LastModified = savedAt };
+        UpdateCurrentState(savedAt, isClean: true, lastCommandId: null);
         _logger?.Log(new LogEntry
         {
             Level = LogLevel.Info,
@@ -182,7 +211,7 @@ public sealed class ProjectService : IProjectService
     public async Task<RevisionDto> SaveRevisionAsync(string label, CancellationToken ct = default)
     {
         EnsureCurrentProject();
-        var projectId = new Domain.Identifiers.ProjectId(CurrentProject!.ProjectId);
+        var projectId = new ProjectId(CurrentProject!.ProjectId);
         var current = await _revisionRepository.FindWorkingAsync(projectId, ct).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Cannot save a revision without an active working revision.");
         var updated = current with
@@ -217,22 +246,20 @@ public sealed class ProjectService : IProjectService
         return ToRevisionDto(updated);
     }
 
-    public async Task CloseAsync()
+    public Task CloseAsync()
     {
         if (CurrentProject is null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        var savedAt = _clock.Now;
-        await _checkpointRepository.MarkCleanAsync(new Domain.Identifiers.ProjectId(CurrentProject.ProjectId), savedAt).ConfigureAwait(false);
         _eventBus.Publish(new ProjectClosedEvent(CurrentProject.ProjectId));
         _logger?.Log(new LogEntry
         {
             Level = LogLevel.Info,
             Category = "Application",
             Message = "Project closed.",
-            Timestamp = savedAt,
+            Timestamp = _clock.Now,
             Properties = new Dictionary<string, string>
             {
                 ["projectId"] = CurrentProject.ProjectId.ToString()
@@ -240,6 +267,7 @@ public sealed class ProjectService : IProjectService
         });
         CurrentProject = null;
         _currentPersistedProjectState?.Clear();
+        return Task.CompletedTask;
     }
 
     private static RevisionDto ToRevisionDto(RevisionRecord revision) =>
@@ -266,5 +294,64 @@ public sealed class ProjectService : IProjectService
         {
             throw new InvalidOperationException("No current project is open.");
         }
+    }
+
+    private void OnDesignChanged(DesignChangedEvent @event)
+    {
+        if (CurrentProject is null)
+        {
+            return;
+        }
+
+        var changedAt = _clock.Now;
+        CurrentProject = CurrentProject with
+        {
+            HasUnsavedChanges = true,
+            LastModified = changedAt
+        };
+
+        CommandId? lastCommandId = @event.Result.CommandId == Guid.Empty
+            ? null
+            : new CommandId(@event.Result.CommandId);
+
+        UpdateCurrentState(changedAt, isClean: false, lastCommandId);
+    }
+
+    private void UpdateCurrentState(DateTimeOffset savedAt, bool isClean, CommandId? lastCommandId)
+    {
+        if (_currentPersistedProjectState?.CurrentState is not { } || _workingRevisionSource is null)
+        {
+            return;
+        }
+
+        var latestState = _workingRevisionSource.CaptureCurrentState();
+        var checkpoint = latestState.Checkpoint ?? new AutosaveCheckpoint(
+            Guid.NewGuid().ToString("N"),
+            latestState.Project.Id,
+            latestState.Revision.Id,
+            savedAt,
+            lastCommandId,
+            isClean);
+
+        _currentPersistedProjectState.SetCurrentState(latestState with
+        {
+            Project = latestState.Project with { UpdatedAt = savedAt },
+            Checkpoint = checkpoint with
+            {
+                SavedAt = savedAt,
+                LastCommandId = lastCommandId ?? checkpoint.LastCommandId,
+                IsClean = isClean
+            }
+        });
+    }
+
+    private static string NormalizeFilePath(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            throw new ArgumentException("A project file path is required.", nameof(filePath));
+        }
+
+        return Path.GetFullPath(filePath);
     }
 }

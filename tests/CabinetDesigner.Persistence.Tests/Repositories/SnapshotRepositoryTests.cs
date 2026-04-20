@@ -29,6 +29,7 @@ public sealed class SnapshotRepositoryTests
             createdAt,
             "user1",
             "Rev 1",
+            "hash-1",
             JsonWithSchemaVersion(1),
             JsonWithSchemaVersion(1),
             JsonWithSchemaVersion(1),
@@ -44,6 +45,7 @@ public sealed class SnapshotRepositoryTests
             createdAt.AddSeconds(1),
             "user2",
             "Rev 1",
+            "hash-2",
             JsonWithSchemaVersion(1),
             JsonWithSchemaVersion(1),
             JsonWithSchemaVersion(1),
@@ -97,6 +99,7 @@ public sealed class SnapshotRepositoryTests
             createdAt,
             "user1",
             "Rev 1",
+            "hash-1",
             JsonWithSchemaVersion(1),
             JsonWithSchemaVersion(1),
             JsonWithSchemaVersion(1),
@@ -127,6 +130,42 @@ public sealed class SnapshotRepositoryTests
     private static string JsonWithSchemaVersion(int version)
     {
         return $$$"""{"schema_version":{{{version}}},"payload":{"value":"test"}}""";
+    }
+
+    [Fact]
+    public async Task ReadAsync_RoundTripsContentHash()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+        var state = TestData.CreatePersistedState();
+
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var snapshotRepository = new SnapshotRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        await projectRepository.SaveAsync(state.Project);
+        await revisionRepository.SaveAsync(state.Revision);
+
+        var snapshot = new ApprovedSnapshot(
+            state.Revision.Id,
+            state.Project.Id,
+            1,
+            DateTimeOffset.Parse("2026-04-08T17:00:00Z"),
+            "user1",
+            "Rev 1",
+            "hash-content-123",
+            JsonWithSchemaVersion(1),
+            JsonWithSchemaVersion(1),
+            JsonWithSchemaVersion(1),
+            JsonWithSchemaVersion(1),
+            JsonWithSchemaVersion(1),
+            JsonWithSchemaVersion(1),
+            JsonWithSchemaVersion(1));
+
+        await snapshotRepository.WriteAsync(snapshot);
+        var loaded = await snapshotRepository.ReadAsync(state.Revision.Id);
+
+        Assert.NotNull(loaded);
+        Assert.Equal("hash-content-123", loaded!.ContentHash);
     }
 
     private static async Task<int> CountSnapshotsForRevisionAsync(

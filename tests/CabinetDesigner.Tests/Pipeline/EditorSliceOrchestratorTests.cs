@@ -1,6 +1,7 @@
 using CabinetDesigner.Application;
 using CabinetDesigner.Application.Explanation;
 using CabinetDesigner.Application.Pipeline;
+using CabinetDesigner.Application.Pipeline.Stages;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
@@ -19,12 +20,14 @@ public sealed class EditorSliceOrchestratorTests
     {
         var store = CreateStoreWithWall(out var wall);
         var undoStack = new InMemoryUndoStack();
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             undoStack,
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         var createRun = new CreateRunCommand(Point2D.Origin, new Point2D(96m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "create", DateTimeOffset.UnixEpoch);
         var createResult = orchestrator.Execute(createRun);
@@ -41,12 +44,14 @@ public sealed class EditorSliceOrchestratorTests
     public void Execute_MoveCabinet_BetweenRuns_Succeeds()
     {
         var store = CreateStoreWithWall(out var wall);
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             new InMemoryUndoStack(),
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         Assert.True(orchestrator.Execute(new CreateRunCommand(Point2D.Origin, new Point2D(96m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "run-1", DateTimeOffset.UnixEpoch)).Success);
         Assert.True(orchestrator.Execute(new CreateRunCommand(new Point2D(0m, 24m), new Point2D(96m, 24m), wall.Id.Value.ToString(), CommandOrigin.User, "run-2", DateTimeOffset.UnixEpoch)).Success);
@@ -66,12 +71,14 @@ public sealed class EditorSliceOrchestratorTests
     public void Execute_MoveCabinet_WithinSameRun_ReordersSlots()
     {
         var store = CreateStoreWithWall(out var wall);
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             new InMemoryUndoStack(),
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         Assert.True(orchestrator.Execute(new CreateRunCommand(Point2D.Origin, new Point2D(120m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "run", DateTimeOffset.UnixEpoch)).Success);
         var run = Assert.Single(store.GetAllRuns());
@@ -91,12 +98,14 @@ public sealed class EditorSliceOrchestratorTests
     public void Execute_MoveCabinet_ToMissingRun_Fails()
     {
         var store = CreateStoreWithWall(out var wall);
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             new InMemoryUndoStack(),
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         Assert.True(orchestrator.Execute(new CreateRunCommand(Point2D.Origin, new Point2D(96m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "run", DateTimeOffset.UnixEpoch)).Success);
         var run = Assert.Single(store.GetAllRuns());
@@ -113,12 +122,14 @@ public sealed class EditorSliceOrchestratorTests
     public void Undo_AddCabinet_RemovesCabinetFromRun()
     {
         var store = CreateStoreWithWall(out var wall);
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             new InMemoryUndoStack(),
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         Assert.True(orchestrator.Execute(new CreateRunCommand(Point2D.Origin, new Point2D(96m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "run", DateTimeOffset.UnixEpoch)).Success);
         var run = Assert.Single(store.GetAllRuns());
@@ -136,12 +147,14 @@ public sealed class EditorSliceOrchestratorTests
     {
         var store = CreateStoreWithWall(out var wall);
         var undoStack = new InMemoryUndoStack();
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             undoStack,
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         Assert.True(orchestrator.Execute(new CreateRunCommand(Point2D.Origin, new Point2D(96m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "run-1", DateTimeOffset.UnixEpoch)).Success);
         Assert.True(orchestrator.Execute(new CreateRunCommand(new Point2D(0m, 24m), new Point2D(96m, 24m), wall.Id.Value.ToString(), CommandOrigin.User, "run-2", DateTimeOffset.UnixEpoch)).Success);
@@ -162,12 +175,14 @@ public sealed class EditorSliceOrchestratorTests
     public void Execute_MoveCabinet_WhenTargetRunOverCapacity_Fails()
     {
         var store = CreateStoreWithWall(out var wall);
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             new InMemoryUndoStack(),
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         Assert.True(orchestrator.Execute(new CreateRunCommand(Point2D.Origin, new Point2D(96m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "run-1", DateTimeOffset.UnixEpoch)).Success);
         Assert.True(orchestrator.Execute(new CreateRunCommand(new Point2D(0m, 24m), new Point2D(24m, 24m), wall.Id.Value.ToString(), CommandOrigin.User, "run-2", DateTimeOffset.UnixEpoch)).Success);
@@ -190,4 +205,11 @@ public sealed class EditorSliceOrchestratorTests
         store.AddWall(wall);
         return store;
     }
+
+    private static IReadOnlyList<IResolutionStage> CreateEditorSliceStages(InMemoryDesignStateStore store, InMemoryDeltaTracker deltaTracker) =>
+        [
+            new InputCaptureStage(store),
+            new InteractionInterpretationStage(deltaTracker, store),
+            new SpatialResolutionStage(store)
+        ];
 }

@@ -46,4 +46,11 @@ public abstract record DomainOperation
     public sealed record UpdateRunCapacity(
         RunId RunId,
         Length NewCapacity) : DomainOperation;
+
+    public sealed record DeleteRun(
+        RunId RunId) : DomainOperation;
+
+    public sealed record SetCabinetOverride(
+        CabinetId CabinetId,
+        string OverrideKey) : DomainOperation;
 }

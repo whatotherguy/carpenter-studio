@@ -17,6 +17,7 @@ public static class PersistenceServiceRegistration
         services.AddScoped<SqliteSessionAccessor>();
         services.AddSingleton<ISchemaMigration, V1_InitialSchema>();
         services.AddSingleton<ISchemaMigration, V2_RepairSchemaDrift>();
+        services.AddSingleton<ISchemaMigration, V3_AddApprovedSnapshotContentHash>();
         services.AddSingleton<MigrationRunner>();
         services.AddSingleton<StartupOrchestrator>();
         services.AddSingleton<ISnapshotSerializer, V1SnapshotSerializer>();

@@ -31,7 +31,7 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
                 var runsById = runs.ToDictionary(run => run.Id);
                 var cabinetsById = cabinets.ToDictionary(cabinet => cabinet.Id);
 
-                foreach (var row in cabinetRows.OrderBy(row => row.SlotIndex))
+                foreach (var row in cabinetRows.OrderBy(row => row.RunId, StringComparer.Ordinal).ThenBy(row => row.SlotIndex).ThenBy(row => row.Id, StringComparer.Ordinal))
                 {
                     if (!runsById.TryGetValue(new RunId(Guid.Parse(row.RunId)), out var run))
                     {
@@ -95,20 +95,27 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
         }
 
         var runByCabinetId = revision.Runs
-            .SelectMany(run => run.Slots.Where(slot => slot.CabinetId is not null).Select(slot => (run.Id, slot.CabinetId!.Value, slot.SlotIndex)))
-            .ToDictionary(item => item.Value, item => (item.Id, item.SlotIndex));
+            .SelectMany(run => run.Slots.Where(slot => slot.CabinetId is not null).Select(slot => (RunId: run.Id, CabinetId: slot.CabinetId!.Value, slot.SlotIndex)))
+            .ToDictionary(item => item.CabinetId, item => (item.RunId, item.SlotIndex));
 
-        foreach (var cabinet in revision.Cabinets)
+        var cabinetsToSave = revision.Cabinets
+            .Where(cabinet => runByCabinetId.ContainsKey(cabinet.Id))
+            .OrderBy(cabinet => runByCabinetId[cabinet.Id].RunId.Value)
+            .ThenBy(cabinet => runByCabinetId[cabinet.Id].SlotIndex)
+            .ThenBy(cabinet => cabinet.Id.Value)
+            .ToArray();
+
+        foreach (var cabinet in cabinetsToSave)
         {
-            if (!runByCabinetId.TryGetValue(cabinet.Id, out var placement))
-            {
-                continue;
-            }
-
-            await InsertCabinetAsync(connection, transaction, CabinetMapper.ToRow(cabinet, revision.Revision.Id, placement.Id, placement.SlotIndex, timestamp), ct).ConfigureAwait(false);
+            var placement = runByCabinetId[cabinet.Id];
+            await InsertCabinetAsync(connection, transaction, CabinetMapper.ToRow(cabinet, revision.Revision.Id, placement.RunId, placement.SlotIndex, timestamp), ct).ConfigureAwait(false);
         }
 
-        foreach (var part in revision.Parts)
+        foreach (var part in revision.Parts
+            .OrderBy(part => part.CabinetId.Value)
+            .ThenBy(part => part.PartType, StringComparer.Ordinal)
+            .ThenBy(part => part.Label, StringComparer.Ordinal)
+            .ThenBy(part => part.PartId, StringComparer.Ordinal))
         {
             await InsertPartAsync(connection, transaction, PartMapper.ToRow(part, revision.Revision.Id, timestamp), ct).ConfigureAwait(false);
         }
@@ -229,7 +236,7 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
 
     private static async Task<List<CabinetRow>> LoadCabinetRowsAsync(SqliteConnection connection, SqliteTransaction? transaction, RevisionId revisionId, CancellationToken ct)
     {
-        using var command = CreateCommand(connection, transaction, "SELECT id, revision_id, run_id, slot_index, cabinet_type_id, category, construction_method, nominal_width, nominal_height, nominal_depth, overrides_json, created_at, updated_at FROM cabinets WHERE revision_id = @revisionId ORDER BY slot_index;");
+        using var command = CreateCommand(connection, transaction, "SELECT id, revision_id, run_id, slot_index, cabinet_type_id, category, construction_method, nominal_width, nominal_height, nominal_depth, overrides_json, created_at, updated_at FROM cabinets WHERE revision_id = @revisionId ORDER BY run_id, slot_index, id;");
         command.Parameters.AddWithValue("@revisionId", revisionId.Value.ToString());
         var cabinets = new List<CabinetRow>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
@@ -258,7 +265,7 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
 
     private static async Task<IReadOnlyList<CabinetDesigner.Application.Pipeline.StageResults.GeneratedPart>> LoadPartsAsync(SqliteConnection connection, SqliteTransaction? transaction, RevisionId revisionId, CancellationToken ct)
     {
-        using var command = CreateCommand(connection, transaction, "SELECT id, revision_id, cabinet_id, part_type, label, material_id, length, width, thickness, grain_direction, edge_treatment_json, created_at, updated_at FROM parts WHERE revision_id = @revisionId ORDER BY id;");
+        using var command = CreateCommand(connection, transaction, "SELECT id, revision_id, cabinet_id, part_type, label, material_id, length, width, thickness, grain_direction, edge_treatment_json, created_at, updated_at FROM parts WHERE revision_id = @revisionId ORDER BY cabinet_id, part_type, label, id;");
         command.Parameters.AddWithValue("@revisionId", revisionId.Value.ToString());
         var parts = new List<CabinetDesigner.Application.Pipeline.StageResults.GeneratedPart>();
         await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);

@@ -39,6 +39,107 @@ public sealed class PersistenceIntegrationTests
     }
 
     [Fact]
+    public async Task WorkingRevision_SaveAndLoad_PreservesDeterministicOrderingAndOverrides()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        var createdAt = DateTimeOffset.Parse("2026-04-08T17:00:00Z");
+        var projectId = ProjectId.New();
+        var revisionId = RevisionId.New();
+
+        var room = new Room(RoomId.New(), revisionId, "Kitchen", Length.FromFeet(10));
+        var wall = new Wall(WallId.New(), room.Id, new Point2D(0, 0), new Point2D(144, 0), Thickness.Exact(Length.FromInches(4)));
+        var run = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(96));
+
+        var cabinetA = new Cabinet(CabinetId.New(), revisionId, "base-24", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(24), Length.FromInches(24), Length.FromInches(34.5m));
+        cabinetA.SetOverride("zeta", new OverrideValue.OfBool(true));
+        cabinetA.SetOverride("alpha", new OverrideValue.OfLength(Length.FromInches(0.5m)));
+
+        var cabinetB = new Cabinet(CabinetId.New(), revisionId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(30), Length.FromInches(24), Length.FromInches(34.5m));
+        cabinetB.SetOverride("alpha", new OverrideValue.OfLength(Length.FromInches(0.5m)));
+        cabinetB.SetOverride("zeta", new OverrideValue.OfBool(true));
+
+        run.AppendCabinet(cabinetB.Id, cabinetB.NominalWidth);
+        run.AppendCabinet(cabinetA.Id, cabinetA.NominalWidth);
+
+        var partB = new GeneratedPart
+        {
+            PartId = Guid.NewGuid().ToString("N"),
+            CabinetId = cabinetB.Id,
+            PartType = "right_side",
+            Width = Length.FromInches(23.25m),
+            Height = Length.FromInches(34.5m),
+            MaterialThickness = Thickness.Exact(Length.FromInches(0.75m)),
+            MaterialId = MaterialId.New(),
+            GrainDirection = GrainDirection.LengthWise,
+            Edges = new EdgeTreatment("top", null, "left", null),
+            Label = "B-RIGHT"
+        };
+
+        var partA = new GeneratedPart
+        {
+            PartId = Guid.NewGuid().ToString("N"),
+            CabinetId = cabinetA.Id,
+            PartType = "left_side",
+            Width = Length.FromInches(23.25m),
+            Height = Length.FromInches(34.5m),
+            MaterialThickness = Thickness.Exact(Length.FromInches(0.75m)),
+            MaterialId = MaterialId.New(),
+            GrainDirection = GrainDirection.LengthWise,
+            Edges = new EdgeTreatment("top", null, "left", null),
+            Label = "A-LEFT"
+        };
+
+        var project = new ProjectRecord(projectId, "Deterministic Kitchen", null, createdAt, createdAt, ApprovalState.Draft);
+        var revision = new RevisionRecord(revisionId, projectId, 1, ApprovalState.Draft, createdAt, null, null, "Rev 1");
+        var workingRevision = new WorkingRevision(revision, [room], [wall], [run], [cabinetA, cabinetB], [partB, partA]);
+
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var workingRevisionRepository = new WorkingRevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        await projectRepository.SaveAsync(project);
+        await revisionRepository.SaveAsync(revision);
+        await workingRevisionRepository.SaveAsync(workingRevision);
+
+        var loaded = await workingRevisionRepository.LoadAsync(projectId);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(workingRevision.Revision.Id, loaded!.Revision.Id);
+        Assert.Equal(workingRevision.Rooms[0].Id, loaded.Rooms[0].Id);
+        Assert.Equal(workingRevision.Walls[0].Id, loaded.Walls[0].Id);
+        Assert.Equal(
+            run.Slots.Where(slot => slot.CabinetId is not null).Select(slot => slot.CabinetId!.Value).ToArray(),
+            loaded.Runs[0].Slots.Where(slot => slot.CabinetId is not null).Select(slot => slot.CabinetId!.Value).ToArray());
+        Assert.Equal(
+            run.Slots.Select(slot => slot.OccupiedWidth).ToArray(),
+            loaded.Runs[0].Slots.Select(slot => slot.OccupiedWidth).ToArray());
+
+        var expectedCabinetIds = run.Slots
+            .Where(slot => slot.CabinetId is not null)
+            .Select(slot => slot.CabinetId!.Value)
+            .ToArray();
+        Assert.Equal(expectedCabinetIds, loaded.Cabinets.Select(cabinet => cabinet.Id).ToArray());
+
+        Assert.Equal(
+            cabinetA.Overrides.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (pair.Key, pair.Value)).ToArray(),
+            loaded.Cabinets.Single(cabinet => cabinet.Id == cabinetA.Id).Overrides.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (pair.Key, pair.Value)).ToArray());
+        Assert.Equal(
+            cabinetB.Overrides.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (pair.Key, pair.Value)).ToArray(),
+            loaded.Cabinets.Single(cabinet => cabinet.Id == cabinetB.Id).Overrides.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (pair.Key, pair.Value)).ToArray());
+
+        var expectedParts = new[] { partB, partA }
+            .OrderBy(part => part.CabinetId.Value)
+            .ThenBy(part => part.PartType, StringComparer.Ordinal)
+            .ThenBy(part => part.Label, StringComparer.Ordinal)
+            .ThenBy(part => part.PartId, StringComparer.Ordinal)
+            .Select(part => part.PartId)
+            .ToArray();
+
+        Assert.Equal(expectedParts, loaded.Parts.Select(part => part.PartId).ToArray());
+    }
+
+    [Fact]
     public async Task SnapshotRepository_WriteOnce_AndTriggerBlocksUpdates()
     {
         await using var fixture = new SqliteTestFixture();
@@ -51,7 +152,7 @@ public sealed class PersistenceIntegrationTests
         await projectRepository.SaveAsync(state.Project);
         await revisionRepository.SaveAsync(state.Revision with { State = ApprovalState.Approved, ApprovedAt = DateTimeOffset.UtcNow, ApprovedBy = "tester" });
 
-        var snapshot = new ApprovedSnapshot(state.Revision.Id, state.Project.Id, 1, DateTimeOffset.UtcNow, "tester", "Rev 1", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""");
+        var snapshot = new ApprovedSnapshot(state.Revision.Id, state.Project.Id, 1, DateTimeOffset.UtcNow, "tester", "Rev 1", "hash", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""", """{"schema_version":1}""");
         await snapshotRepository.WriteAsync(snapshot);
         await Assert.ThrowsAsync<InvalidOperationException>(() => snapshotRepository.WriteAsync(snapshot));
 

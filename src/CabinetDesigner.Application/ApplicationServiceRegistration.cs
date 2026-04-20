@@ -1,4 +1,5 @@
 using CabinetDesigner.Application.Explanation;
+using CabinetDesigner.Application.Costing;
 using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Projection;
@@ -31,6 +32,21 @@ public static class ApplicationServiceRegistration
         services.AddSingleton<IManufacturingProjector, ManufacturingProjector>();
         services.AddSingleton<IInstallProjector, InstallProjector>();
         services.AddSingleton<IValidationResultStore, InMemoryValidationResultStore>();
+        services.AddSingleton<IPackagingResultStore, InMemoryPackagingResultStore>();
+        services.AddSingleton<ICatalogService, CatalogService>();
+        services.AddSingleton<ICostingPolicy, DefaultCostingPolicy>();
+        services.AddSingleton<IPreviousApprovedCostLookup>(provider =>
+        {
+            var snapshots = provider.GetService<Persistence.ISnapshotRepository>();
+            if (snapshots is null)
+            {
+                return new NullPreviousApprovedCostLookup();
+            }
+
+            return new SnapshotApprovedCostLookup(
+                snapshots,
+                provider.GetRequiredService<Persistence.ICurrentPersistedProjectState>());
+        });
         services.AddSingleton<IResolutionOrchestrator>(provider => new ResolutionOrchestrator(
             provider.GetRequiredService<IDeltaTracker>(),
             provider.GetRequiredService<IWhyEngine>(),
@@ -39,7 +55,12 @@ public static class ApplicationServiceRegistration
             stateStore: provider.GetRequiredService<IDesignStateStore>(),
             logger: provider.GetRequiredService<IResolutionOrchestratorLogger>(),
             stages: null,
-            validationResultStore: provider.GetRequiredService<IValidationResultStore>()));
+            validationResultStore: provider.GetRequiredService<IValidationResultStore>(),
+            packagingResultStore: provider.GetRequiredService<IPackagingResultStore>(),
+            catalogService: provider.GetRequiredService<ICatalogService>(),
+            costingPolicy: provider.GetRequiredService<ICostingPolicy>(),
+            currentPersistedProjectState: provider.GetRequiredService<ICurrentPersistedProjectState>(),
+            previousCostLookup: provider.GetRequiredService<IPreviousApprovedCostLookup>()));
 
         services.AddScoped<IDesignCommandHandler, DesignCommandHandler>();
         services.AddScoped<IPreviewCommandHandler, PreviewCommandHandler>();
@@ -50,7 +71,6 @@ public static class ApplicationServiceRegistration
         services.AddScoped<IUndoRedoService, UndoRedoService>();
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<ISnapshotService, SnapshotService>();
-        services.AddSingleton<ICatalogService, CatalogService>();
         services.AddSingleton<IValidationSummaryService, ValidationSummaryService>();
 
         return services;

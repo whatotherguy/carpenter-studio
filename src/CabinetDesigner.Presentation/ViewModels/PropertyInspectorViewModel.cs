@@ -190,9 +190,9 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<ProjectClosedEvent>(OnProjectClosed);
     }
 
-    private void OnProjectOpened(ProjectOpenedEvent _) => SetProjectOpen(true);
+    private void OnProjectOpened(ProjectOpenedEvent _) => DispatchIfNeeded(() => SetProjectOpen(true));
 
-    private void OnProjectClosed(ProjectClosedEvent _) => SetProjectOpen(false);
+    private void OnProjectClosed(ProjectClosedEvent _) => DispatchIfNeeded(() => SetProjectOpen(false));
 
     private void SetProjectOpen(bool isOpen)
     {
@@ -424,4 +424,16 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         new PropertyRowViewModel("editability", "Editability", canEditWidth ? "Nominal width editable" : "Read-only shell", false),
         new PropertyRowViewModel("data-source", "Data Source", "Projected scene data", false)
     ];
+
+    private static void DispatchIfNeeded(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        dispatcher.Invoke(action);
+    }
 }

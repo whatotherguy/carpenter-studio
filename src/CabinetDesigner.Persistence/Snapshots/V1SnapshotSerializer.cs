@@ -17,6 +17,7 @@ public sealed class V1SnapshotSerializer : ISnapshotSerializer
             approvedAt,
             state.Revision.ApprovedBy,
             label,
+            string.Empty,
             JsonSerializer.Serialize(new OrderedBlob<WorkingRevision>(1, state.Revision.Id.Value, approvedAt, state.WorkingRevision), SqliteJson.Options),
             JsonSerializer.Serialize(new OrderedBlob<IReadOnlyList<CabinetDesigner.Application.Pipeline.StageResults.GeneratedPart>>(1, state.Revision.Id.Value, approvedAt, state.WorkingRevision.Parts), SqliteJson.Options),
             JsonSerializer.Serialize(new OrderedBlob<object>(1, state.Revision.Id.Value, approvedAt, new { state.WorkingRevision.Parts.Count }), SqliteJson.Options),

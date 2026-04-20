@@ -123,6 +123,11 @@ public sealed record InstallBlocker
 public enum InstallBlockerCode
 {
     ManufacturingNotReady,
+    MissingEngineeringAssembly,
+    MissingRunEndConditions,
+    MissingManufacturingCutList,
+    MissingCabinetManufacturingParts,
+    UnsupportedEngineeringFiller,
     DependencyCycle
 }
 
@@ -205,6 +210,18 @@ public static class InstallSequencer
             if (y is null)
             {
                 return 1;
+            }
+
+            var yCompare = x.Footprint.Origin.Y.CompareTo(y.Footprint.Origin.Y);
+            if (yCompare != 0)
+            {
+                return yCompare;
+            }
+
+            var xCompare = x.Footprint.Origin.X.CompareTo(y.Footprint.Origin.X);
+            if (xCompare != 0)
+            {
+                return xCompare;
             }
 
             var runCompare = x.RunId.Value.CompareTo(y.RunId.Value);

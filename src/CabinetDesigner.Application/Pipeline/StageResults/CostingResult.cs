@@ -33,4 +33,8 @@ public sealed record CabinetCostBreakdown(
     string CabinetId,
     decimal MaterialCost,
     decimal HardwareCost,
-    decimal LaborCost);
+    decimal LaborCost,
+    decimal InstallCost)
+{
+    public decimal Subtotal => MaterialCost + HardwareCost + LaborCost + InstallCost;
+}

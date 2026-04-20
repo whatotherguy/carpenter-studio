@@ -22,6 +22,12 @@ public sealed class ValidationContext
 
     public required IReadOnlyList<RunValidationSnapshot> RunSnapshots { get; init; }
 
+    public IReadOnlyList<ConstraintViolationSnapshot> Constraints { get; init; } = [];
+
+    public IReadOnlyList<ManufacturingBlockerSnapshot> ManufacturingBlockers { get; init; } = [];
+
+    public IReadOnlyList<InstallBlockerSnapshot> InstallBlockers { get; init; } = [];
+
     public required WorkflowStateSnapshot WorkflowState { get; init; }
 }
 
@@ -39,7 +45,23 @@ public sealed record RunValidationSnapshot(
     bool HasLeftEndCondition,
     bool HasRightEndCondition);
 
+public sealed record ConstraintViolationSnapshot(
+    string ConstraintCode,
+    string Message,
+    ValidationSeverity Severity,
+    IReadOnlyList<string> AffectedEntityIds);
+
 public sealed record WorkflowStateSnapshot(
     string ApprovalState,
     bool HasUnapprovedChanges,
     bool HasPendingManufactureBlockers);
+
+public sealed record ManufacturingBlockerSnapshot(
+    string BlockerCode,
+    string Message,
+    IReadOnlyList<string> AffectedEntityIds);
+
+public sealed record InstallBlockerSnapshot(
+    string BlockerCode,
+    string Message,
+    IReadOnlyList<string> AffectedEntityIds);

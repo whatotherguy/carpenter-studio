@@ -96,39 +96,6 @@ public sealed class StatusBarViewModelTests
         Assert.False(viewModel.HasManufactureBlockers);
     }
 
-    [Fact]
-    public void RefreshValidationCounts_WhenServiceThrowsNotImplementedException_LogsWarningAndZerosCounts()
-    {
-        var logger = new CapturingAppLogger();
-        var eventBus = new ApplicationEventBus();
-        using var viewModel = new StatusBarViewModel(eventBus, new ThrowingValidationSummaryService(), logger);
-
-        Assert.Equal(0, viewModel.ErrorCount);
-        Assert.Equal(0, viewModel.WarningCount);
-        Assert.Equal(0, viewModel.InfoCount);
-        Assert.False(viewModel.HasManufactureBlockers);
-        Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Warning, logger.Entries[0].Level);
-        Assert.Equal("StatusBarViewModel", logger.Entries[0].Category);
-        Assert.NotNull(logger.Entries[0].Exception);
-        Assert.IsType<NotImplementedException>(logger.Entries[0].Exception);
-    }
-
-    [Fact]
-    public void DesignChangedEvent_WhenServiceThrowsNotImplementedException_LogsWarningOnEachRefresh()
-    {
-        var logger = new CapturingAppLogger();
-        var eventBus = new ApplicationEventBus();
-        using var viewModel = new StatusBarViewModel(eventBus, new ThrowingValidationSummaryService(), logger);
-
-        var countAfterConstruct = logger.Entries.Count;
-
-        eventBus.Publish(new DesignChangedEvent(new CommandResultDto(Guid.NewGuid(), "test", true, [], [], [])));
-
-        Assert.Equal(countAfterConstruct + 1, logger.Entries.Count);
-        Assert.All(logger.Entries, entry => Assert.Equal(LogLevel.Warning, entry.Level));
-    }
-
     private sealed class RecordingValidationSummaryService : IValidationSummaryService
     {
         public RecordingValidationSummaryService(IReadOnlyList<ValidationIssueSummaryDto> issues, bool hasBlockers)

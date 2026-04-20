@@ -21,7 +21,9 @@ internal static class CabinetMapper
         NominalWidth = LengthText.FormatLength(cabinet.NominalWidth),
         NominalHeight = LengthText.FormatLength(cabinet.Height),
         NominalDepth = LengthText.FormatLength(cabinet.Depth),
-        OverridesJson = JsonSerializer.Serialize(cabinet.Overrides, SqliteJson.Options),
+        OverridesJson = JsonSerializer.Serialize(
+            cabinet.Overrides.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+            SqliteJson.Options),
         CreatedAt = timestamp.UtcDateTime.ToString("O"),
         UpdatedAt = timestamp.UtcDateTime.ToString("O")
     };

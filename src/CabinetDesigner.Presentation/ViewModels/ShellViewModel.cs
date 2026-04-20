@@ -360,9 +360,9 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     private void DispatchIfNeeded(Action action)
     {
         var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null)
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
         {
-            // No dispatcher available (e.g., in unit tests), execute directly
+            // No healthy dispatcher available (e.g., unit tests or a disposed WPF app); execute directly.
             action();
             return;
         }

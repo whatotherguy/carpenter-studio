@@ -25,4 +25,22 @@ public sealed class CabinetMapperRoundTripTests
         Assert.Equal(cabinet.Height, roundTrip.Height);
         Assert.Equal(cabinet.Overrides, roundTrip.Overrides);
     }
+
+    [Fact]
+    public void CabinetMapper_SerializesOverridesDeterministically()
+    {
+        var revisionId = RevisionId.New();
+        var first = new Cabinet(CabinetId.New(), revisionId, "base-36", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(36), Length.FromInches(24), Length.FromInches(34.5m));
+        first.SetOverride("zeta", new OverrideValue.OfBool(true));
+        first.SetOverride("alpha", new OverrideValue.OfLength(Length.FromInches(0.5m)));
+
+        var second = new Cabinet(CabinetId.New(), revisionId, "base-36", CabinetCategory.Base, ConstructionMethod.Frameless, Length.FromInches(36), Length.FromInches(24), Length.FromInches(34.5m));
+        second.SetOverride("alpha", new OverrideValue.OfLength(Length.FromInches(0.5m)));
+        second.SetOverride("zeta", new OverrideValue.OfBool(true));
+
+        var firstRow = CabinetMapper.ToRow(first, revisionId, RunId.New(), 0, DateTimeOffset.UnixEpoch);
+        var secondRow = CabinetMapper.ToRow(second, revisionId, RunId.New(), 0, DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(firstRow.OverridesJson, secondRow.OverridesJson);
+    }
 }

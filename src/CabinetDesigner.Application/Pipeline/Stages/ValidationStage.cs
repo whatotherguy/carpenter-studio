@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.StageResults;
 using CabinetDesigner.Domain.Geometry;
@@ -10,16 +11,18 @@ public sealed class ValidationStage : IResolutionStage
 {
     private readonly IValidationEngine _engine;
     private readonly IValidationResultStore? _resultStore;
+    private readonly ICurrentPersistedProjectState? _projectState;
 
-    public ValidationStage(IValidationResultStore? resultStore = null)
-        : this(CreateDefaultEngine(), resultStore)
+    public ValidationStage(IValidationResultStore? resultStore = null, ICurrentPersistedProjectState? projectState = null)
+        : this(CreateDefaultEngine(), resultStore, projectState)
     {
     }
 
-    public ValidationStage(IValidationEngine engine, IValidationResultStore? resultStore = null)
+    public ValidationStage(IValidationEngine engine, IValidationResultStore? resultStore = null, ICurrentPersistedProjectState? projectState = null)
     {
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
         _resultStore = resultStore;
+        _projectState = projectState;
     }
 
     public int StageNumber => 10;
@@ -50,12 +53,18 @@ public sealed class ValidationStage : IResolutionStage
 
     private static IValidationEngine CreateDefaultEngine() =>
         new ValidationEngineBuilder()
+            .AddRule(new MaterialAssignmentRule())
+            .AddRule(new HardwareAssignmentRule())
+            .AddRule(new ManufacturingReadinessRule())
+            .AddRule(new InstallReadinessRule())
             .AddRule(new RunOverCapacityRule())
             .AddRule(new WorkflowUnapprovedChangesRule())
             .Build();
 
-    private static ValidationContext BuildContext(ResolutionContext context) =>
-        new()
+    private ValidationContext BuildContext(ResolutionContext context)
+    {
+        var currentState = _projectState?.CurrentState;
+        return new ValidationContext
         {
             Command = context.Command,
             Mode = context.Mode == ResolutionMode.Preview
@@ -64,11 +73,15 @@ public sealed class ValidationStage : IResolutionStage
             Strictness = ValidationStrictness.ReportOnly,
             CabinetPositions = BuildCabinetPositions(context.SpatialResult),
             RunSnapshots = BuildRunSnapshots(context.SpatialResult, context.EngineeringResult),
+            Constraints = BuildConstraintSnapshots(context.ConstraintResult),
+            ManufacturingBlockers = BuildManufacturingBlockerSnapshots(context.ManufacturingResult),
+            InstallBlockers = BuildInstallBlockerSnapshots(context.InstallResult),
             WorkflowState = new WorkflowStateSnapshot(
-                ApprovalState: "Draft",
-                HasUnapprovedChanges: false,
-                HasPendingManufactureBlockers: false)
+                ApprovalState: currentState?.Revision.State.ToString() ?? "Draft",
+                HasUnapprovedChanges: currentState?.Checkpoint is { IsClean: false },
+                HasPendingManufactureBlockers: context.ManufacturingResult.Plan.Readiness.Blockers.Count > 0)
         };
+    }
 
     private static IReadOnlyList<CabinetPositionSnapshot> BuildCabinetPositions(SpatialResolutionResult spatialResult) =>
         spatialResult.SlotPositionUpdates
@@ -106,4 +119,44 @@ public sealed class ValidationStage : IResolutionStage
             .OrderBy(snapshot => snapshot.RunId, StringComparer.Ordinal)
             .ToArray();
     }
+
+    private static IReadOnlyList<ConstraintViolationSnapshot> BuildConstraintSnapshots(
+        ConstraintPropagationResult constraintResult) =>
+        constraintResult.Violations
+            .Select(violation => new ConstraintViolationSnapshot(
+                violation.ConstraintCode,
+                violation.Message,
+                violation.Severity,
+                violation.AffectedEntityIds
+                    .OrderBy(id => id, StringComparer.Ordinal)
+                    .ToArray()))
+            .OrderBy(violation => violation.ConstraintCode, StringComparer.Ordinal)
+            .ThenBy(violation => violation.Message, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<ManufacturingBlockerSnapshot> BuildManufacturingBlockerSnapshots(
+        ManufacturingPlanResult manufacturingResult) =>
+        manufacturingResult.Plan.Readiness.Blockers
+            .Select(blocker => new ManufacturingBlockerSnapshot(
+                blocker.Code.ToString(),
+                blocker.Message,
+                blocker.AffectedEntityIds
+                    .OrderBy(id => id, StringComparer.Ordinal)
+                    .ToArray()))
+            .OrderBy(snapshot => snapshot.BlockerCode, StringComparer.Ordinal)
+            .ThenBy(snapshot => snapshot.Message, StringComparer.Ordinal)
+            .ToArray();
+
+    private static IReadOnlyList<InstallBlockerSnapshot> BuildInstallBlockerSnapshots(
+        InstallPlanResult installResult) =>
+        installResult.Plan.Readiness.Blockers
+            .Select(blocker => new InstallBlockerSnapshot(
+                blocker.Code.ToString(),
+                blocker.Message,
+                blocker.AffectedEntityIds
+                    .OrderBy(id => id, StringComparer.Ordinal)
+                    .ToArray()))
+            .OrderBy(snapshot => snapshot.BlockerCode, StringComparer.Ordinal)
+            .ThenBy(snapshot => snapshot.Message, StringComparer.Ordinal)
+            .ToArray();
 }

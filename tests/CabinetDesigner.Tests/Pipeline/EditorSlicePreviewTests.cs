@@ -1,5 +1,7 @@
 using CabinetDesigner.Application;
 using CabinetDesigner.Application.Explanation;
+using CabinetDesigner.Application.Pipeline;
+using CabinetDesigner.Application.Pipeline.Stages;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
@@ -19,12 +21,14 @@ public sealed class EditorSlicePreviewTests
         var store = new InMemoryDesignStateStore();
         var wall = new Wall(WallId.New(), RoomId.New(), Point2D.Origin, new Point2D(120m, 0m), Thickness.Exact(Length.FromInches(4m)));
         store.AddWall(wall);
+        var deltaTracker = new InMemoryDeltaTracker();
         var orchestrator = new ResolutionOrchestrator(
-            new InMemoryDeltaTracker(),
+            deltaTracker,
             new WhyEngine(),
             new InMemoryUndoStack(),
             store,
-            store);
+            store,
+            stages: CreateEditorSliceStages(store, deltaTracker));
 
         Assert.True(orchestrator.Execute(new CreateRunCommand(Point2D.Origin, new Point2D(96m, 0m), wall.Id.Value.ToString(), CommandOrigin.User, "run-1", DateTimeOffset.UnixEpoch)).Success);
         Assert.True(orchestrator.Execute(new CreateRunCommand(new Point2D(0m, 24m), new Point2D(96m, 24m), wall.Id.Value.ToString(), CommandOrigin.User, "run-2", DateTimeOffset.UnixEpoch)).Success);
@@ -39,4 +43,11 @@ public sealed class EditorSlicePreviewTests
         Assert.NotNull(preview.SpatialResult);
         Assert.NotEmpty(preview.SpatialResult!.Placements);
     }
+
+    private static IReadOnlyList<IResolutionStage> CreateEditorSliceStages(InMemoryDesignStateStore store, InMemoryDeltaTracker deltaTracker) =>
+        [
+            new InputCaptureStage(store),
+            new InteractionInterpretationStage(deltaTracker, store),
+            new SpatialResolutionStage(store)
+        ];
 }

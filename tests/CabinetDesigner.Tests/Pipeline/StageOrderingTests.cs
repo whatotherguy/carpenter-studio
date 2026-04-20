@@ -1,5 +1,7 @@
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.Stages;
+using CabinetDesigner.Application.Services;
+using CabinetDesigner.Application.State;
 using Xunit;
 
 namespace CabinetDesigner.Tests.Pipeline;
@@ -49,8 +51,8 @@ public sealed class StageOrderingTests
         new InputCaptureStage(),
         new InteractionInterpretationStage(),
         new SpatialResolutionStage(),
-        new EngineeringResolutionStage(),
-        new ConstraintPropagationStage(),
+        new EngineeringResolutionStage(new InMemoryDesignStateStore()),
+        new ConstraintPropagationStage(new CatalogService(), new InMemoryDesignStateStore()),
         new PartGenerationStage(),
         new ManufacturingPlanningStage(),
         new InstallPlanningStage(),

@@ -45,6 +45,8 @@ public sealed class InteractionInterpretationStage : IResolutionStage
                 InsertCabinetIntoRunCommand insertCabinet => ExecuteInsertCabinet(insertCabinet, context),
                 MoveCabinetCommand moveCabinet => ExecuteMoveCabinet(moveCabinet, context),
                 ResizeCabinetCommand resizeCabinet => ExecuteResizeCabinet(resizeCabinet, context),
+                DeleteRunCommand deleteRun => ExecuteDeleteRun(deleteRun, context),
+                SetCabinetOverrideCommand setCabinetOverride => ExecuteSetCabinetOverride(setCabinetOverride, context),
                 _ => [new DomainOperation.None()]
             };
 
@@ -63,6 +65,10 @@ public sealed class InteractionInterpretationStage : IResolutionStage
         catch (ArgumentOutOfRangeException exception)
         {
             return StageResult.Failed(StageNumber, [new ValidationIssue(ValidationSeverity.Error, "INTERACTION_FAILED", exception.Message)]);
+        }
+        catch (InteractionFailureException exception)
+        {
+            return StageResult.Failed(StageNumber, [new ValidationIssue(ValidationSeverity.Error, exception.Code, exception.Message)]);
         }
     }
 
@@ -236,6 +242,47 @@ public sealed class InteractionInterpretationStage : IResolutionStage
         return [new DomainOperation.ResizeCabinet(command.CabinetId, command.NewNominalWidth)];
     }
 
+    private IReadOnlyList<DomainOperation> ExecuteDeleteRun(DeleteRunCommand command, ResolutionContext context)
+    {
+        var run = ((ResolvedRunEntity)context.InputCapture.ResolvedEntities["run"]).Run;
+        if (run.Slots.Count > 0)
+        {
+            throw new InteractionFailureException("RUN_NOT_EMPTY", $"Run {command.RunId} cannot be deleted because it is not empty.");
+        }
+
+        var previousRunValues = _stateStore.CaptureRunValues(run);
+        _stateStore.RemoveRun(run.Id);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            run.Id.Value.ToString(),
+            "CabinetRun",
+            DeltaOperation.Removed,
+            previousRunValues));
+
+        return [new DomainOperation.DeleteRun(run.Id)];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteSetCabinetOverride(SetCabinetOverrideCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+        var updatedOverrides = new Dictionary<string, OverrideValue>(cabinet.EffectiveOverrides, StringComparer.Ordinal)
+        {
+            [command.OverrideKey] = command.Value
+        };
+        var updatedCabinet = cabinet with { Overrides = updatedOverrides };
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.SetCabinetOverride(command.CabinetId, command.OverrideKey)];
+    }
+
     private static int ResolveTargetIndex(MoveCabinetCommand command, CabinetRun targetRun, bool isSameRunMove, int sourceIndex)
     {
         var index = command.TargetPlacement switch
@@ -247,5 +294,10 @@ public sealed class InteractionInterpretationStage : IResolutionStage
         };
 
         return index;
+    }
+
+    private sealed class InteractionFailureException(string code, string message) : Exception(message)
+    {
+        public string Code { get; } = code;
     }
 }

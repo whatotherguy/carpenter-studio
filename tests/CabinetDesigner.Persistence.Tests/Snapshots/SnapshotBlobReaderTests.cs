@@ -43,6 +43,7 @@ public sealed class SnapshotBlobReaderTests
             DateTimeOffset.Parse("2026-04-08T17:00:00Z"),
             "tester",
             "Rev 1",
+            "hash",
             CreateBlob(schemaVersion, revisionId),
             CreateBlob(schemaVersion, revisionId),
             CreateBlob(schemaVersion, revisionId),

@@ -54,6 +54,7 @@ public sealed class BlobCorruptionTests
             DateTimeOffset.Parse("2026-04-08T17:00:00Z"),
             "tester",
             "Rev 1",
+            "hash",
             blob,
             blob,
             blob,

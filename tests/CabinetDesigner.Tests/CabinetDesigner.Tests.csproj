@@ -19,11 +19,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\CabinetDesigner.App\CabinetDesigner.App.csproj" />
     <ProjectReference Include="..\..\src\CabinetDesigner.Domain\CabinetDesigner.Domain.csproj" />
     <ProjectReference Include="..\..\src\CabinetDesigner.Application\CabinetDesigner.Application.csproj" />
     <ProjectReference Include="..\..\src\CabinetDesigner.Editor\CabinetDesigner.Editor.csproj" />
     <ProjectReference Include="..\..\src\CabinetDesigner.Rendering\CabinetDesigner.Rendering.csproj" />
     <ProjectReference Include="..\..\src\CabinetDesigner.Presentation\CabinetDesigner.Presentation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

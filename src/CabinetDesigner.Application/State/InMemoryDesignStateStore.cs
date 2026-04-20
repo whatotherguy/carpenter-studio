@@ -1,4 +1,5 @@
 using CabinetDesigner.Application.Pipeline;
+using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Geometry;
@@ -135,6 +136,15 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         }
     }
 
+    public void RemoveRun(RunId runId)
+    {
+        lock (_sync)
+        {
+            _runs.Remove(runId);
+            _runSpatialInfo.Remove(runId);
+        }
+    }
+
     public void LoadWorkingRevision(WorkingRevision revision)
     {
         ArgumentNullException.ThrowIfNull(revision);
@@ -171,7 +181,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 slot.RunId,
                 slot.Id,
                 cabinet.Category,
-                cabinet.Construction));
+                cabinet.Construction,
+                cabinet.Height,
+                new Dictionary<string, OverrideValue>(cabinet.Overrides, StringComparer.Ordinal)));
         }
 
         lock (_sync)
@@ -350,7 +362,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
             new RunId(cabinetSnapshot.RunId),
             new RunSlotId(cabinetSnapshot.SlotId),
             cabinetSnapshot.Category,
-            cabinetSnapshot.Construction);
+            cabinetSnapshot.Construction,
+            Length.FromInches(cabinetSnapshot.NominalHeightInches),
+            cabinetSnapshot.DeserializeOverrides());
 
         lock (_sync)
         {
@@ -418,10 +432,12 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         string CabinetTypeId,
         decimal NominalWidthInches,
         decimal NominalDepthInches,
+        decimal NominalHeightInches,
         Guid RunId,
         Guid SlotId,
         CabinetCategory Category,
-        ConstructionMethod Construction)
+        ConstructionMethod Construction,
+        string OverridesJson)
     {
         public static CabinetSnapshot From(CabinetStateRecord cabinet) =>
             new(
@@ -429,10 +445,16 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 cabinet.CabinetTypeId,
                 cabinet.NominalWidth.Inches,
                 cabinet.NominalDepth.Inches,
+                cabinet.EffectiveNominalHeight.Inches,
                 cabinet.RunId.Value,
                 cabinet.SlotId.Value,
                 cabinet.Category,
-                cabinet.Construction);
+                cabinet.Construction,
+                JsonSerializer.Serialize(cabinet.EffectiveOverrides, SnapshotJsonOptions));
+
+        public IReadOnlyDictionary<string, OverrideValue> DeserializeOverrides() =>
+            JsonSerializer.Deserialize<Dictionary<string, OverrideValue>>(OverridesJson, SnapshotJsonOptions)
+            ?? new Dictionary<string, OverrideValue>(StringComparer.Ordinal);
     }
 
     private sealed record WallSnapshot(

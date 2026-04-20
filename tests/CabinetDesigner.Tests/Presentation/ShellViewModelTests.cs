@@ -207,6 +207,22 @@ public sealed class ShellViewModelTests
     }
 
     [Fact]
+    public void ShellViewModel_ExposesMountedPanelsAndCanvasSurface()
+    {
+        using var shell = CreateShellViewModel(out _, out _, out _, out _, out _);
+
+        Assert.NotNull(shell.Catalog);
+        Assert.NotNull(shell.PropertyInspector);
+        Assert.NotNull(shell.RunSummary);
+        Assert.NotNull(shell.IssuePanel);
+        Assert.NotNull(shell.StatusBar);
+        Assert.NotNull(shell.Canvas);
+        Assert.NotNull(shell.CanvasView);
+        Assert.Equal(shell.Canvas.StatusMessage, shell.CurrentStatusText);
+        Assert.Equal(shell.Canvas.CurrentMode, shell.CanvasCurrentMode);
+    }
+
+    [Fact]
     public void ProjectClosedEvent_ClearsSelectionDrivenPanels()
     {
         using var shell = CreateShellViewModel(out _, out _, out var projector, out var eventBus, out var currentState);
@@ -258,6 +274,38 @@ public sealed class ShellViewModelTests
 
         Assert.StartsWith("Error:", shell.StatusBar.StatusMessage);
         Assert.False(shell.SaveCommand.IsExecuting);
+    }
+
+    [Fact]
+    public async Task CloseProjectCommand_WithUnsavedChangesAndDialogYes_SavesThenCloses()
+    {
+        var dialogService = new StubDialogService { YesNoResult = true };
+        using var shell = CreateShellViewModel(dialogService, out var projectService, out _, out _, out var eventBus, out _);
+        var project = new ProjectSummaryDto(Guid.NewGuid(), "Shop A", "C:\\shop.cab", DateTimeOffset.UtcNow, "Rev 1", true);
+        projectService.SeedCurrentProject(project);
+        eventBus.Publish(new ProjectOpenedEvent(project));
+
+        await shell.CloseProjectCommand.ExecuteAsync();
+
+        Assert.True(projectService.SaveCalled);
+        Assert.True(projectService.CloseCalled);
+        Assert.Null(shell.ActiveProject);
+    }
+
+    [Fact]
+    public async Task CloseProjectCommand_WithUnsavedChangesAndDialogNo_ClosesWithoutSaving()
+    {
+        var dialogService = new StubDialogService { YesNoResult = false };
+        using var shell = CreateShellViewModel(dialogService, out var projectService, out _, out _, out var eventBus, out _);
+        var project = new ProjectSummaryDto(Guid.NewGuid(), "Shop A", "C:\\shop.cab", DateTimeOffset.UtcNow, "Rev 1", true);
+        projectService.SeedCurrentProject(project);
+        eventBus.Publish(new ProjectOpenedEvent(project));
+
+        await shell.CloseProjectCommand.ExecuteAsync();
+
+        Assert.False(projectService.SaveCalled);
+        Assert.True(projectService.CloseCalled);
+        Assert.Null(shell.ActiveProject);
     }
 
     [Fact]
@@ -468,11 +516,21 @@ public sealed class ShellViewModelTests
         out RecordingUndoRedoService undoRedoService,
         out RecordingSceneProjector projector,
         out ApplicationEventBus eventBus,
+        out CurrentWorkingRevisionSource currentState) =>
+        CreateShellViewModel(new StubDialogService(), out projectService, out undoRedoService, out projector, out eventBus, out currentState);
+
+    private static ShellViewModel CreateShellViewModel(
+        IDialogService dialogService,
+        out RecordingProjectService projectService,
+        out RecordingUndoRedoService undoRedoService,
+        out RecordingSceneProjector projector,
+        out ApplicationEventBus eventBus,
         out CurrentWorkingRevisionSource currentState)
     {
         projectService = new RecordingProjectService();
         undoRedoService = new RecordingUndoRedoService();
         eventBus = new ApplicationEventBus();
+        projectService.EventBus = eventBus;
         var validationSummaryService = new RecordingValidationSummaryService();
         var stateStore = new InMemoryDesignStateStore();
         currentState = new CurrentWorkingRevisionSource(stateStore);
@@ -495,7 +553,7 @@ public sealed class ShellViewModelTests
         var statusBar = new StatusBarViewModel(eventBus, validationSummaryService);
         var issuePanel = new IssuePanelViewModel(validationSummaryService, eventBus);
 
-        return new ShellViewModel(projectService, undoRedoService, eventBus, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar, new StubDialogService());
+        return new ShellViewModel(projectService, undoRedoService, eventBus, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar, dialogService);
     }
 
     private static void SeedRunSummaryState(CurrentWorkingRevisionSource currentState)
@@ -529,7 +587,11 @@ public sealed class ShellViewModelTests
     {
         public ProjectSummaryDto? CurrentProject { get; private set; }
 
+        public IApplicationEventBus? EventBus { get; set; }
+
         public bool SaveCalled { get; private set; }
+
+        public bool CloseCalled { get; private set; }
 
         public bool ThrowOnSave { get; set; }
 
@@ -559,6 +621,11 @@ public sealed class ShellViewModelTests
 
         public Task CloseAsync()
         {
+            CloseCalled = true;
+            if (CurrentProject is not null)
+            {
+                EventBus?.Publish(new ProjectClosedEvent(CurrentProject.ProjectId));
+            }
             CurrentProject = null;
             return Task.CompletedTask;
         }
@@ -720,11 +787,15 @@ public sealed class ShellViewModelTests
 
     private sealed class StubDialogService : IDialogService
     {
-        public string? ShowOpenFileDialog(string title, string filter) => null;
+        public string? OpenFilePath { get; set; }
+
+        public bool YesNoResult { get; set; }
+
+        public string? ShowOpenFileDialog(string title, string filter) => OpenFilePath;
 
         public string? ShowSaveFileDialog(string title, string filter, string defaultFileName) => null;
 
-        public bool ShowYesNoDialog(string title, string message) => false;
+        public bool ShowYesNoDialog(string title, string message) => YesNoResult;
     }
 
     private sealed class ThrowingRunService : IRunService

@@ -1,5 +1,6 @@
 using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.Persistence;
+using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.ProjectContext;
 
@@ -13,6 +14,7 @@ public sealed class SnapshotService : ISnapshotService
     private readonly ISnapshotRepository _snapshotRepository;
     private readonly IWorkingRevisionSource _workingRevisionSource;
     private readonly IValidationHistoryRepository _validationHistoryRepository;
+    private readonly IPackagingResultStore _packagingResultStore;
     private readonly IApplicationEventBus _eventBus;
     private readonly IClock _clock;
     private readonly IAppLogger? _logger;
@@ -24,6 +26,7 @@ public sealed class SnapshotService : ISnapshotService
         ISnapshotRepository snapshotRepository,
         IWorkingRevisionSource workingRevisionSource,
         IValidationHistoryRepository validationHistoryRepository,
+        IPackagingResultStore packagingResultStore,
         IApplicationEventBus eventBus,
         IClock clock,
         IAppLogger? logger = null)
@@ -34,6 +37,7 @@ public sealed class SnapshotService : ISnapshotService
         _snapshotRepository = snapshotRepository;
         _workingRevisionSource = workingRevisionSource;
         _validationHistoryRepository = validationHistoryRepository;
+        _packagingResultStore = packagingResultStore ?? throw new ArgumentNullException(nameof(packagingResultStore));
         _eventBus = eventBus;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _logger = logger;
@@ -43,13 +47,19 @@ public sealed class SnapshotService : ISnapshotService
     {
         var state = _workingRevisionSource.CaptureCurrentState();
         var approvedAt = _clock.Now;
+        var packaging = _packagingResultStore.Current;
+        if (packaging is null || packaging.RevisionId != state.Revision.Id || string.IsNullOrWhiteSpace(packaging.ContentHash))
+        {
+            throw new InvalidOperationException("No current packaged snapshot is available for approval.");
+        }
+
         var revision = state.Revision with
         {
             Label = label,
             State = ApprovalState.Approved,
             ApprovedAt = approvedAt
         };
-        var validationIssues = await _validationHistoryRepository.LoadAsync(revision.Id, ct).ConfigureAwait(false);
+        _ = await _validationHistoryRepository.LoadAsync(revision.Id, ct).ConfigureAwait(false);
         var snapshot = new ApprovedSnapshot(
             revision.Id,
             state.Project.Id,
@@ -57,13 +67,14 @@ public sealed class SnapshotService : ISnapshotService
             revision.ApprovedAt ?? approvedAt,
             revision.ApprovedBy,
             label,
-            JsonSerializer.Serialize(new { schema_version = 1, revision_id = revision.Id.Value, label, project = state.Project.Name }),
-            JsonSerializer.Serialize(new { schema_version = 1, revision_id = revision.Id.Value, parts = state.WorkingRevision.Parts }),
-            JsonSerializer.Serialize(new { schema_version = 1, revision_id = revision.Id.Value, parts_count = state.WorkingRevision.Parts.Count }),
-            JsonSerializer.Serialize(new { schema_version = 1, revision_id = revision.Id.Value, cabinet_count = state.WorkingRevision.Cabinets.Count }),
-            JsonSerializer.Serialize(new { schema_version = 1, revision_id = revision.Id.Value, project = state.Project.Name }),
-            JsonSerializer.Serialize(new { schema_version = 1, revision_id = revision.Id.Value, issues = validationIssues }),
-            JsonSerializer.Serialize(new { schema_version = 1, revision_id = revision.Id.Value, explanation = Array.Empty<object>() }));
+            packaging.ContentHash,
+            packaging.DesignBlob,
+            packaging.PartsBlob,
+            packaging.ManufacturingBlob,
+            packaging.InstallBlob,
+            packaging.EstimateBlob,
+            packaging.ValidationBlob,
+            packaging.ExplanationBlob);
 
         await _unitOfWork.BeginAsync(ct).ConfigureAwait(false);
         try

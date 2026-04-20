@@ -6,6 +6,8 @@ using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
+using CabinetDesigner.Domain.Commands.Modification;
+using CabinetDesigner.Domain.Commands.Structural;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Domain.RunContext;
@@ -220,6 +222,111 @@ public sealed class InteractionInterpretationStageTests
         Assert.Contains(deltas, d => d.EntityType == "Cabinet" && d.Operation == DeltaOperation.Modified);
     }
 
+    [Fact]
+    public void DeleteRun_WhenEmpty_RemovesRunAndRecordsRemovedDelta()
+    {
+        var store = CreateStoreWithRun(out var run, out _);
+        var command = new DeleteRunCommand(
+            run.Id,
+            CommandOrigin.User,
+            "delete run",
+            DateTimeOffset.UnixEpoch);
+
+        var context = CreateDeleteRunContext(command, run);
+        var deltaTracker = new InMemoryDeltaTracker();
+        deltaTracker.Begin();
+
+        var result = new InteractionInterpretationStage(deltaTracker, store).Execute(context);
+        var deltas = deltaTracker.Finalize();
+
+        Assert.True(result.Success);
+        Assert.Null(store.GetRun(run.Id));
+        Assert.Contains(deltas, delta => delta.EntityType == "CabinetRun" && delta.Operation == DeltaOperation.Removed);
+    }
+
+    [Fact]
+    public void DeleteRun_WhenRunContainsCabinets_FailsWithRunNotEmpty()
+    {
+        var store = CreateStoreWithRun(out var run, out _);
+        var cabinetId = CabinetId.New();
+        var slot = run.AppendCabinet(cabinetId, Length.FromInches(30m));
+        store.AddCabinet(new CabinetStateRecord(
+            cabinetId,
+            "base-30",
+            Length.FromInches(30m),
+            Length.FromInches(24m),
+            run.Id,
+            slot.Id,
+            CabinetCategory.Base,
+            ConstructionMethod.Frameless));
+
+        var command = new DeleteRunCommand(
+            run.Id,
+            CommandOrigin.User,
+            "delete non-empty run",
+            DateTimeOffset.UnixEpoch);
+
+        var result = new InteractionInterpretationStage(new InMemoryDeltaTracker(), store).Execute(CreateDeleteRunContext(command, run));
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Issues, issue => issue.Code == "RUN_NOT_EMPTY");
+        Assert.NotNull(store.GetRun(run.Id));
+    }
+
+    [Fact]
+    public void SetCabinetOverride_UpdatesCabinetAndRecordsDelta()
+    {
+        var store = CreateStoreWithRun(out var run, out _);
+        var cabinetId = CabinetId.New();
+        var slot = run.AppendCabinet(cabinetId, Length.FromInches(30m));
+        var cabinet = new CabinetStateRecord(
+            cabinetId,
+            "base-30",
+            Length.FromInches(30m),
+            Length.FromInches(24m),
+            run.Id,
+            slot.Id,
+            CabinetCategory.Base,
+            ConstructionMethod.Frameless);
+        store.AddCabinet(cabinet);
+
+        var command = new SetCabinetOverrideCommand(
+            cabinetId,
+            "nominal_width",
+            new OverrideValue.OfLength(Length.FromInches(33m)),
+            CommandOrigin.User,
+            "set override",
+            DateTimeOffset.UnixEpoch);
+
+        var context = new ResolutionContext
+        {
+            Command = command,
+            Mode = ResolutionMode.Full,
+            InputCapture = new InputCaptureResult
+            {
+                ResolvedEntities = new Dictionary<string, IDomainEntity>
+                {
+                    ["cabinet"] = new ResolvedCabinetEntity(cabinet)
+                },
+                NormalizedParameters = new Dictionary<string, OverrideValue>(),
+                TemplateExpansions = []
+            }
+        };
+
+        var deltaTracker = new InMemoryDeltaTracker();
+        deltaTracker.Begin();
+
+        var result = new InteractionInterpretationStage(deltaTracker, store).Execute(context);
+        var deltas = deltaTracker.Finalize();
+
+        Assert.True(result.Success);
+        var updatedCabinet = store.GetCabinet(cabinetId);
+        Assert.NotNull(updatedCabinet);
+        var value = Assert.IsType<OverrideValue.OfLength>(updatedCabinet.EffectiveOverrides["nominal_width"]);
+        Assert.Equal(33m, value.Value.Inches);
+        Assert.Contains(deltas, delta => delta.EntityType == "Cabinet" && delta.Operation == DeltaOperation.Modified);
+    }
+
     private static InMemoryDesignStateStore CreateStoreWithRun(out CabinetRun run, out Wall wall)
     {
         var store = new InMemoryDesignStateStore();
@@ -260,6 +367,27 @@ public sealed class InteractionInterpretationStageTests
         context.InputCapture = new InputCaptureResult
         {
             ResolvedEntities = resolvedEntities,
+            NormalizedParameters = new Dictionary<string, OverrideValue>(),
+            TemplateExpansions = []
+        };
+
+        return context;
+    }
+
+    private static ResolutionContext CreateDeleteRunContext(DeleteRunCommand command, CabinetRun run)
+    {
+        var context = new ResolutionContext
+        {
+            Command = command,
+            Mode = ResolutionMode.Full
+        };
+
+        context.InputCapture = new InputCaptureResult
+        {
+            ResolvedEntities = new Dictionary<string, IDomainEntity>
+            {
+                ["run"] = new ResolvedRunEntity(run)
+            },
             NormalizedParameters = new Dictionary<string, OverrideValue>(),
             TemplateExpansions = []
         };

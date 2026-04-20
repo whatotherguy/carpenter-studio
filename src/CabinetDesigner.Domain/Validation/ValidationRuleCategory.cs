@@ -4,6 +4,7 @@ public enum ValidationRuleCategory
 {
     Geometry,
     Engineering,
+    Constraints,
     MaterialHardware,
     Manufacturing,
     Installation,

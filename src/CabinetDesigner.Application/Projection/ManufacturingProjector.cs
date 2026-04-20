@@ -28,12 +28,28 @@ public sealed class ManufacturingProjector : IManufacturingProjector
         ArgumentNullException.ThrowIfNull(partResult);
         ArgumentNullException.ThrowIfNull(constraintResult);
 
-        var materialAssignments = constraintResult.MaterialAssignments.ToDictionary(
-            assignment => assignment.PartId,
-            StringComparer.Ordinal);
-
         var blockers = new List<ManufacturingBlocker>();
+        blockers.AddRange(BuildConstraintBlockers(constraintResult));
+
+        var materialAssignments = constraintResult.MaterialAssignments
+            .OrderBy(assignment => assignment.PartId, StringComparer.Ordinal)
+            .GroupBy(assignment => assignment.PartId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Last(),
+                StringComparer.Ordinal);
+
         var projectedParts = new List<ManufacturingPart>();
+
+        if (partResult.Parts.Count == 0)
+        {
+            blockers.Add(new ManufacturingBlocker
+            {
+                Code = ManufacturingBlockerCode.NoPartsProduced,
+                Message = "No parts were produced for manufacturing.",
+                AffectedEntityIds = []
+            });
+        }
 
         foreach (var part in partResult.Parts)
         {
@@ -67,8 +83,33 @@ public sealed class ManufacturingProjector : IManufacturingProjector
             });
         }
 
+        var duplicatePartIds = projectedParts
+            .GroupBy(part => part.PartId, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .ToArray();
+
+        if (duplicatePartIds.Length > 0)
+        {
+            blockers.AddRange(duplicatePartIds.Select(group => new ManufacturingBlocker
+            {
+                Code = ManufacturingBlockerCode.MalformedPart,
+                Message = $"Cut list contains duplicate part identifier '{group.Key}'.",
+                AffectedEntityIds = group
+                    .Select(part => part.PartId)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+            }));
+        }
+
+        var invalidPartIds = duplicatePartIds
+            .SelectMany(group => group.Select(part => part.PartId))
+            .ToHashSet(StringComparer.Ordinal);
+
         var orderedParts = projectedParts
+            .Where(part => !invalidPartIds.Contains(part.PartId))
             .OrderBy(part => part.MaterialId.Value, Comparer<Guid>.Default)
+            .ThenBy(part => part.MaterialThickness.Nominal.Inches)
             .ThenBy(part => part.MaterialThickness.Actual.Inches)
             .ThenBy(part => part.GrainDirection)
             .ThenBy(part => part.Label, StringComparer.Ordinal)
@@ -88,6 +129,7 @@ public sealed class ManufacturingProjector : IManufacturingProjector
                     .ToArray()
             })
             .OrderBy(group => group.MaterialId.Value, Comparer<Guid>.Default)
+            .ThenBy(group => group.MaterialThickness.Nominal.Inches)
             .ThenBy(group => group.MaterialThickness.Actual.Inches)
             .ThenBy(group => group.GrainDirection)
             .ToArray();
@@ -120,11 +162,39 @@ public sealed class ManufacturingProjector : IManufacturingProjector
                 Blockers = blockers
                     .OrderBy(blocker => blocker.Code)
                     .ThenBy(blocker => blocker.Message, StringComparer.Ordinal)
-                    .ThenBy(blocker => blocker.AffectedEntityIds[0], StringComparer.Ordinal)
+                    .ThenBy(blocker => blocker.AffectedEntityIds.Count > 0 ? blocker.AffectedEntityIds[0] : string.Empty, StringComparer.Ordinal)
                     .ToArray()
             }
         };
     }
+
+    private static IReadOnlyList<ManufacturingBlocker> BuildConstraintBlockers(ConstraintPropagationResult constraintResult) =>
+        constraintResult.Violations
+            .OrderBy(violation => violation.ConstraintCode, StringComparer.Ordinal)
+            .ThenBy(violation => violation.Message, StringComparer.Ordinal)
+            .SelectMany(violation => violation.ConstraintCode switch
+            {
+                "MATERIAL_UNRESOLVED" =>
+                [
+                    new ManufacturingBlocker
+                    {
+                        Code = ManufacturingBlockerCode.MissingMaterial,
+                        Message = violation.Message,
+                        AffectedEntityIds = violation.AffectedEntityIds
+                    }
+                ],
+                "NO_HARDWARE_CATALOG" =>
+                [
+                    new ManufacturingBlocker
+                    {
+                        Code = ManufacturingBlockerCode.MissingHardware,
+                        Message = violation.Message,
+                        AffectedEntityIds = violation.AffectedEntityIds
+                    }
+                ],
+                _ => Array.Empty<ManufacturingBlocker>()
+            })
+            .ToArray();
 
     private static MaterialId ResolveMaterialId(
         GeneratedPart part,
@@ -154,6 +224,46 @@ public sealed class ManufacturingProjector : IManufacturingProjector
     {
         var blockers = new List<ManufacturingBlocker>();
 
+        if (string.IsNullOrWhiteSpace(part.PartId))
+        {
+            blockers.Add(new ManufacturingBlocker
+            {
+                Code = ManufacturingBlockerCode.MalformedPart,
+                Message = "A manufacturing part is missing a stable identifier.",
+                AffectedEntityIds = []
+            });
+        }
+
+        if (part.CabinetId == default)
+        {
+            blockers.Add(new ManufacturingBlocker
+            {
+                Code = ManufacturingBlockerCode.MalformedPart,
+                Message = $"Part '{part.Label}' is missing its cabinet association.",
+                AffectedEntityIds = string.IsNullOrWhiteSpace(part.PartId) ? [] : [part.PartId]
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(part.PartType))
+        {
+            blockers.Add(new ManufacturingBlocker
+            {
+                Code = ManufacturingBlockerCode.MalformedPart,
+                Message = $"Part '{part.Label}' is missing a part type.",
+                AffectedEntityIds = string.IsNullOrWhiteSpace(part.PartId) ? [] : [part.PartId]
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(part.Label))
+        {
+            blockers.Add(new ManufacturingBlocker
+            {
+                Code = ManufacturingBlockerCode.MalformedPart,
+                Message = $"Part '{part.PartId}' is missing a cut-list label.",
+                AffectedEntityIds = string.IsNullOrWhiteSpace(part.PartId) ? [] : [part.PartId]
+            });
+        }
+
         if (materialId == default)
         {
             blockers.Add(new ManufacturingBlocker
@@ -164,12 +274,22 @@ public sealed class ManufacturingProjector : IManufacturingProjector
             });
         }
 
-        if (thickness.Actual <= Length.Zero)
+        if (part.Width <= Length.Zero || part.Height <= Length.Zero)
+        {
+            blockers.Add(new ManufacturingBlocker
+            {
+                Code = ManufacturingBlockerCode.InvalidDimensions,
+                Message = $"Part '{part.Label}' has impossible cut dimensions.",
+                AffectedEntityIds = [part.PartId]
+            });
+        }
+
+        if (thickness.Nominal <= Length.Zero || thickness.Actual <= Length.Zero)
         {
             blockers.Add(new ManufacturingBlocker
             {
                 Code = ManufacturingBlockerCode.InvalidThickness,
-                Message = $"Part '{part.Label}' has an invalid actual thickness.",
+                Message = $"Part '{part.Label}' has incomplete thickness data.",
                 AffectedEntityIds = [part.PartId]
             });
         }

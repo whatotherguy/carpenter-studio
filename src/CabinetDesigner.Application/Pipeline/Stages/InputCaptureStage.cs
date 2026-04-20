@@ -71,6 +71,15 @@ public sealed class InputCaptureStage : IResolutionStage
                 resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinet);
                 break;
 
+            case DeleteRunCommand deleteRun:
+                if (_stateStore.GetRun(deleteRun.RunId) is not { } runToDelete)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("RUN_NOT_FOUND", $"Run {deleteRun.RunId} was not found.")]);
+                }
+
+                resolvedEntities["run"] = new ResolvedRunEntity(runToDelete);
+                break;
+
             case CreateRunCommand createRun:
                 if (!Guid.TryParse(createRun.WallId, out var wallGuid))
                 {
@@ -92,6 +101,15 @@ public sealed class InputCaptureStage : IResolutionStage
                 }
 
                 resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToResize);
+                break;
+
+            case SetCabinetOverrideCommand setCabinetOverride:
+                if (_stateStore.GetCabinet(setCabinetOverride.CabinetId) is not { } cabinetToOverride)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {setCabinetOverride.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToOverride);
                 break;
         }
 

@@ -512,40 +512,44 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void OnDesignChanged(DesignChangedEvent _)
-    {
-        RefreshScene();
-        StatusMessage = "Design updated.";
-    }
-
-    private void OnUndoApplied(UndoAppliedEvent _)
-    {
-        RefreshScene();
-        StatusMessage = "Undo applied.";
-    }
-
-    private void OnRedoApplied(RedoAppliedEvent _)
-    {
-        RefreshScene();
-        StatusMessage = "Redo applied.";
-    }
-
-    private void OnProjectClosed(ProjectClosedEvent _)
-    {
-        if (_isDragActive || _pendingDragCabinetId is not null)
+    private void OnDesignChanged(DesignChangedEvent _) =>
+        DispatchIfNeeded(() =>
         {
-            _interactionService.OnDragAborted();
-        }
+            RefreshScene();
+            StatusMessage = "Design updated.";
+        });
 
-        _pendingDragCabinetId = null;
-        _isDragActive = false;
-        Scene = null;
-        SelectedCabinetIds = [];
-        HoveredCabinetId = null;
-        _canvasHost.UpdateViewport(_editorSession.Viewport);
-        StatusMessage = "Project closed.";
-        OnPropertyChanged(nameof(CurrentMode));
-    }
+    private void OnUndoApplied(UndoAppliedEvent _) =>
+        DispatchIfNeeded(() =>
+        {
+            RefreshScene();
+            StatusMessage = "Undo applied.";
+        });
+
+    private void OnRedoApplied(RedoAppliedEvent _) =>
+        DispatchIfNeeded(() =>
+        {
+            RefreshScene();
+            StatusMessage = "Redo applied.";
+        });
+
+    private void OnProjectClosed(ProjectClosedEvent _) =>
+        DispatchIfNeeded(() =>
+        {
+            if (_isDragActive || _pendingDragCabinetId is not null)
+            {
+                _interactionService.OnDragAborted();
+            }
+
+            _pendingDragCabinetId = null;
+            _isDragActive = false;
+            Scene = null;
+            SelectedCabinetIds = [];
+            HoveredCabinetId = null;
+            _canvasHost.UpdateViewport(_editorSession.Viewport);
+            StatusMessage = "Project closed.";
+            OnPropertyChanged(nameof(CurrentMode));
+        });
 
     private void RefreshScene()
     {
@@ -588,5 +592,17 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(IsBusy));
+    }
+
+    private static void DispatchIfNeeded(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        dispatcher.Invoke(action);
     }
 }

@@ -18,10 +18,12 @@ internal sealed class SnapshotRepository : SqliteRepositoryBase, ISnapshotReposi
             using var command = CreateCommand(connection, transaction, """
                 INSERT OR IGNORE INTO approved_snapshots(
                     revision_id, snapshot_schema_ver, approved_at, approved_by,
+                    content_hash,
                     design_blob, parts_blob, manufacturing_blob, install_blob,
                     estimate_blob, validation_blob, explanation_blob)
                 VALUES(
                     @revisionId, @snapshotSchemaVer, @approvedAt, @approvedBy,
+                    @contentHash,
                     @designBlob, @partsBlob, @manufacturingBlob, @installBlob,
                     @estimateBlob, @validationBlob, @explanationBlob);
                 """);
@@ -29,6 +31,7 @@ internal sealed class SnapshotRepository : SqliteRepositoryBase, ISnapshotReposi
             command.Parameters.AddWithValue("@snapshotSchemaVer", row.SnapshotSchemaVer);
             command.Parameters.AddWithValue("@approvedAt", row.ApprovedAt);
             command.Parameters.AddWithValue("@approvedBy", row.ApprovedBy);
+            command.Parameters.AddWithValue("@contentHash", row.ContentHash);
             command.Parameters.AddWithValue("@designBlob", row.DesignBlob);
             command.Parameters.AddWithValue("@partsBlob", row.PartsBlob);
             command.Parameters.AddWithValue("@manufacturingBlob", row.ManufacturingBlob);
@@ -47,7 +50,7 @@ internal sealed class SnapshotRepository : SqliteRepositoryBase, ISnapshotReposi
         WithConnectionAsync(async (connection, transaction) =>
         {
             using var command = CreateCommand(connection, transaction, """
-                SELECT s.revision_id, s.snapshot_schema_ver, s.approved_at, s.approved_by, s.design_blob, s.parts_blob, s.manufacturing_blob, s.install_blob, s.estimate_blob, s.validation_blob, s.explanation_blob,
+                SELECT s.revision_id, s.snapshot_schema_ver, s.approved_at, s.approved_by, s.content_hash, s.design_blob, s.parts_blob, s.manufacturing_blob, s.install_blob, s.estimate_blob, s.validation_blob, s.explanation_blob,
                        r.project_id, r.revision_number, COALESCE(r.label, '') AS label
                 FROM approved_snapshots s
                 INNER JOIN revisions r ON r.id = s.revision_id
@@ -67,17 +70,18 @@ internal sealed class SnapshotRepository : SqliteRepositoryBase, ISnapshotReposi
                     SnapshotSchemaVer = reader.GetInt32(1),
                     ApprovedAt = reader.GetString(2),
                     ApprovedBy = reader.GetString(3),
-                    DesignBlob = reader.GetString(4),
-                    PartsBlob = reader.GetString(5),
-                    ManufacturingBlob = reader.GetString(6),
-                    InstallBlob = reader.GetString(7),
-                    EstimateBlob = reader.GetString(8),
-                    ValidationBlob = reader.GetString(9),
-                    ExplanationBlob = reader.GetString(10)
+                    ContentHash = reader.GetString(4),
+                    DesignBlob = reader.GetString(5),
+                    PartsBlob = reader.GetString(6),
+                    ManufacturingBlob = reader.GetString(7),
+                    InstallBlob = reader.GetString(8),
+                    EstimateBlob = reader.GetString(9),
+                    ValidationBlob = reader.GetString(10),
+                    ExplanationBlob = reader.GetString(11)
                 },
-                new ProjectId(Guid.Parse(reader.GetString(11))),
-                reader.GetInt32(12),
-                reader.GetString(13));
+                new ProjectId(Guid.Parse(reader.GetString(12))),
+                reader.GetInt32(13),
+                reader.GetString(14));
         }, ct);
 
     public Task<IReadOnlyList<SnapshotSummary>> ListAsync(ProjectId projectId, CancellationToken ct = default) =>

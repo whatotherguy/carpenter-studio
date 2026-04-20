@@ -12,7 +12,7 @@ public sealed class SqliteTestFixture : IAsyncDisposable
         DatabasePath = Path.Combine(databaseDirectory, $"{Guid.NewGuid():N}.db");
         ConnectionFactory = new SqliteConnectionFactory(DatabasePath);
         SessionAccessor = new CabinetDesigner.Persistence.UnitOfWork.SqliteSessionAccessor();
-        MigrationRunner = new MigrationRunner(ConnectionFactory, [new V1_InitialSchema(), new V2_RepairSchemaDrift()]);
+        MigrationRunner = new MigrationRunner(ConnectionFactory, [new V1_InitialSchema(), new V2_RepairSchemaDrift(), new V3_AddApprovedSnapshotContentHash()]);
     }
 
     public string DatabasePath { get; }

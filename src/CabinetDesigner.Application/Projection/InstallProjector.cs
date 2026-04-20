@@ -8,6 +8,8 @@ namespace CabinetDesigner.Application.Projection;
 
 public sealed class InstallProjector : IInstallProjector
 {
+    private static readonly StringComparer KeyComparer = StringComparer.Ordinal;
+
     public InstallPlan Project(
         SpatialResolutionResult spatialResult,
         EngineeringResolutionResult engineeringResult,
@@ -27,19 +29,27 @@ public sealed class InstallProjector : IInstallProjector
                 Readiness = new InstallReadinessResult
                 {
                     IsReady = false,
-                    Blockers =
-                    [
-                        new InstallBlocker
-                        {
-                            Code = InstallBlockerCode.ManufacturingNotReady,
-                            Message = "Manufacturing plan is not ready; install planning cannot proceed.",
-                            AffectedEntityIds = manufacturingResult.Plan.Readiness.Blockers
-                                .SelectMany(blocker => blocker.AffectedEntityIds)
-                                .Distinct(StringComparer.Ordinal)
-                                .OrderBy(id => id, StringComparer.Ordinal)
-                                .ToArray()
-                        }
-                    ]
+                    Blockers = [CreateManufacturingNotReadyBlocker(manufacturingResult.Plan)]
+                }
+            };
+        }
+
+        var readinessBlockers = BuildReadinessBlockers(
+            spatialResult,
+            engineeringResult,
+            manufacturingResult.Plan);
+
+        if (readinessBlockers.Count > 0)
+        {
+            return new InstallPlan
+            {
+                Steps = [],
+                Dependencies = [],
+                FasteningRequirements = [],
+                Readiness = new InstallReadinessResult
+                {
+                    IsReady = false,
+                    Blockers = readinessBlockers
                 }
             };
         }
@@ -47,13 +57,22 @@ public sealed class InstallProjector : IInstallProjector
         var dependencies = new List<InstallDependency>();
         var seedSteps = new List<InstallStep>();
         var orderedCabinetStepsByRun = new Dictionary<RunId, IReadOnlyList<InstallStep>>();
+        var assemblyLookup = engineeringResult.Assemblies.ToDictionary(
+            assembly => assembly.CabinetId,
+            assembly => assembly,
+            EqualityComparer<CabinetId>.Default);
 
         foreach (var runGroup in spatialResult.Placements
                      .GroupBy(placement => placement.RunId)
-                     .OrderBy(group => group.Key.Value))
+                     .OrderBy(group => group.Min(GetRunOffset))
+                     .ThenBy(group => group.Min(placement => placement.Origin.Y))
+                     .ThenBy(group => group.Min(placement => placement.Origin.X))
+                     .ThenBy(group => group.Key.Value))
         {
             var orderedPlacements = runGroup
                 .OrderBy(GetRunOffset)
+                .ThenBy(placement => placement.Origin.Y)
+                .ThenBy(placement => placement.Origin.X)
                 .ThenBy(placement => placement.CabinetId.Value)
                 .ToArray();
 
@@ -62,6 +81,7 @@ public sealed class InstallProjector : IInstallProjector
             for (var index = 0; index < orderedPlacements.Length; index++)
             {
                 var placement = orderedPlacements[index];
+                var assembly = assemblyLookup[placement.CabinetId];
                 var step = new InstallStep
                 {
                     StepKey = CreateCabinetStepKey(placement.CabinetId),
@@ -71,15 +91,16 @@ public sealed class InstallProjector : IInstallProjector
                     RunId = placement.RunId,
                     SequenceGroupIndex = index,
                     Footprint = placement.WorldBounds,
-                    Description = $"Install cabinet {placement.CabinetId.Value:D}.",
+                    Description = $"Install cabinet {placement.CabinetId.Value:D} using {assembly.AssemblyType}.",
                     DependsOn = [],
                     Rationales =
                     [
                         InstallRationale.Create(
-                            "install.step.cabinet_from_approved_placement",
-                            "Install step is derived from approved cabinet placement.",
+                            "install.step.cabinet_from_engineering_and_manufacturing",
+                            "Install step is derived from approved placement, engineering assembly resolution, and manufactured parts.",
                             new Dictionary<string, string>(StringComparer.Ordinal)
                             {
+                                ["assembly_type"] = assembly.AssemblyType,
                                 ["cabinet_id"] = placement.CabinetId.Value.ToString("D"),
                                 ["run_id"] = placement.RunId.Value.ToString("D")
                             })
@@ -193,6 +214,135 @@ public sealed class InstallProjector : IInstallProjector
     {
         var originVector = new Vector2D(placement.Origin.X, placement.Origin.Y);
         return originVector.Dot(placement.Direction);
+    }
+
+    private static InstallBlocker CreateManufacturingNotReadyBlocker(ManufacturingPlan manufacturingPlan)
+    {
+        var blockerCodes = manufacturingPlan.Readiness.Blockers
+            .Select(blocker => blocker.Code.ToString())
+            .Distinct(KeyComparer)
+            .OrderBy(code => code, KeyComparer)
+            .ToArray();
+        var blockerSummary = blockerCodes.Length == 0
+            ? "unknown blockers"
+            : string.Join(", ", blockerCodes);
+
+        return new InstallBlocker
+        {
+            Code = InstallBlockerCode.ManufacturingNotReady,
+            Message = $"Manufacturing plan is not ready; resolve manufacturing blockers before install planning. Current blockers: {blockerSummary}.",
+            AffectedEntityIds = manufacturingPlan.Readiness.Blockers
+                .SelectMany(blocker => blocker.AffectedEntityIds)
+                .Distinct(KeyComparer)
+                .OrderBy(id => id, KeyComparer)
+                .ToArray()
+        };
+    }
+
+    private static IReadOnlyList<InstallBlocker> BuildReadinessBlockers(
+        SpatialResolutionResult spatialResult,
+        EngineeringResolutionResult engineeringResult,
+        ManufacturingPlan manufacturingPlan)
+    {
+        var blockers = new List<InstallBlocker>();
+        var placements = spatialResult.Placements
+            .OrderBy(placement => placement.RunId.Value)
+            .ThenBy(GetRunOffset)
+            .ThenBy(placement => placement.Origin.Y)
+            .ThenBy(placement => placement.Origin.X)
+            .ThenBy(placement => placement.CabinetId.Value)
+            .ToArray();
+        var assemblyCabinetIds = engineeringResult.Assemblies
+            .Select(assembly => assembly.CabinetId)
+            .ToHashSet();
+        var cutListCabinetIds = manufacturingPlan.CutList
+            .Select(item => item.CabinetId)
+            .ToHashSet();
+        var runsWithEndConditions = engineeringResult.EndConditionUpdates
+            .Select(update => update.RunId)
+            .ToHashSet();
+
+        if (manufacturingPlan.CutList.Count == 0)
+        {
+            blockers.Add(new InstallBlocker
+            {
+                Code = InstallBlockerCode.MissingManufacturingCutList,
+                Message = "Manufacturing plan produced no cut-list parts; install planning cannot verify cabinet readiness.",
+                AffectedEntityIds = []
+            });
+        }
+
+        foreach (var placement in placements)
+        {
+            if (!assemblyCabinetIds.Contains(placement.CabinetId))
+            {
+                blockers.Add(new InstallBlocker
+                {
+                    Code = InstallBlockerCode.MissingEngineeringAssembly,
+                    Message = $"Cabinet '{placement.CabinetId.Value:D}' is missing an engineering assembly; install planning cannot determine a safe install sequence.",
+                    AffectedEntityIds = [placement.CabinetId.Value.ToString("D")]
+                });
+            }
+
+            if (!runsWithEndConditions.Contains(placement.RunId))
+            {
+                blockers.Add(new InstallBlocker
+                {
+                    Code = InstallBlockerCode.MissingRunEndConditions,
+                    Message = $"Run '{placement.RunId.Value:D}' is missing engineered end conditions; install planning cannot determine safe completion requirements.",
+                    AffectedEntityIds = [placement.RunId.Value.ToString("D")]
+                });
+            }
+
+            if (!cutListCabinetIds.Contains(placement.CabinetId))
+            {
+                blockers.Add(new InstallBlocker
+                {
+                    Code = InstallBlockerCode.MissingCabinetManufacturingParts,
+                    Message = $"Cabinet '{placement.CabinetId.Value:D}' has no manufactured parts in the cut list; install planning cannot verify fastening readiness.",
+                    AffectedEntityIds = [placement.CabinetId.Value.ToString("D")]
+                });
+            }
+        }
+
+        var runIdsWithPlacements = placements
+            .Select(placement => placement.RunId)
+            .ToHashSet();
+
+        foreach (var requirement in engineeringResult.FillerRequirements
+                     .OrderBy(requirement => requirement.RunId.Value)
+                     .ThenBy(requirement => requirement.Width.Inches)
+                     .ThenBy(requirement => requirement.Reason, KeyComparer))
+        {
+            if (runIdsWithPlacements.Contains(requirement.RunId))
+            {
+                continue;
+            }
+
+            blockers.Add(new InstallBlocker
+            {
+                Code = InstallBlockerCode.UnsupportedEngineeringFiller,
+                Message = $"Run '{requirement.RunId.Value:D}' has filler requirements but no cabinet placements; filler installation is unsupported without installed cabinets.",
+                AffectedEntityIds = [requirement.RunId.Value.ToString("D")]
+            });
+        }
+
+        return blockers
+            .GroupBy(
+                blocker => (blocker.Code, blocker.Message, string.Join("|", blocker.AffectedEntityIds.OrderBy(id => id, KeyComparer))),
+                EqualityComparer<(InstallBlockerCode, string, string)>.Default)
+            .Select(group => group.First() with
+            {
+                AffectedEntityIds = group
+                    .SelectMany(blocker => blocker.AffectedEntityIds)
+                    .Distinct(KeyComparer)
+                    .OrderBy(id => id, KeyComparer)
+                    .ToArray()
+            })
+            .OrderBy(blocker => blocker.Code)
+            .ThenBy(blocker => blocker.Message, KeyComparer)
+            .ThenBy(blocker => blocker.AffectedEntityIds.Count > 0 ? blocker.AffectedEntityIds[0] : string.Empty, KeyComparer)
+            .ToArray();
     }
 
     private static string CreateCabinetStepKey(CabinetId cabinetId) => $"cabinet:{cabinetId.Value:D}";

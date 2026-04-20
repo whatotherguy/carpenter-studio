@@ -5,6 +5,7 @@ using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Application.Pipeline.StageResults;
+using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Services;
 using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.Commands;
@@ -33,6 +34,7 @@ public sealed class SnapshotServiceTests
             snapshotRepository,
             new RecordingWorkingRevisionSource(state),
             new RecordingValidationHistoryRepository(),
+            new RecordingPackagingResultStore(CreatePackagingResult(state.Revision.Id, clock.Now)),
             eventBus,
             clock,
             logger);
@@ -59,6 +61,7 @@ public sealed class SnapshotServiceTests
             new RecordingSnapshotRepository(),
             new RecordingWorkingRevisionSource(state),
             new RecordingValidationHistoryRepository(),
+            new RecordingPackagingResultStore(CreatePackagingResult(state.Revision.Id, DateTimeOffset.Now)),
             new RecordingEventBus(),
             new FixedClock(DateTimeOffset.Now));
 
@@ -92,6 +95,7 @@ public sealed class SnapshotServiceTests
             new RecordingSnapshotRepository(),
             new RecordingWorkingRevisionSource(state),
             new RecordingValidationHistoryRepository(),
+            new RecordingPackagingResultStore(CreatePackagingResult(revision1.Id, createdAt)),
             new RecordingEventBus(),
             new FixedClock(createdAt));
 
@@ -127,6 +131,7 @@ public sealed class SnapshotServiceTests
             new RecordingSnapshotRepository(),
             new RecordingWorkingRevisionSourceThrowsInvalidOperation(),
             new RecordingValidationHistoryRepository(),
+            new RecordingPackagingResultStore(null),
             new RecordingEventBus(),
             new FixedClock(DateTimeOffset.Now));
 
@@ -145,6 +150,23 @@ public sealed class SnapshotServiceTests
         var checkpoint = new AutosaveCheckpoint(Guid.NewGuid().ToString("N"), projectId, revisionId, createdAt, null, true);
         return new PersistedProjectState(project, revision, workingRevision, checkpoint);
     }
+
+    private static PackagingResult CreatePackagingResult(RevisionId revisionId, DateTimeOffset createdAt) =>
+        new()
+        {
+            SnapshotId = $"snap:{revisionId.Value:D}:abcdef0123456789",
+            RevisionId = revisionId,
+            CreatedAt = createdAt,
+            ContentHash = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+            Summary = new CabinetDesigner.Application.Pipeline.StageResults.SnapshotSummary(1, 1, 1, 0, 125m),
+            DesignBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"design":true}}""",
+            PartsBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"parts":true}}""",
+            ManufacturingBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"manufacturing":true}}""",
+            InstallBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"install":true}}""",
+            EstimateBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"cost_total":125.0}}""",
+            ValidationBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"issues":[]}}""",
+            ExplanationBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"explanation":[]}}"""
+        };
 
     private sealed class FixedClock(DateTimeOffset now) : IClock
     {
@@ -234,6 +256,15 @@ public sealed class SnapshotServiceTests
 
         public Task<IReadOnlyList<CabinetDesigner.Application.Persistence.SnapshotSummary>> ListAsync(ProjectId projectId, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<CabinetDesigner.Application.Persistence.SnapshotSummary>>([]);
+    }
+
+    private sealed class RecordingPackagingResultStore(PackagingResult? current) : IPackagingResultStore
+    {
+        public PackagingResult? Current { get; private set; } = current;
+
+        public void Update(PackagingResult result) => Current = result;
+
+        public void Clear() => Current = null;
     }
 
     private sealed class RecordingRevisionRepositoryMultiple(IReadOnlyList<RevisionRecord> revisions) : IRevisionRepository
