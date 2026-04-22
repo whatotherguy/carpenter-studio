@@ -22,7 +22,7 @@ public sealed class PartGenerationStage : IResolutionStage
         _logger = logger;
     }
 
-    public int StageNumber => 6;
+    public int StageNumber => 5;
 
     public string StageName => "Part Generation";
 
