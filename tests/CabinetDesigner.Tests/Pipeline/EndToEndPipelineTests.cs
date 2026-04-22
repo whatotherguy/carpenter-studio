@@ -40,8 +40,9 @@ public sealed class EndToEndPipelineTests
         Assert.NotNull(context.PackagingResult);
         Assert.False(string.IsNullOrWhiteSpace(context.PackagingResult.ContentHash));
         Assert.Equal(revisionId, context.PackagingResult.RevisionId);
-        Assert.Contains("\"costing\"", context.PackagingResult.EstimateBlob, StringComparison.Ordinal);
-        Assert.True(context.CostingResult.Total > 0m);
+        Assert.Contains("\"status\":\"not_configured\"", context.PackagingResult.EstimateBlob, StringComparison.Ordinal);
+        Assert.Equal(CostingStatus.NotConfigured, context.CostingResult.Status);
+        Assert.Equal(0m, context.CostingResult.Total);
     }
 
     [Fact]
@@ -64,6 +65,7 @@ public sealed class EndToEndPipelineTests
         }
 
         Assert.Equal(firstContext.CostingResult.Total, secondContext.CostingResult.Total);
+        Assert.Equal(firstContext.CostingResult.Status, secondContext.CostingResult.Status);
         Assert.Equal(firstContext.PackagingResult.ContentHash, secondContext.PackagingResult.ContentHash);
         Assert.Equal(firstContext.PackagingResult.PartsBlob, secondContext.PackagingResult.PartsBlob);
         Assert.Equal(firstContext.PackagingResult.ManufacturingBlob, secondContext.PackagingResult.ManufacturingBlob);

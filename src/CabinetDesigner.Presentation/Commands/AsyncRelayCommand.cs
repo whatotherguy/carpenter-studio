@@ -1,6 +1,8 @@
-using System.Threading;
 using System.ComponentModel;
+using System.Threading;
 using System.Windows.Input;
+using CabinetDesigner.Application.Diagnostics;
+using CabinetDesigner.Application.Events;
 
 namespace CabinetDesigner.Presentation.Commands;
 
@@ -8,15 +10,21 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 {
     private readonly Func<Task> _executeAsync;
     private readonly Func<bool>? _canExecute;
-    private readonly Action<Exception>? _onException;
+    private readonly IAppLogger _logger;
+    private readonly IApplicationEventBus _eventBus;
     private readonly SynchronizationContext? _synchronizationContext;
     private bool _isExecuting;
 
-    public AsyncRelayCommand(Func<Task> executeAsync, Func<bool>? canExecute = null, Action<Exception>? onException = null)
+    public AsyncRelayCommand(
+        Func<Task> executeAsync,
+        IAppLogger logger,
+        IApplicationEventBus eventBus,
+        Func<bool>? canExecute = null)
     {
         _executeAsync = executeAsync ?? throw new ArgumentNullException(nameof(executeAsync));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _canExecute = canExecute;
-        _onException = onException;
         _synchronizationContext = SynchronizationContext.Current;
     }
 
@@ -50,17 +58,15 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            PostToUiThread(() =>
+            _logger.Log(new LogEntry
             {
-                try
-                {
-                    _onException?.Invoke(ex);
-                }
-                catch
-                {
-                    // A failing exception handler must not crash the command.
-                }
+                Level = LogLevel.Error,
+                Category = "Presentation",
+                Message = "Async command execution failed.",
+                Timestamp = DateTimeOffset.UtcNow,
+                Exception = ex
             });
+            _eventBus.Publish(new CommandExecutionFailedEvent(ex.Message, ex));
         }
         finally
         {

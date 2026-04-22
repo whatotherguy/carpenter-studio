@@ -71,6 +71,30 @@
                         AutomationProperties.Name="Select None"
                         Margin="0"
                         ToolTip="Clear selection" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding DeleteSelectedCommand}"
+                        Content="Delete"
+                        AutomationProperties.Name="Delete Selected"
+                        Margin="0"
+                        ToolTip="Delete the selected cabinet or cabinets (Delete)" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding ExportCutListCommand}"
+                        Content="Export Cut List"
+                        AutomationProperties.Name="Export Cut List"
+                        Margin="0"
+                        ToolTip="Export CSV, TXT, and printable HTML cut lists" />
+                <Button Style="{StaticResource ShellToolbarButtonStyle}"
+                        Command="{Binding PreviewHtmlCommand}"
+                        Content="Preview HTML"
+                        AutomationProperties.Name="Preview HTML"
+                        Margin="0"
+                        ToolTip="Generate the cut list HTML and open it in your browser" />
+                <ToggleButton Style="{StaticResource ShellToolbarToggleButtonStyle}"
+                              Command="{Binding Canvas.ToggleWallDrawingCommand}"
+                              IsChecked="{Binding Canvas.IsWallDrawingMode}"
+                              Content="Draw wall"
+                              AutomationProperties.Name="Draw wall"
+                              ToolTip="Toggle wall drawing mode (Esc to cancel)" />
             </StackPanel>
 
             <StackPanel Grid.Column="2"

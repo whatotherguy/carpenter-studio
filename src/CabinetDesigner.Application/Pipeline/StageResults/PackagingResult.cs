@@ -34,4 +34,4 @@ public sealed record SnapshotSummary(
     int RunCount,
     int PartCount,
     int ValidationIssueCount,
-    decimal TotalCost);
+    CostingStatus CostingStatus);

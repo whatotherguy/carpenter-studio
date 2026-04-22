@@ -20,10 +20,19 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
     // reader running on a thread-pool continuation.
     private readonly object _sync = new();
 
+    private readonly Dictionary<RoomId, Room> _rooms = [];
     private readonly Dictionary<RunId, CabinetRun> _runs = [];
     private readonly Dictionary<WallId, Wall> _walls = [];
     private readonly Dictionary<CabinetId, CabinetStateRecord> _cabinets = [];
     private readonly Dictionary<RunId, RunSpatialInfo> _runSpatialInfo = [];
+
+    public Room? GetRoom(RoomId id)
+    {
+        lock (_sync)
+        {
+            return _rooms.TryGetValue(id, out var room) ? room : null;
+        }
+    }
 
     public CabinetRun? GetRun(RunId id)
     {
@@ -67,6 +76,14 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         }
     }
 
+    public IReadOnlyList<Room> GetAllRooms()
+    {
+        lock (_sync)
+        {
+            return _rooms.Values.OrderBy(room => room.Id.Value).ToArray();
+        }
+    }
+
     public IReadOnlyList<Wall> GetAllWalls()
     {
         lock (_sync)
@@ -88,6 +105,15 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         lock (_sync)
         {
             return _runSpatialInfo.TryGetValue(runId, out var spatialInfo) ? spatialInfo : null;
+        }
+    }
+
+    public void AddRoom(Room room)
+    {
+        ArgumentNullException.ThrowIfNull(room);
+        lock (_sync)
+        {
+            _rooms[room.Id] = room;
         }
     }
 
@@ -136,6 +162,28 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         }
     }
 
+    public void RemoveCabinet(CabinetId cabinetId)
+    {
+        lock (_sync)
+        {
+            if (!_cabinets.TryGetValue(cabinetId, out var cabinet))
+            {
+                throw new InvalidOperationException($"Cabinet {cabinetId.Value} was not found.");
+            }
+
+            if (_runs.TryGetValue(cabinet.RunId, out var run))
+            {
+                var slot = run.Slots.FirstOrDefault(candidate => candidate.CabinetId == cabinetId);
+                if (slot is not null)
+                {
+                    run.RemoveSlot(slot.Id);
+                }
+            }
+
+            _cabinets.Remove(cabinetId);
+        }
+    }
+
     public void RemoveRun(RunId runId)
     {
         lock (_sync)
@@ -145,11 +193,25 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         }
     }
 
+    public void RemoveWall(WallId wallId)
+    {
+        lock (_sync)
+        {
+            if (_walls.TryGetValue(wallId, out var wall) && _rooms.TryGetValue(wall.RoomId, out var room))
+            {
+                room.RemoveWall(wallId);
+            }
+
+            _walls.Remove(wallId);
+        }
+    }
+
     public void LoadWorkingRevision(WorkingRevision revision)
     {
         ArgumentNullException.ThrowIfNull(revision);
 
         // Resolve all data outside the lock to minimise the critical section.
+        var rooms = revision.Rooms.OrderBy(room => room.Id.Value).ToArray();
         var walls = revision.Walls.OrderBy(wall => wall.Id.Value).ToArray();
         var runs = revision.Runs.OrderBy(run => run.Id.Value).ToArray();
 
@@ -180,18 +242,31 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 cabinet.Depth,
                 slot.RunId,
                 slot.Id,
-                cabinet.Category,
-                cabinet.Construction,
-                cabinet.Height,
-                new Dictionary<string, OverrideValue>(cabinet.Overrides, StringComparer.Ordinal)));
+            cabinet.Category,
+            cabinet.Construction,
+            cabinet.Height,
+            cabinet.Openings.Select(opening => new CabinetOpeningStateRecord(
+                opening.Id.Value,
+                opening.Index,
+                opening.Type,
+                opening.Width,
+                opening.Height)).ToArray(),
+            new Dictionary<string, OverrideValue>(cabinet.Overrides, StringComparer.Ordinal),
+            cabinet.DefaultOpeningCount));
         }
 
         lock (_sync)
         {
+            _rooms.Clear();
             _runs.Clear();
             _walls.Clear();
             _cabinets.Clear();
             _runSpatialInfo.Clear();
+
+            foreach (var room in rooms)
+            {
+                _rooms[room.Id] = room;
+            }
 
             foreach (var wall in walls)
             {
@@ -219,6 +294,7 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
     {
         lock (_sync)
         {
+            _rooms.Clear();
             _runs.Clear();
             _walls.Clear();
             _cabinets.Clear();
@@ -242,10 +318,13 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                     _runSpatialInfo.Remove(runId);
                     break;
                 case "Cabinet":
-                    _cabinets.Remove(new CabinetId(parsed));
+                    RemoveCabinet(new CabinetId(parsed));
                     break;
                 case "Wall":
                     _walls.Remove(new WallId(parsed));
+                    break;
+                case "Room":
+                    _rooms.Remove(new RoomId(parsed));
                     break;
                 default:
                     throw new InvalidOperationException($"Unsupported entity type '{entityType}'.");
@@ -267,6 +346,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
 
         switch (entityType)
         {
+            case "Room":
+                RestoreRoom(snapshotText.Value);
+                break;
             case "CabinetRun":
                 RestoreRun(snapshotText.Value);
                 break;
@@ -279,6 +361,12 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
             default:
                 throw new InvalidOperationException($"Unsupported entity type '{entityType}'.");
         }
+    }
+
+    public IReadOnlyDictionary<string, DeltaValue> CaptureRoomValues(Room room)
+    {
+        ArgumentNullException.ThrowIfNull(room);
+        return CreateSnapshotValues(JsonSerializer.Serialize(RoomSnapshot.From(room), SnapshotJsonOptions));
     }
 
     public IReadOnlyDictionary<string, DeltaValue> CaptureRunValues(CabinetRun run)
@@ -364,7 +452,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
             cabinetSnapshot.Category,
             cabinetSnapshot.Construction,
             Length.FromInches(cabinetSnapshot.NominalHeightInches),
-            cabinetSnapshot.DeserializeOverrides());
+            cabinetSnapshot.DeserializeOpenings(),
+            cabinetSnapshot.DeserializeOverrides(),
+            cabinetSnapshot.DefaultOpeningCount);
 
         lock (_sync)
         {
@@ -386,6 +476,48 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         lock (_sync)
         {
             _walls[wall.Id] = wall;
+        }
+    }
+
+    private void RestoreRoom(string snapshot)
+    {
+        var roomSnapshot = JsonSerializer.Deserialize<RoomSnapshot>(snapshot, SnapshotJsonOptions)
+            ?? throw new InvalidOperationException("Room snapshot could not be deserialized.");
+        var walls = roomSnapshot.Walls
+            .OrderBy(wall => wall.WallId)
+            .Select(wall => new Wall(
+                new WallId(wall.WallId),
+                new RoomId(roomSnapshot.RoomId),
+                new Point2D(wall.StartXInches, wall.StartYInches),
+                new Point2D(wall.EndXInches, wall.EndYInches),
+                Thickness.Exact(Length.FromInches(wall.ThicknessInches))))
+            .ToArray();
+        var obstacles = roomSnapshot.Obstacles
+            .OrderBy(obstacle => obstacle.ObstacleId)
+            .Select(obstacle => new Obstacle(
+                new ObstacleId(obstacle.ObstacleId),
+                new RoomId(roomSnapshot.RoomId),
+                new Rect2D(
+                    new Point2D(obstacle.MinXInches, obstacle.MinYInches),
+                    Length.FromInches(obstacle.WidthInches),
+                    Length.FromInches(obstacle.HeightInches)),
+                obstacle.Description))
+            .ToArray();
+        var room = Room.Reconstitute(
+            new RoomId(roomSnapshot.RoomId),
+            new RevisionId(roomSnapshot.RevisionId),
+            roomSnapshot.Name,
+            Length.FromInches(roomSnapshot.CeilingHeightInches),
+            walls,
+            obstacles);
+
+        lock (_sync)
+        {
+            _rooms[room.Id] = room;
+            foreach (var wall in walls)
+            {
+                _walls[wall.Id] = wall;
+            }
         }
     }
 
@@ -437,7 +569,9 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
         Guid SlotId,
         CabinetCategory Category,
         ConstructionMethod Construction,
-        string OverridesJson)
+        string OpeningsJson,
+        string OverridesJson,
+        int DefaultOpeningCount)
     {
         public static CabinetSnapshot From(CabinetStateRecord cabinet) =>
             new(
@@ -450,7 +584,13 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 cabinet.SlotId.Value,
                 cabinet.Category,
                 cabinet.Construction,
-                JsonSerializer.Serialize(cabinet.EffectiveOverrides, SnapshotJsonOptions));
+                JsonSerializer.Serialize(cabinet.EffectiveOpenings.OrderBy(opening => opening.Index), SnapshotJsonOptions),
+                JsonSerializer.Serialize(cabinet.EffectiveOverrides, SnapshotJsonOptions),
+                cabinet.EffectiveDefaultOpeningCount);
+
+        public IReadOnlyList<CabinetOpeningStateRecord> DeserializeOpenings() =>
+            JsonSerializer.Deserialize<List<CabinetOpeningStateRecord>>(OpeningsJson, SnapshotJsonOptions)
+            ?? [];
 
         public IReadOnlyDictionary<string, OverrideValue> DeserializeOverrides() =>
             JsonSerializer.Deserialize<Dictionary<string, OverrideValue>>(OverridesJson, SnapshotJsonOptions)
@@ -476,4 +616,56 @@ public sealed class InMemoryDesignStateStore : IDesignStateStore, IStateManager
                 wall.EndPoint.Y,
                 wall.WallThickness.Actual.Inches);
     }
+
+    private sealed record RoomSnapshot(
+        Guid RoomId,
+        Guid RevisionId,
+        string Name,
+        decimal CeilingHeightInches,
+        IReadOnlyList<RoomWallSnapshot> Walls,
+        IReadOnlyList<RoomObstacleSnapshot> Obstacles)
+    {
+        public static RoomSnapshot From(Room room) =>
+            new(
+                room.Id.Value,
+                room.RevisionId.Value,
+                room.Name,
+                room.CeilingHeight.Inches,
+                room.Walls
+                    .OrderBy(wall => wall.Id.Value)
+                    .Select(wall => new RoomWallSnapshot(
+                        wall.Id.Value,
+                        wall.StartPoint.X,
+                        wall.StartPoint.Y,
+                        wall.EndPoint.X,
+                        wall.EndPoint.Y,
+                        wall.WallThickness.Actual.Inches))
+                    .ToArray(),
+                room.Obstacles
+                    .OrderBy(obstacle => obstacle.Id.Value)
+                    .Select(obstacle => new RoomObstacleSnapshot(
+                        obstacle.Id.Value,
+                        obstacle.Bounds.Min.X,
+                        obstacle.Bounds.Min.Y,
+                        obstacle.Bounds.Width.Inches,
+                        obstacle.Bounds.Height.Inches,
+                        obstacle.Description))
+                    .ToArray());
+    }
+
+    private sealed record RoomWallSnapshot(
+        Guid WallId,
+        decimal StartXInches,
+        decimal StartYInches,
+        decimal EndXInches,
+        decimal EndYInches,
+        decimal ThicknessInches);
+
+    private sealed record RoomObstacleSnapshot(
+        Guid ObstacleId,
+        decimal MinXInches,
+        decimal MinYInches,
+        decimal WidthInches,
+        decimal HeightInches,
+        string Description);
 }

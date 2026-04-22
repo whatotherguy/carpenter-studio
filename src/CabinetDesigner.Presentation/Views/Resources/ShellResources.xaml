@@ -64,6 +64,24 @@
         <Setter Property="Cursor" Value="Hand" />
     </Style>
 
+    <Style x:Key="ShellToolbarToggleButtonStyle" TargetType="ToggleButton">
+        <Setter Property="MinWidth" Value="96" />
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+        <Setter Property="Background" Value="{StaticResource ShellSurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellBorderSoftBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{StaticResource ShellTextBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Style.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Background" Value="{StaticResource ShellAccentBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource ShellAccentBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource ShellTextInverseBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <Style x:Key="ShellToolbarTextBoxStyle" TargetType="TextBox">
         <Setter Property="MinWidth" Value="170" />
         <Setter Property="Padding" Value="8,5" />

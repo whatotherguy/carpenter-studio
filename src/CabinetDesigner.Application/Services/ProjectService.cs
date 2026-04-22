@@ -74,6 +74,86 @@ public sealed class ProjectService : IProjectService
 
     public ProjectSummaryDto? CurrentProject { get; private set; }
 
+    public async Task<IReadOnlyList<ProjectSummaryDto>> ListProjectsAsync(CancellationToken ct = default)
+    {
+        var projects = await _projectRepository.ListRecentAsync(50, ct).ConfigureAwait(false);
+        var results = new List<ProjectSummaryDto>(projects.Count);
+        foreach (var project in projects)
+        {
+            var revision = await _revisionRepository.FindWorkingAsync(project.Id, ct).ConfigureAwait(false);
+            if (revision is null)
+            {
+                revision = (await _revisionRepository.ListAsync(project.Id, ct).ConfigureAwait(false)).FirstOrDefault();
+            }
+
+            if (revision is null)
+            {
+                throw new InvalidOperationException($"No revision was found for project {project.Name}.");
+            }
+
+            results.Add(ToSummary(project, revision, project.FilePath ?? string.Empty, hasUnsavedChanges: false));
+        }
+
+        return results;
+    }
+
+    public async Task<ProjectSummaryDto> OpenProjectAsync(ProjectId projectId, CancellationToken ct = default)
+    {
+        var recentProjects = await _projectRepository.ListRecentAsync(50, ct).ConfigureAwait(false);
+        var matchingProjects = recentProjects.Where(project => project.Id == projectId).ToArray();
+        if (matchingProjects.Length > 1)
+        {
+            throw new InvalidOperationException($"Multiple projects matched project id '{projectId.Value}'.");
+        }
+
+        var project = matchingProjects.Length == 1
+            ? matchingProjects[0]
+            : await _projectRepository.FindAsync(projectId, ct).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Project {projectId.Value} was not found.");
+
+        var revision = await _revisionRepository.FindWorkingAsync(project.Id, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"No working revision was found for project '{project.Name}'.");
+        var workingRevision = await _workingRevisionRepository.LoadAsync(project.Id, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"No working revision payload was found for project '{project.Name}'.");
+        var checkpoint = await _checkpointRepository.FindByProjectAsync(project.Id, ct).ConfigureAwait(false);
+        _currentPersistedProjectState?.SetCurrentState(new PersistedProjectState(project, revision, workingRevision, checkpoint));
+
+        CurrentProject = ToSummary(project, revision, project.FilePath ?? string.Empty, checkpoint is { IsClean: false });
+        if (checkpoint is { IsClean: false })
+        {
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Warning,
+                Category = "Infrastructure",
+                Message = "Previous session did not shut down cleanly.",
+                Timestamp = _clock.Now,
+                Properties = new Dictionary<string, string>
+                {
+                    ["projectId"] = project.Id.Value.ToString(),
+                    ["revisionId"] = revision.Id.Value.ToString(),
+                    ["projectName"] = project.Name
+                }
+            });
+        }
+
+        _logger?.Log(new LogEntry
+        {
+            Level = LogLevel.Info,
+            Category = "Application",
+            Message = "Project opened.",
+            Timestamp = _clock.Now,
+            Properties = new Dictionary<string, string>
+            {
+                ["projectId"] = project.Id.Value.ToString(),
+                ["revisionId"] = revision.Id.Value.ToString(),
+                ["projectName"] = project.Name,
+                ["dirty"] = (checkpoint is { IsClean: false }).ToString()
+            }
+        });
+        _eventBus.Publish(new ProjectOpenedEvent(CurrentProject));
+        return CurrentProject;
+    }
+
     public async Task<ProjectSummaryDto> OpenProjectAsync(string filePath, CancellationToken ct = default)
     {
         var normalizedPath = NormalizeFilePath(filePath);
@@ -184,6 +264,7 @@ public sealed class ProjectService : IProjectService
                 ["revisionId"] = revision.Id.Value.ToString()
             }
         });
+        _eventBus.Publish(new ProjectOpenedEvent(CurrentProject));
         return CurrentProject;
     }
 

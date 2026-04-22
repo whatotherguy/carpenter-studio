@@ -7,6 +7,7 @@ using CabinetDesigner.Application.Services;
 using CabinetDesigner.Presentation.Projection;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Editor;
+using CabinetDesigner.Domain.SpatialContext;
 using CabinetDesigner.Presentation.ViewModels;
 using CabinetDesigner.Rendering;
 using CabinetDesigner.Rendering.DTOs;
@@ -606,6 +607,7 @@ public sealed class EditorCanvasViewModelTests
     {
         var mockCanvasHost = new DisposableCanvasHostMock();
         var eventBus = new ApplicationEventBus();
+        var logger = new CapturingAppLogger();
         var projector = new RecordingSceneProjector();
         var interactionService = new RecordingInteractionService();
 
@@ -616,7 +618,8 @@ public sealed class EditorCanvasViewModelTests
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             mockCanvasHost,
-            interactionService);
+            interactionService,
+            logger);
 
         Assert.False(mockCanvasHost.DisposeCalled);
 
@@ -754,6 +757,7 @@ public sealed class EditorCanvasViewModelTests
     {
         projector = new RecordingSceneProjector();
         eventBus = new ApplicationEventBus();
+        var logger = new CapturingAppLogger();
         canvasHost = new RecordingCanvasHost();
         interactionService = new RecordingInteractionService();
         return new EditorCanvasViewModel(
@@ -763,7 +767,8 @@ public sealed class EditorCanvasViewModelTests
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             canvasHost,
-            interactionService);
+            interactionService,
+            logger);
     }
 
     private sealed class RecordingSceneProjector : ISceneProjector
@@ -895,7 +900,11 @@ public sealed class EditorCanvasViewModelTests
 
         public Guid? HoveredCabinetId { get; private set; }
 
+        public Guid? ActiveRoomId { get; private set; }
+
         public ViewportTransform Viewport { get; private set; } = ViewportTransform.Default;
+
+        public CabinetDesigner.Editor.Snap.SnapSettings SnapSettings => CabinetDesigner.Editor.Snap.SnapSettings.Default;
 
         public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds)
         {
@@ -905,6 +914,11 @@ public sealed class EditorCanvasViewModelTests
         public void SetHoveredCabinetId(Guid? cabinetId)
         {
             HoveredCabinetId = cabinetId;
+        }
+
+        public void SetActiveRoom(Guid? roomId)
+        {
+            ActiveRoomId = roomId;
         }
 
         public void ZoomAt(double screenX, double screenY, double scaleFactor)
@@ -928,15 +942,15 @@ public sealed class EditorCanvasViewModelTests
 
         public void ResetViewport() => Viewport = ViewportTransform.Default;
 
-        public void FitViewport(CabinetDesigner.Domain.Geometry.Rect2D contentBounds, double canvasWidth, double canvasHeight)
+        public void FitViewport(ViewportBounds contentBounds, double canvasWidth, double canvasHeight)
         {
             if (canvasWidth <= 0 || canvasHeight <= 0)
             {
                 return;
             }
 
-            var contentWidthInches = (double)(contentBounds.Max.X - contentBounds.Min.X);
-            var contentHeightInches = (double)(contentBounds.Max.Y - contentBounds.Min.Y);
+            var contentWidthInches = contentBounds.MaxX - contentBounds.MinX;
+            var contentHeightInches = contentBounds.MaxY - contentBounds.MinY;
             if (contentWidthInches <= 0 || contentHeightInches <= 0)
             {
                 return;
@@ -946,8 +960,8 @@ public sealed class EditorCanvasViewModelTests
             var scaleX = canvasWidth * marginFactor / contentWidthInches;
             var scaleY = canvasHeight * marginFactor / contentHeightInches;
             var scale = Math.Clamp(Math.Min(scaleX, scaleY), 2.0, 200.0);
-            var centreWorldX = (double)((contentBounds.Min.X + contentBounds.Max.X) / 2);
-            var centreWorldY = (double)((contentBounds.Min.Y + contentBounds.Max.Y) / 2);
+            var centreWorldX = (contentBounds.MinX + contentBounds.MaxX) / 2;
+            var centreWorldY = (contentBounds.MinY + contentBounds.MaxY) / 2;
             Viewport = new ViewportTransform((decimal)scale, (decimal)((canvasWidth / 2) - (centreWorldX * scale)), (decimal)((canvasHeight / 2) - (centreWorldY * scale)));
         }
     }
@@ -1129,6 +1143,7 @@ public sealed class EditorCanvasViewModelForwardingTests
         var slowInteractionService = new SlowCommitInteractionService(tcs);
         var projector = new RecordingSceneProjector();
         var eventBus = new ApplicationEventBus();
+        var logger = new CapturingAppLogger();
         using var viewModel = new EditorCanvasViewModel(
             new RecordingRunService(),
             eventBus,
@@ -1136,7 +1151,8 @@ public sealed class EditorCanvasViewModelForwardingTests
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             new ForwardingCanvasHost(),
-            slowInteractionService);
+            slowInteractionService,
+            logger);
 
         var cabinetId = Guid.NewGuid();
         projector.Scene = MakeSingleCabinetScene(cabinetId);
@@ -1181,6 +1197,7 @@ public sealed class EditorCanvasViewModelForwardingTests
     {
         projector = new RecordingSceneProjector();
         eventBus = new ApplicationEventBus();
+        var logger = new CapturingAppLogger();
         interactionService = new RecordingInteractionService();
         return new EditorCanvasViewModel(
             new RecordingRunService(),
@@ -1189,7 +1206,8 @@ public sealed class EditorCanvasViewModelForwardingTests
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             host,
-            interactionService);
+            interactionService,
+            logger);
     }
 
     private static EditorCanvasViewModel CreateViewModelWithInteraction(
@@ -1200,6 +1218,7 @@ public sealed class EditorCanvasViewModelForwardingTests
     {
         projector = new RecordingSceneProjector();
         eventBus = new ApplicationEventBus();
+        var logger = new CapturingAppLogger();
         return new EditorCanvasViewModel(
             runService,
             eventBus,
@@ -1207,7 +1226,8 @@ public sealed class EditorCanvasViewModelForwardingTests
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             new ForwardingCanvasHost(),
-            interactionService);
+            interactionService,
+            logger);
     }
 
     private sealed class RecordingSceneProjector : ISceneProjector
@@ -1246,11 +1266,17 @@ public sealed class EditorCanvasViewModelForwardingTests
 
         public Guid? HoveredCabinetId { get; private set; }
 
+        public Guid? ActiveRoomId { get; private set; }
+
         public ViewportTransform Viewport { get; } = ViewportTransform.Default;
+
+        public CabinetDesigner.Editor.Snap.SnapSettings SnapSettings => CabinetDesigner.Editor.Snap.SnapSettings.Default;
 
         public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds) => SelectedCabinetIds = cabinetIds.ToArray();
 
         public void SetHoveredCabinetId(Guid? cabinetId) => HoveredCabinetId = cabinetId;
+
+        public void SetActiveRoom(Guid? roomId) => ActiveRoomId = roomId;
 
         public void ZoomAt(double screenX, double screenY, double scaleFactor) { }
 
@@ -1262,7 +1288,7 @@ public sealed class EditorCanvasViewModelForwardingTests
 
         public void ResetViewport() { }
 
-        public void FitViewport(CabinetDesigner.Domain.Geometry.Rect2D contentBounds, double canvasWidth, double canvasHeight) { }
+        public void FitViewport(ViewportBounds contentBounds, double canvasWidth, double canvasHeight) { }
     }
 
     private sealed class RecordingInteractionService : IEditorInteractionService

@@ -1,6 +1,7 @@
 using CabinetDesigner.Application.Pipeline.StageResults;
 using CabinetDesigner.Persistence.Repositories;
 using CabinetDesigner.Persistence.Tests.Fixtures;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace CabinetDesigner.Persistence.Tests;
@@ -42,6 +43,72 @@ public sealed class WorkingRevisionReconstructionTests
         Assert.Equal(
             state.WorkingRevision.Runs[1].Slots.Select(slot => slot.OccupiedWidth).ToArray(),
             secondRun.Slots.Select(slot => slot.OccupiedWidth).ToArray());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ReplayIsDeterministic_AcrossMultipleLoads()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        var state = CreateMultiRunState();
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var workingRevisionRepository = new WorkingRevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+
+        await projectRepository.SaveAsync(state.Project);
+        await revisionRepository.SaveAsync(state.Revision);
+        await workingRevisionRepository.SaveAsync(state.WorkingRevision);
+
+        var firstLoad = await workingRevisionRepository.LoadAsync(state.Project.Id);
+        var secondLoad = await workingRevisionRepository.LoadAsync(state.Project.Id);
+
+        Assert.NotNull(firstLoad);
+        Assert.NotNull(secondLoad);
+        Assert.Equal(firstLoad!.Runs.Select(run => run.Id).ToArray(), secondLoad!.Runs.Select(run => run.Id).ToArray());
+        Assert.Equal(firstLoad.Cabinets.Select(cabinet => cabinet.Id).ToArray(), secondLoad.Cabinets.Select(cabinet => cabinet.Id).ToArray());
+
+        for (var i = 0; i < firstLoad.Runs.Count; i++)
+        {
+            Assert.Equal(
+                firstLoad.Runs[i].Slots.Select(slot => slot.CabinetId).ToArray(),
+                secondLoad.Runs[i].Slots.Select(slot => slot.CabinetId).ToArray());
+            Assert.Equal(
+                firstLoad.Runs[i].Slots.Select(slot => slot.OccupiedWidth).ToArray(),
+                secondLoad.Runs[i].Slots.Select(slot => slot.OccupiedWidth).ToArray());
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_CorruptedRowThrows_WithStableExceptionType()
+    {
+        await using var fixture = new SqliteTestFixture();
+        await fixture.InitializeAsync();
+
+        var state = CreateMultiRunState();
+        var projectRepository = new ProjectRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var revisionRepository = new RevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+        var workingRevisionRepository = new WorkingRevisionRepository(fixture.ConnectionFactory, fixture.SessionAccessor);
+
+        await projectRepository.SaveAsync(state.Project);
+        await revisionRepository.SaveAsync(state.Revision);
+        await workingRevisionRepository.SaveAsync(state.WorkingRevision);
+
+        await using (var connection = (SqliteConnection)await fixture.ConnectionFactory.OpenConnectionAsync())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                PRAGMA foreign_keys = OFF;
+                UPDATE cabinets SET run_id = 'not-a-guid' WHERE revision_id = @revisionId;
+                """;
+            command.Parameters.AddWithValue("@revisionId", state.Revision.Id.Value.ToString());
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => workingRevisionRepository.LoadAsync(state.Project.Id));
+
+        Assert.Equal("WORKING_REVISION_CORRUPT", exception.Message);
+        Assert.IsType<FormatException>(exception.InnerException);
     }
 
     private static PersistedProjectState CreateMultiRunState()

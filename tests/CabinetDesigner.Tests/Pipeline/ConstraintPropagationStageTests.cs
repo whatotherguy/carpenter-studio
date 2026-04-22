@@ -51,6 +51,64 @@ public sealed class ConstraintPropagationStageTests
     }
 
     [Fact]
+    public void Execute_AssignsDefaultMaterial_FromCatalog_ForEveryPart()
+    {
+        var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000030"));
+        var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000030"));
+        var store = CreateStore([
+            CreateRun(runId),
+            CreateCabinet(cabinetId, runId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless)
+        ]);
+        var catalog = new CatalogService();
+        var stage = new ConstraintPropagationStage(catalog, store);
+        var allPartTypes = new[]
+        {
+            "LeftSide", "RightSide", "Top", "Bottom", "Back", "AdjustableShelf", "ToeKick",
+            "Door", "DrawerFront", "DrawerBoxBottom", "DrawerBoxFront", "DrawerBoxBack",
+            "DrawerBoxLeftSide", "DrawerBoxRightSide"
+        };
+        var parts = allPartTypes.Select((t, i) => CreatePart(cabinetId, $"part:{i}", t)).ToArray();
+        var context = CreateContext(parts);
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        Assert.Equal(allPartTypes.Length, context.ConstraintResult.MaterialAssignments.Count);
+        Assert.All(context.ConstraintResult.MaterialAssignments, assignment =>
+        {
+            Assert.NotEqual(default, assignment.MaterialId);
+            Assert.True(assignment.ResolvedThickness.Actual > Length.Zero,
+                $"Part {assignment.PartId} should have a positive thickness.");
+        });
+    }
+
+    [Fact]
+    public void Execute_RespectsRunLevelOverride_WhenCabinetOverrideAbsent()
+    {
+        var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000031"));
+        var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000031"));
+        var catalog = new CatalogService();
+        var runLevelMaterial = catalog.ResolvePartMaterial("Back", CabinetCategory.Base, ConstructionMethod.Frameless);
+        var store = CreateStore([
+            CreateRun(runId),
+            CreateCabinet(
+                cabinetId, runId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless,
+                new Dictionary<string, OverrideValue>
+                {
+                    ["material.All"] = new OverrideValue.OfMaterialId(runLevelMaterial)
+                })
+        ]);
+        var stage = new ConstraintPropagationStage(catalog, store);
+        var context = CreateContext([CreatePart(cabinetId, "part:1", "LeftSide")]);
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        var assignment = Assert.Single(context.ConstraintResult.MaterialAssignments);
+        Assert.Equal(runLevelMaterial, assignment.MaterialId);
+    }
+
+    [Fact]
     public void Execute_RespectsCabinetLevelOverride()
     {
         var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000011"));
@@ -115,14 +173,53 @@ public sealed class ConstraintPropagationStageTests
         var result = stage.Execute(context);
 
         Assert.False(result.Success);
-        var issue = Assert.Single(result.Issues);
-        Assert.Equal("MATERIAL_UNRESOLVED", issue.Code);
-        Assert.Equal(ValidationSeverity.Error, issue.Severity);
+        Assert.Contains(result.Issues, i => i.Code == "MATERIAL_UNRESOLVED" && i.Severity == ValidationSeverity.Error);
 
-        var violation = Assert.Single(context.ConstraintResult.Violations);
-        Assert.Equal("MATERIAL_UNRESOLVED", violation.ConstraintCode);
-        Assert.Equal(ValidationSeverity.Error, violation.Severity);
-        Assert.Contains("part:1", violation.AffectedEntityIds);
+        var materialViolation = Assert.Single(context.ConstraintResult.Violations
+            .Where(v => v.ConstraintCode == "MATERIAL_UNRESOLVED"));
+        Assert.Equal(ValidationSeverity.Error, materialViolation.Severity);
+        Assert.Contains("part:1", materialViolation.AffectedEntityIds);
+    }
+
+    [Fact]
+    public void Execute_EmitsError_WhenPartHasNoResolution()
+    {
+        var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000032"));
+        var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000032"));
+        var store = CreateStore([
+            CreateRun(runId),
+            CreateCabinet(cabinetId, runId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless)
+        ]);
+        var stage = new ConstraintPropagationStage(new CatalogService(), store);
+        var context = CreateContext([CreatePart(cabinetId, "part:x", "UnknownType")]);
+
+        var result = stage.Execute(context);
+
+        Assert.False(result.Success);
+        Assert.Contains(result.Issues, i => i.Code == "MATERIAL_UNRESOLVED" && i.Severity == ValidationSeverity.Error);
+        Assert.DoesNotContain(result.Issues, i => i.Code == "MATERIAL_UNRESOLVED" && i.Severity == ValidationSeverity.Warning);
+    }
+
+    [Fact]
+    public void Execute_HardwareEmpty_EmitsWarningViolation_NotError()
+    {
+        var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000033"));
+        var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000033"));
+        var store = CreateStore([
+            CreateRun(runId),
+            CreateCabinet(cabinetId, runId, "base-30", CabinetCategory.Base, ConstructionMethod.Frameless)
+        ]);
+        var stage = new ConstraintPropagationStage(new CatalogService(), store);
+        var context = CreateContext([CreatePart(cabinetId, "part:1", "LeftSide")]);
+
+        var result = stage.Execute(context);
+
+        Assert.True(result.Success);
+        Assert.Empty(context.ConstraintResult.HardwareAssignments);
+        Assert.All(
+            context.ConstraintResult.Violations.Where(v => v.ConstraintCode == "NO_HARDWARE_CATALOG"),
+            v => Assert.Equal(ValidationSeverity.Warning, v.Severity));
+        Assert.DoesNotContain(result.Issues, i => i.Code == "NO_HARDWARE_CATALOG" && i.Severity == ValidationSeverity.Error);
     }
 
     [Fact]

@@ -8,21 +8,29 @@ namespace CabinetDesigner.Presentation.ViewModels;
 public sealed class ApplicationEditorSceneGraph : IEditorSceneGraph
 {
     private readonly IDesignStateStore _stateStore;
+    private readonly IEditorCanvasSession _editorSession;
 
-    public ApplicationEditorSceneGraph(IDesignStateStore stateStore)
+    public ApplicationEditorSceneGraph(IDesignStateStore stateStore, IEditorCanvasSession editorSession)
     {
         _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
+        _editorSession = editorSession ?? throw new ArgumentNullException(nameof(editorSession));
     }
 
     public EditorSceneSnapshot Capture()
     {
         var runViews = new List<RunSceneView>();
+        var activeRoomId = _editorSession.ActiveRoomId;
 
         foreach (var run in _stateStore.GetAllRuns())
         {
             var wall = _stateStore.GetWall(run.WallId);
             var spatialInfo = _stateStore.GetRunSpatialInfo(run.Id);
             if (wall is null || spatialInfo is null)
+            {
+                continue;
+            }
+
+            if (activeRoomId is not null && wall.RoomId.Value != activeRoomId.Value)
             {
                 continue;
             }
@@ -70,12 +78,18 @@ public sealed class ApplicationEditorSceneGraph : IEditorSceneGraph
         RunId? bestRunId = null;
         var bestDistanceSquared = decimal.MaxValue;
         var hitRadiusSquared = hitRadius.Inches * hitRadius.Inches;
+        var activeRoomId = _editorSession.ActiveRoomId;
 
         foreach (var run in _stateStore.GetAllRuns())
         {
             var wall = _stateStore.GetWall(run.WallId);
             var spatialInfo = _stateStore.GetRunSpatialInfo(run.Id);
             if (wall is null || spatialInfo is null)
+            {
+                continue;
+            }
+
+            if (activeRoomId is not null && wall.RoomId.Value != activeRoomId.Value)
             {
                 continue;
             }

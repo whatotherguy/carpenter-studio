@@ -46,7 +46,7 @@ public sealed class ManufacturingProjector : IManufacturingProjector
             blockers.Add(new ManufacturingBlocker
             {
                 Code = ManufacturingBlockerCode.NoPartsProduced,
-                Message = "No parts were produced for manufacturing.",
+                Message = "No parts were produced by part generation.",
                 AffectedEntityIds = []
             });
         }
@@ -183,15 +183,8 @@ public sealed class ManufacturingProjector : IManufacturingProjector
                         AffectedEntityIds = violation.AffectedEntityIds
                     }
                 ],
-                "NO_HARDWARE_CATALOG" =>
-                [
-                    new ManufacturingBlocker
-                    {
-                        Code = ManufacturingBlockerCode.MissingHardware,
-                        Message = violation.Message,
-                        AffectedEntityIds = violation.AffectedEntityIds
-                    }
-                ],
+                // V2: vendor hardware catalog integration will surface hardware blockers here;
+                // V1 always emits NO_HARDWARE_CATALOG as a warning — not a manufacturing blocker
                 _ => Array.Empty<ManufacturingBlocker>()
             })
             .ToArray();

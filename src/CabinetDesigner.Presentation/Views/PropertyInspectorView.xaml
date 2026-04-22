@@ -8,7 +8,7 @@
         <DockPanel LastChildFill="True">
             <views:ShellPanelHeaderView DockPanel.Dock="Top"
                                         Title="Property Inspector"
-                                        Subtitle="Inspect the selected cabinet and resize its width when available."
+                                        Subtitle="Inspect and edit cabinet properties."
                                         Margin="0,0,0,12">
                 <views:ShellPanelHeaderView.RightContent>
                     <StackPanel HorizontalAlignment="Right"
@@ -30,16 +30,10 @@
                 </views:ShellPanelHeaderView.RightContent>
             </views:ShellPanelHeaderView>
 
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <StackPanel Grid.Row="0"
-                            Orientation="Vertical">
-                    <Border Style="{StaticResource ShellStatusBadgeStyle}">
+            <ScrollViewer Style="{StaticResource ShellCatalogListScrollViewerStyle}">
+                <StackPanel Margin="0,0,0,12">
+                    <Border Style="{StaticResource ShellStatusBadgeStyle}"
+                            Margin="0,0,0,12">
                         <StackPanel>
                             <TextBlock Text="Selected entity"
                                        Style="{StaticResource ShellMiniLabelStyle}" />
@@ -49,169 +43,175 @@
                         </StackPanel>
                     </Border>
 
-                    <Grid Margin="0,10,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <Border Grid.Column="0"
-                                Style="{StaticResource ShellStatusBadgeStyle}"
-                                Margin="0,0,6,0">
-                            <StackPanel>
-                                <TextBlock Text="Selection"
-                                           Style="{StaticResource ShellMiniLabelStyle}" />
-                                <TextBlock Text="{Binding SelectionSummaryDisplay}"
-                                           Style="{StaticResource ShellStatusBadgeTextStyle}" />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Grid.Column="1"
-                                Style="{StaticResource ShellStatusBadgeStyle}"
-                                Margin="6,0,0,0">
-                            <StackPanel>
-                                <TextBlock Text="Editability"
-                                           Style="{StaticResource ShellMiniLabelStyle}" />
-                                <TextBlock Text="{Binding EditabilityStatusDisplay}"
-                                           Style="{StaticResource ShellStatusBadgeTextStyle}"
-                                           TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-                </StackPanel>
-
-                <Border Grid.Row="1"
-                        Margin="0,12,0,0">
-                    <Border.Style>
-                        <Style TargetType="Border" BasedOn="{StaticResource ShellPropertyCardStyle}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasSingleSelection}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Text="Nominal Width"
-                                       Style="{StaticResource ShellPropertyKeyStyle}" />
-                            <TextBlock Text="The first editable property supported by the application layer."
+                    <Border Style="{StaticResource ShellPropertyCardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Identity"
+                                       Style="{StaticResource ShellSectionTitleStyle}" />
+                            <TextBlock Text="{Binding DisplayName}"
+                                       Style="{StaticResource ShellStatusBadgeTextStyle}"
+                                       Margin="0,6,0,0" />
+                            <TextBlock Text="Display name is derived from cabinet type and instance ordinal."
                                        Style="{StaticResource ShellMiniLabelStyle}"
                                        Margin="0,4,0,0" />
-                            <TextBlock Text="{Binding EditabilityStatusDisplay}"
-                                       Style="{StaticResource ShellCatalogMetaStyle}"
-                                       Margin="0,6,0,0" />
-                        </StackPanel>
-
-                        <Grid Grid.Column="1"
-                              Margin="12,0,0,0">
-                            <StackPanel HorizontalAlignment="Right">
-                                <StackPanel>
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsEditingNominalWidth}" Value="True">
-                                                    <Setter Property="Visibility" Value="Collapsed" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </StackPanel.Style>
-                                    <TextBlock Text="{Binding NominalWidthDisplay}"
-                                               Style="{StaticResource ShellStatusBadgeTextStyle}"
-                                               HorizontalAlignment="Right" />
-                                    <Button Content="Edit"
-                                            Command="{Binding BeginNominalWidthEditCommand}"
-                                            Style="{StaticResource ShellToolbarButtonStyle}"
-                                            Margin="0,8,0,0"
-                                            HorizontalAlignment="Right" />
-                                </StackPanel>
-
-                                <StackPanel>
-                                    <StackPanel.Style>
-                                        <Style TargetType="StackPanel">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsEditingNominalWidth}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </StackPanel.Style>
-                                    <TextBox Text="{Binding NominalWidthEditValue, UpdateSourceTrigger=PropertyChanged}"
-                                             Style="{StaticResource ShellToolbarTextBoxStyle}"
-                                             MinWidth="120"
-                                             HorizontalAlignment="Right" />
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Right"
-                                                Margin="0,8,0,0">
-                                        <Button Content="Save"
-                                                Command="{Binding CommitNominalWidthEditCommand}"
-                                                Style="{StaticResource ShellToolbarButtonStyle}" />
-                                        <Button Content="Cancel"
-                                                Command="{Binding CancelNominalWidthEditCommand}"
-                                                Style="{StaticResource ShellToolbarButtonStyle}"
-                                                Margin="0" />
-                                    </StackPanel>
-                                </StackPanel>
-                                <TextBlock Text="{Binding LastErrorMessage}"
-                                           Foreground="{StaticResource ShellErrorBrush}"
-                                           TextWrapping="Wrap">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock" BasedOn="{StaticResource ShellMiniLabelStyle}">
-                                            <Setter Property="Visibility" Value="Collapsed" />
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasError}" Value="True">
-                                                    <Setter Property="Visibility" Value="Visible" />
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
-                    </Grid>
-                </Border>
-
-                <Grid Grid.Row="2">
-                    <ScrollViewer Style="{StaticResource ShellCatalogListScrollViewerStyle}">
-                        <ItemsControl Style="{StaticResource ShellPropertyItemsControlStyle}"
-                                      ItemsSource="{Binding Properties}"
-                                      ItemTemplate="{StaticResource PropertyRowTemplate}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </ScrollViewer>
-
-                    <Border Style="{StaticResource ShellPropertyEmptyStateBorderStyle}">
-                        <StackPanel VerticalAlignment="Center"
-                                    HorizontalAlignment="Center">
-                            <TextBlock Text="{Binding SourceLabel}"
-                                       Style="{StaticResource ShellSectionTitleStyle}"
-                                       TextAlignment="Center" />
-                            <TextBlock Text="{Binding EmptyStateText}"
-                                       Style="{StaticResource ShellCatalogEmptyStateTextStyle}"
-                                       Margin="0,6,0,0"
-                                       MaxWidth="260" />
-                            <TextBlock Text="{Binding StatusMessage}"
-                                       Style="{StaticResource ShellMiniLabelStyle}"
-                                       Margin="0,10,0,0"
-                                       TextAlignment="Center"
-                                       MaxWidth="260" />
                         </StackPanel>
                     </Border>
-                </Grid>
-            </Grid>
+
+                    <Border Style="{StaticResource ShellPropertyCardStyle}"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Dimensions"
+                                       Style="{StaticResource ShellSectionTitleStyle}" />
+                            <UniformGrid Columns="3"
+                                         Margin="0,8,0,0">
+                                <StackPanel Margin="0,0,8,0">
+                                    <TextBlock Text="Width"
+                                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                                    <TextBlock Text="{Binding NominalWidth}"
+                                               Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Margin="8,0,8,0">
+                                    <TextBlock Text="Depth"
+                                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                                    <TextBlock Text="{Binding Depth}"
+                                               Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Margin="8,0,0,0">
+                                    <TextBlock Text="Height"
+                                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                                    <TextBlock Text="{Binding Height}"
+                                               Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource ShellPropertyCardStyle}"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Cabinet Settings"
+                                       Style="{StaticResource ShellSectionTitleStyle}" />
+                            <UniformGrid Columns="2"
+                                         Margin="0,8,0,0">
+                                <StackPanel Margin="0,0,8,8">
+                                    <TextBlock Text="Category"
+                                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                                    <TextBlock Text="{Binding Category}"
+                                               Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Margin="8,0,0,8">
+                                    <TextBlock Text="Construction"
+                                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                                    <TextBlock Text="{Binding Construction}"
+                                               Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Margin="0,8,8,0">
+                                    <TextBlock Text="Shelf Count"
+                                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                                    <TextBlock Text="{Binding ShelfCount}"
+                                               Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                </StackPanel>
+                                <StackPanel Margin="8,8,0,0">
+                                    <TextBlock Text="Toe Kick Height"
+                                               Style="{StaticResource ShellPropertyKeyStyle}" />
+                                    <TextBlock Text="{Binding ToeKickHeight}"
+                                               Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource ShellPropertyCardStyle}"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Openings"
+                                       Style="{StaticResource ShellSectionTitleStyle}" />
+                            <ItemsControl ItemsSource="{Binding Openings}"
+                                          Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource ShellCatalogListItemBorderStyle}"
+                                                Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Type}"
+                                                           Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                                <TextBlock Text="{Binding Width}"
+                                                           Style="{StaticResource ShellMiniLabelStyle}" />
+                                                <TextBlock Text="{Binding Height}"
+                                                           Style="{StaticResource ShellMiniLabelStyle}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource ShellPropertyCardStyle}"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Material Overrides"
+                                       Style="{StaticResource ShellSectionTitleStyle}" />
+                            <ItemsControl ItemsSource="{Binding MaterialOverrides}"
+                                          Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource ShellCatalogListItemBorderStyle}"
+                                                Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                                <TextBlock Text="{Binding DisplayValue}"
+                                                           Style="{StaticResource ShellMiniLabelStyle}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource ShellPropertyCardStyle}"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Thickness Overrides"
+                                       Style="{StaticResource ShellSectionTitleStyle}" />
+                            <ItemsControl ItemsSource="{Binding ThicknessOverrides}"
+                                          Margin="0,8,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource ShellCatalogListItemBorderStyle}"
+                                                Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding DisplayName}"
+                                                           Style="{StaticResource ShellStatusBadgeTextStyle}" />
+                                                <TextBlock Text="{Binding DisplayValue}"
+                                                           Style="{StaticResource ShellMiniLabelStyle}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource ShellPropertyCardStyle}"
+                            Margin="0,12,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Notes"
+                                       Style="{StaticResource ShellSectionTitleStyle}" />
+                            <TextBlock Text="{Binding Notes}"
+                                       Style="{StaticResource ShellStatusBadgeTextStyle}"
+                                       Margin="0,6,0,0"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <ItemsControl Style="{StaticResource ShellPropertyItemsControlStyle}"
+                                  ItemsSource="{Binding Properties}"
+                                  ItemTemplate="{StaticResource PropertyRowTemplate}"
+                                  Margin="0,12,0,0" />
+                </StackPanel>
+            </ScrollViewer>
         </DockPanel>
     </Border>
 </UserControl>

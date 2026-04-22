@@ -14,7 +14,7 @@ public sealed class CabinetOpening
     public Length Width { get; private set; }
     public Length Height { get; private set; }
     public OpeningType Type { get; private set; }
-    public int Index { get; }
+    public int Index { get; private set; }
     public IReadOnlyList<HardwareItemId> HardwareIds => _hardwareIds;
     public MaterialId? FrontMaterialId { get; private set; }
 
@@ -48,6 +48,32 @@ public sealed class CabinetOpening
     public void ChangeType(OpeningType newType)
     {
         Type = newType;
+    }
+
+    public void Resize(Length width, Length height)
+    {
+        if (width <= Length.Zero)
+        {
+            throw new InvalidOperationException("Cabinet opening width must be positive.");
+        }
+
+        if (height <= Length.Zero)
+        {
+            throw new InvalidOperationException("Cabinet opening height must be positive.");
+        }
+
+        Width = width;
+        Height = height;
+    }
+
+    public void SetIndex(int index)
+    {
+        if (index < 0)
+        {
+            throw new InvalidOperationException("Cabinet opening index cannot be negative.");
+        }
+
+        Index = index;
     }
 
     public void AssignFrontMaterial(MaterialId materialId)

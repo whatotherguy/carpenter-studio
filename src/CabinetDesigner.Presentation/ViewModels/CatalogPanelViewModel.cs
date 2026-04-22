@@ -17,7 +17,10 @@ public sealed class CatalogPanelViewModel : ObservableObject
                 item.TypeId,
                 item.DisplayName,
                 item.Category,
+                item.ConstructionMethod.ToString(),
                 item.Description,
+                $"{item.NominalWidth.Inches:0.##}\" W x {item.Depth.Inches:0.##}\" D x {item.Height.Inches:0.##}\" H",
+                $"{item.DefaultOpenings} opening{(item.DefaultOpenings == 1 ? string.Empty : "s")}",
                 FormatWidth(item.DefaultNominalWidthInches),
                 item.DefaultNominalWidthInches))
             .ToArray();
@@ -81,7 +84,10 @@ public sealed class CatalogPanelViewModel : ObservableObject
         item.TypeId.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         item.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         item.Category.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        item.ConstructionMethod.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         item.Description.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        item.DimensionsDisplay.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        item.DefaultOpeningsDisplay.Contains(search, StringComparison.OrdinalIgnoreCase) ||
         item.DefaultWidthDisplay.Contains(search, StringComparison.OrdinalIgnoreCase);
 
     private static string FormatWidth(decimal widthInches) => $"{widthInches:0.##}\"";

@@ -11,14 +11,23 @@ public sealed record ResizeCabinetCommand : DesignCommandBase
 
     public CabinetId CabinetId { get; }
 
-    public Length NewNominalWidth { get; }
+    public Length NewWidth { get; }
 
-    public Length PreviousNominalWidth { get; }
+    public Length NewDepth { get; }
+
+    public Length NewHeight { get; }
+
+    public Length PreviousNominalWidth { get; private set; }
+
+    public Length NewNominalWidth => NewWidth;
+
+    public bool HasExplicitDimensions { get; }
 
     public ResizeCabinetCommand(
         CabinetId cabinetId,
-        Length previousNominalWidth,
-        Length newNominalWidth,
+        Length newWidth,
+        Length newDepth,
+        Length newHeight,
         CommandOrigin origin,
         string intentDescription,
         DateTimeOffset timestamp)
@@ -29,28 +38,67 @@ public sealed record ResizeCabinetCommand : DesignCommandBase
             [cabinetId.Value.ToString()]))
     {
         CabinetId = cabinetId;
-        NewNominalWidth = newNominalWidth;
+        NewWidth = newWidth;
+        NewDepth = newDepth;
+        NewHeight = newHeight;
+        PreviousNominalWidth = newWidth;
+        HasExplicitDimensions = true;
+    }
+
+    internal ResizeCabinetCommand(
+        CabinetId cabinetId,
+        Length previousNominalWidth,
+        Length newNominalWidth,
+        CommandOrigin origin,
+        string intentDescription,
+        DateTimeOffset timestamp)
+        : this(
+            cabinetId,
+            newNominalWidth,
+            Length.FromInches(1m),
+            Length.FromInches(1m),
+            origin,
+            intentDescription,
+            timestamp)
+    {
         PreviousNominalWidth = previousNominalWidth;
+        HasExplicitDimensions = false;
     }
 
     public override IReadOnlyList<ValidationIssue> ValidateStructure()
     {
         List<ValidationIssue> issues = [];
 
-        if (NewNominalWidth <= Length.Zero)
+        if (CabinetId == default)
+        {
+            issues.Add(new ValidationIssue(
+                ValidationSeverity.Error,
+                "MISSING_CABINET",
+                "A cabinet identifier is required."));
+        }
+
+        if (NewWidth <= Length.Zero)
         {
             issues.Add(new ValidationIssue(
                 ValidationSeverity.Error,
                 "INVALID_WIDTH",
-                "New width must be greater than zero."));
+                "Width must be greater than zero."));
         }
 
-        if (NewNominalWidth == PreviousNominalWidth)
+        if (NewDepth <= Length.Zero)
         {
             issues.Add(new ValidationIssue(
-                ValidationSeverity.Warning,
-                "NO_CHANGE",
-                "New width is the same as the current width."));
+                ValidationSeverity.Error,
+                "INVALID_DEPTH",
+                "Depth must be greater than zero."));
+        }
+
+        if (NewHeight <= Length.Zero)
+        {
+            issues.Add(new ValidationIssue(
+                ValidationSeverity.Error,
+                "INVALID_HEIGHT",
+                "Height must be greater than zero."));
         }
 
         return issues;

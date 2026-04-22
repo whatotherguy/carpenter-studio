@@ -7,6 +7,7 @@ public enum ValidationRuleCategory
     Constraints,
     MaterialHardware,
     Manufacturing,
+    Install,
     Installation,
     Workflow,
     RunIntegrity,

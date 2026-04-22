@@ -17,6 +17,7 @@ public sealed class EngineeringResolutionStageTests
 {
     private static readonly WallId TestWallId = new(Guid.Parse("40000000-0000-0000-0000-000000000001"));
     private static readonly RoomId TestRoomId = new(Guid.Parse("90000000-0000-0000-0000-000000000001"));
+    private static readonly Thickness TestWallThickness = Thickness.Exact(Length.FromInches(5.5m));
 
     [Fact]
     public void Execute_ProducesOneAssemblyPerCabinet()
@@ -95,10 +96,12 @@ public sealed class EngineeringResolutionStageTests
 
         var run = CreateRun(runId, 120m);
         run.AppendCabinet(cabinetId, Length.FromInches(30m));
-        run.SetLeftEndCondition(EndConditionType.AgainstWall);
-        run.SetRightEndCondition(EndConditionType.Open);
+
+        // Wall whose start endpoint coincides with the run's world start (0,0)
+        var wall = new Wall(TestWallId, TestRoomId, Point2D.Origin, new Point2D(200m, 0m), TestWallThickness);
 
         var store = CreateStore([run], [CreateCabinet(cabinetId, runId, CabinetCategory.Base)]);
+        store.AddWall(wall);
         var stage = new EngineeringResolutionStage(store);
         var context = CreateContext();
 
@@ -139,6 +142,121 @@ public sealed class EngineeringResolutionStageTests
             secondContext.EngineeringResult.Assemblies.Select(FormatAssembly));
         Assert.Equal(firstContext.EngineeringResult.FillerRequirements, secondContext.EngineeringResult.FillerRequirements);
         Assert.Equal(firstContext.EngineeringResult.EndConditionUpdates, secondContext.EngineeringResult.EndConditionUpdates);
+    }
+
+    [Fact]
+    public void Execute_ProducesOneAssemblyPerCabinet_InStableOrder()
+    {
+        var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000040"));
+        var cabinetIdLow = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000001"));
+        var cabinetIdHigh = new CabinetId(Guid.Parse("10000000-0000-0000-FFFF-000000000001"));
+
+        var run = CreateRun(runId, 120m);
+        run.AppendCabinet(cabinetIdHigh, Length.FromInches(30m));
+        run.AppendCabinet(cabinetIdLow, Length.FromInches(30m));
+
+        var store = CreateStore(
+            [run],
+            [
+                CreateCabinet(cabinetIdHigh, runId, CabinetCategory.Base),
+                CreateCabinet(cabinetIdLow, runId, CabinetCategory.Wall)
+            ]);
+
+        var stage = new EngineeringResolutionStage(store);
+        var context = CreateContext();
+        stage.Execute(context);
+
+        Assert.Equal(2, context.EngineeringResult.Assemblies.Count);
+        Assert.True(
+            context.EngineeringResult.Assemblies[0].CabinetId.Value.CompareTo(
+                context.EngineeringResult.Assemblies[1].CabinetId.Value) < 0,
+            "Assemblies must be in ascending CabinetId order regardless of insertion order.");
+        var assembly = context.EngineeringResult.Assemblies[0];
+        Assert.True(assembly.ResolvedParameters.ContainsKey("toe_kick"));
+        Assert.True(assembly.ResolvedParameters.ContainsKey("shelf_count"));
+        Assert.True(assembly.ResolvedParameters.ContainsKey("door_count"));
+        Assert.True(assembly.ResolvedParameters.ContainsKey("drawer_count"));
+    }
+
+    [Fact]
+    public void Execute_EndConditions_WallMetadataPresent_EmitsWall()
+    {
+        var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000020"));
+        var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000020"));
+        var wallId = new WallId(Guid.Parse("40000000-0000-0000-0000-000000000020"));
+
+        var run = new CabinetRun(runId, wallId, Length.FromInches(30m));
+        run.AppendCabinet(cabinetId, Length.FromInches(30m));
+
+        var wall = new Wall(wallId, TestRoomId, Point2D.Origin, new Point2D(200m, 0m), TestWallThickness);
+
+        var store = new InMemoryDesignStateStore();
+        store.AddRun(run, Point2D.Origin, new Point2D(30m, 0m));
+        store.AddCabinet(CreateCabinet(cabinetId, runId, CabinetCategory.Base));
+        store.AddWall(wall);
+
+        var stage = new EngineeringResolutionStage(store);
+        var context = CreateContext();
+        stage.Execute(context);
+
+        var update = Assert.Single(context.EngineeringResult.EndConditionUpdates);
+        Assert.Equal(EndConditionType.AgainstWall, update.LeftEndCondition.Type);
+        Assert.Equal(EndConditionType.Open, update.RightEndCondition.Type);
+    }
+
+    [Fact]
+    public void Execute_EndConditions_AdjacentRun_EmitsAdjacentCabinet()
+    {
+        var run1Id = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000030"));
+        var run2Id = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000031"));
+        var cabinet1Id = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000030"));
+        var cabinet2Id = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000031"));
+
+        var run1 = new CabinetRun(run1Id, TestWallId, Length.FromInches(30m));
+        run1.AppendCabinet(cabinet1Id, Length.FromInches(30m));
+
+        var run2 = new CabinetRun(run2Id, TestWallId, Length.FromInches(60m));
+        run2.AppendCabinet(cabinet2Id, Length.FromInches(30m));
+
+        var store = new InMemoryDesignStateStore();
+        store.AddRun(run1, Point2D.Origin, new Point2D(30m, 0m));
+        store.AddRun(run2, new Point2D(30m, 0m), new Point2D(90m, 0m));
+        store.AddCabinet(CreateCabinet(cabinet1Id, run1Id, CabinetCategory.Base));
+        store.AddCabinet(CreateCabinet(cabinet2Id, run2Id, CabinetCategory.Base));
+
+        var stage = new EngineeringResolutionStage(store);
+        var context = CreateContext();
+        stage.Execute(context);
+
+        var run2Update = context.EngineeringResult.EndConditionUpdates.Single(u => u.RunId == run2Id);
+        Assert.Equal(EndConditionType.AdjacentCabinet, run2Update.LeftEndCondition.Type);
+        Assert.Equal(EndConditionType.Open, run2Update.RightEndCondition.Type);
+    }
+
+    [Fact]
+    public void Execute_EndConditions_NoAttachment_EmitsOpenEnd()
+    {
+        var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000021"));
+        var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000021"));
+        var wallId = new WallId(Guid.Parse("40000000-0000-0000-0000-000000000021"));
+
+        var run = new CabinetRun(runId, wallId, Length.FromInches(30m));
+        run.AppendCabinet(cabinetId, Length.FromInches(30m));
+
+        var wall = new Wall(wallId, TestRoomId, new Point2D(50m, 0m), new Point2D(150m, 0m), TestWallThickness);
+
+        var store = new InMemoryDesignStateStore();
+        store.AddRun(run, Point2D.Origin, new Point2D(30m, 0m));
+        store.AddCabinet(CreateCabinet(cabinetId, runId, CabinetCategory.Base));
+        store.AddWall(wall);
+
+        var stage = new EngineeringResolutionStage(store);
+        var context = CreateContext();
+        stage.Execute(context);
+
+        var update = Assert.Single(context.EngineeringResult.EndConditionUpdates);
+        Assert.Equal(EndConditionType.Open, update.LeftEndCondition.Type);
+        Assert.Equal(EndConditionType.Open, update.RightEndCondition.Type);
     }
 
     private static CabinetRun CreateRun(RunId runId, decimal capacityInches) =>

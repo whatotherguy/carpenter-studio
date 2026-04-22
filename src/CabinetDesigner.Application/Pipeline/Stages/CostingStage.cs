@@ -15,6 +15,7 @@ public sealed class CostingStage : IResolutionStage
 {
     private const string MissingPriceCode = "COSTING_PRICE_MISSING";
     private const string NoPartsCode = "COSTING_NO_PARTS";
+    private const string CostingNotConfiguredReason = "Pricing catalog not configured. Cost calculation skipped. See docs/V2_enhancements.md.";
 
     private readonly ICatalogService _catalog;
     private readonly ICostingPolicy _policy;
@@ -47,6 +48,36 @@ public sealed class CostingStage : IResolutionStage
     public StageResult Execute(ResolutionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        if (!_catalog.IsPricingConfigured)
+        {
+            context.CostingResult = new CostingResult
+            {
+                Status = CostingStatus.NotConfigured,
+                StatusReason = CostingNotConfiguredReason,
+                MaterialCost = 0m,
+                HardwareCost = 0m,
+                LaborCost = 0m,
+                InstallCost = 0m,
+                Subtotal = 0m,
+                Markup = 0m,
+                Tax = 0m,
+                Total = 0m,
+                RevisionDelta = null,
+                CabinetBreakdowns = []
+            };
+
+            _logger?.Log(new LogEntry
+            {
+                Level = LogLevel.Info,
+                Category = "CostingStage",
+                Message = "Costing skipped — pricing catalog not configured.",
+                Timestamp = DateTimeOffset.UtcNow,
+                StageNumber = StageNumber.ToString()
+            });
+
+            return StageResult.Succeeded(StageNumber);
+        }
 
         if (context.PartResult.Parts.Count == 0 || context.ManufacturingResult.Plan.CutList.Count == 0)
         {
@@ -181,6 +212,7 @@ public sealed class CostingStage : IResolutionStage
                     .ToArray());
         }
 
+        // V2: Real vendor pricing and cost totals stay here once pricing is configured. See docs/V2_enhancements.md.
         var subtotal = materialCost + hardwareCost + laborCost + installCost;
         var markup = RoundCurrency(subtotal * _policy.MarkupFraction);
         var tax = RoundCurrency((subtotal + markup) * _policy.TaxFraction);
@@ -188,6 +220,7 @@ public sealed class CostingStage : IResolutionStage
 
         context.CostingResult = new CostingResult
         {
+            Status = CostingStatus.Calculated,
             MaterialCost = RoundCurrency(materialCost),
             HardwareCost = RoundCurrency(hardwareCost),
             LaborCost = RoundCurrency(laborCost),

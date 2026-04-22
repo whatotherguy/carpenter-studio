@@ -1,5 +1,5 @@
-using CabinetDesigner.Application.State;
 using CabinetDesigner.Application.Pipeline.StageResults;
+using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain;
 using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Geometry;
@@ -13,6 +13,14 @@ public static class PartGeometry
     public const string ThicknessOverrideKey = "materialThickness";
     public const string ThicknessOverrideLegacyKey = "materialThicknessOverride";
     public const string ToeKickHeightOverrideKey = "toeKickHeight";
+
+    // V1 shop defaults for drawer box clearances; V2: vendor-driven clearances per slide manufacturer spec
+    public static readonly Length DrawerBoxHeightClearance = Length.FromInches(1m);
+    public static readonly Length DrawerBoxDepthClearance = Length.FromInches(1m);
+    public static readonly Length DrawerBoxWidthClearance = Length.FromInches(1m);
+    // V1 shop defaults for drawer box panel thicknesses; V2: vendor-driven material specs
+    public static readonly Length DrawerBoxBottomThickness = Length.FromInches(0.25m);
+    public static readonly Length DrawerBoxSideThickness = Length.FromInches(0.5m);
 
     private static readonly Thickness DefaultPanelThickness = Thickness.Exact(Length.FromInches(0.75m));
     private static readonly Length DefaultToeKickHeight = Length.FromInches(4m);
@@ -36,6 +44,8 @@ public static class PartGeometry
         {
             specs.AddRange(BuildFaceFrameParts(cabinet, thickness));
         }
+
+        specs.AddRange(BuildOpeningParts(cabinet));
 
         return specs;
     }
@@ -177,7 +187,32 @@ public static class PartGeometry
         return parts;
     }
 
-    private static int ResolveShelfCount(CabinetStateRecord cabinet) =>
+    private static IReadOnlyList<PartGeometrySpec> BuildOpeningParts(CabinetStateRecord cabinet)
+    {
+        var parts = new List<PartGeometrySpec>();
+        foreach (var opening in cabinet.EffectiveOpenings.OrderBy(o => o.Index))
+        {
+            if (opening.Type is OpeningType.Door or OpeningType.SingleDoor or OpeningType.DoubleDoor)
+            {
+                parts.Add(new PartGeometrySpec("Door", opening.Width, opening.Height, GrainDirection.LengthWise, NoEdges()));
+            }
+            else if (opening.Type is OpeningType.Drawer or OpeningType.DrawerBank)
+            {
+                var boxWidth = ClampPositive(opening.Width.Inches - DrawerBoxWidthClearance.Inches);
+                var boxHeight = ClampPositive(opening.Height.Inches - DrawerBoxHeightClearance.Inches);
+                var boxDepth = ClampPositive(cabinet.NominalDepth.Inches - DrawerBoxDepthClearance.Inches);
+                parts.Add(new PartGeometrySpec("DrawerFront", opening.Width, opening.Height, GrainDirection.LengthWise, NoEdges()));
+                parts.Add(new PartGeometrySpec("DrawerBoxBottom", boxWidth, boxDepth, GrainDirection.None, NoEdges()));
+                parts.Add(new PartGeometrySpec("DrawerBoxFront", boxWidth, boxHeight, GrainDirection.LengthWise, NoEdges()));
+                parts.Add(new PartGeometrySpec("DrawerBoxBack", boxWidth, boxHeight, GrainDirection.LengthWise, NoEdges()));
+                parts.Add(new PartGeometrySpec("DrawerBoxLeftSide", boxDepth, boxHeight, GrainDirection.LengthWise, NoEdges()));
+                parts.Add(new PartGeometrySpec("DrawerBoxRightSide", boxDepth, boxHeight, GrainDirection.LengthWise, NoEdges()));
+            }
+        }
+        return parts;
+    }
+
+    public static int ResolveShelfCount(CabinetStateRecord cabinet) =>
         cabinet.Category switch
         {
             CabinetCategory.Base => 1,
@@ -186,16 +221,18 @@ public static class PartGeometry
             _ => 0
         };
 
-    private static int ResolveOpeningCount(CabinetStateRecord cabinet) =>
-        cabinet.Category switch
-        {
-            CabinetCategory.Base or CabinetCategory.Vanity => cabinet.NominalWidth >= Length.FromInches(30m) ? 2 : 1,
-            CabinetCategory.Wall => cabinet.NominalWidth >= Length.FromInches(30m) ? 2 : 1,
-            CabinetCategory.Tall => 2,
-            _ => 1
-        };
+    public static int ResolveOpeningCount(CabinetStateRecord cabinet) =>
+        cabinet.EffectiveDefaultOpeningCount > 0
+            ? cabinet.EffectiveDefaultOpeningCount
+            : cabinet.Category switch
+            {
+                CabinetCategory.Base or CabinetCategory.Vanity => cabinet.NominalWidth >= Length.FromInches(30m) ? 2 : 1,
+                CabinetCategory.Wall => cabinet.NominalWidth >= Length.FromInches(30m) ? 2 : 1,
+                CabinetCategory.Tall => 2,
+                _ => 1
+            };
 
-    private static Length ResolveToeKickHeight(CabinetStateRecord cabinet)
+    public static Length ResolveToeKickHeight(CabinetStateRecord cabinet)
     {
         if (cabinet.EffectiveOverrides.TryGetValue(ToeKickHeightOverrideKey, out var overrideValue) &&
             overrideValue is OverrideValue.OfLength length &&

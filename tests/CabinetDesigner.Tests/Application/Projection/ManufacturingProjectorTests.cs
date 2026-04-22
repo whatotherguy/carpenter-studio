@@ -186,11 +186,7 @@ public sealed class ManufacturingProjectorTests
 
         Assert.False(plan.Readiness.IsReady);
         Assert.Equal(
-            new[]
-            {
-                ManufacturingBlockerCode.MissingMaterial,
-                ManufacturingBlockerCode.MissingHardware
-            },
+            new[] { ManufacturingBlockerCode.MissingMaterial },
             plan.Readiness.Blockers.Select(blocker => blocker.Code).Distinct().ToArray());
     }
 

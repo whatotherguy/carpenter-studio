@@ -1,4 +1,5 @@
 using CabinetDesigner.Application.Diagnostics;
+using CabinetDesigner.Application.Pipeline.Parts;
 using CabinetDesigner.Application.Pipeline.StageResults;
 using CabinetDesigner.Application.Services;
 using CabinetDesigner.Application.State;
@@ -28,7 +29,14 @@ public sealed class ConstraintPropagationStage : IResolutionStage
             ["StructuralBase"] = ["material.StructuralBase", "material.Case", "material.All"],
             ["FrameStile"] = ["material.FrameStile", "material.FaceFrame", "material.All"],
             ["FrameRail"] = ["material.FrameRail", "material.FaceFrame", "material.All"],
-            ["FrameMullion"] = ["material.FrameMullion", "material.FaceFrame", "material.All"]
+            ["FrameMullion"] = ["material.FrameMullion", "material.FaceFrame", "material.All"],
+            ["Door"] = ["material.Door", "material.All"],
+            ["DrawerFront"] = ["material.DrawerFront", "material.All"],
+            ["DrawerBoxBottom"] = ["material.DrawerBoxBottom", "material.DrawerBox", "material.All"],
+            ["DrawerBoxFront"] = ["material.DrawerBoxFront", "material.DrawerBox", "material.All"],
+            ["DrawerBoxBack"] = ["material.DrawerBoxBack", "material.DrawerBox", "material.All"],
+            ["DrawerBoxLeftSide"] = ["material.DrawerBoxLeftSide", "material.DrawerBox", "material.All"],
+            ["DrawerBoxRightSide"] = ["material.DrawerBoxRightSide", "material.DrawerBox", "material.All"]
         };
 
     private readonly ICatalogService _catalog;
@@ -47,7 +55,7 @@ public sealed class ConstraintPropagationStage : IResolutionStage
         _logger = logger;
     }
 
-    public int StageNumber => 5;
+    public int StageNumber => 6;
 
     public string StageName => "Constraint Propagation";
 
@@ -128,7 +136,7 @@ public sealed class ConstraintPropagationStage : IResolutionStage
         foreach (var cabinet in _stateStore.GetAllCabinets()
                      .OrderBy(cabinet => cabinet.CabinetId.Value))
         {
-            var openingCount = ResolveOpeningCount(cabinet);
+            var openingCount = PartGeometry.ResolveOpeningCount(cabinet);
             if (openingCount <= 0)
             {
                 continue;
@@ -145,7 +153,7 @@ public sealed class ConstraintPropagationStage : IResolutionStage
                         issues,
                         "NO_HARDWARE_CATALOG",
                         ValidationSeverity.Warning,
-                        $"Cabinet '{cabinet.CabinetId}' opening {index + 1} has no hardware catalog assignment.",
+                        $"No hardware catalog configured for {cabinet.Category} opening. V2 will integrate vendor hardware.",
                         [cabinet.CabinetId.ToString(), openingId.ToString()]);
                     continue;
                 }
@@ -229,15 +237,6 @@ public sealed class ConstraintPropagationStage : IResolutionStage
         MaterialOverrideKeys.TryGetValue(partType, out var keys)
             ? keys
             : [$"material.{partType}", "material.All"];
-
-    private static int ResolveOpeningCount(CabinetStateRecord cabinet) =>
-        cabinet.Category switch
-        {
-            CabinetCategory.Base or CabinetCategory.Wall or CabinetCategory.Vanity
-                => cabinet.NominalWidth >= Length.FromInches(30m) ? 2 : 1,
-            CabinetCategory.Tall => 2,
-            _ => 1
-        };
 
     private static OpeningId CreateStableOpeningId(CabinetId cabinetId, int ordinal)
     {

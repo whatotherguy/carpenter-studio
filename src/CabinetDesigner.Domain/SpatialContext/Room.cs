@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
 
@@ -35,6 +36,28 @@ public sealed class Room
         CeilingHeight = ceilingHeight;
     }
 
+    public static Room Reconstitute(
+        RoomId id,
+        RevisionId revisionId,
+        string name,
+        Length ceilingHeight,
+        IReadOnlyList<Wall> walls,
+        IReadOnlyList<Obstacle> obstacles)
+    {
+        var room = new Room(id, revisionId, name, ceilingHeight);
+        room._walls.AddRange(walls);
+        room._obstacles.AddRange(obstacles);
+        return room;
+    }
+
+    public void Rename(string newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName))
+            throw new InvalidOperationException("Room name is required.");
+
+        Name = newName;
+    }
+
     public Wall AddWall(Point2D start, Point2D end, Thickness wallThickness)
     {
         var wall = new Wall(WallId.New(), Id, start, end, wallThickness);
@@ -42,11 +65,33 @@ public sealed class Room
         return wall;
     }
 
+    public void RemoveWall(WallId wallId)
+    {
+        var wall = _walls.FirstOrDefault(candidate => candidate.Id == wallId);
+        if (wall is null)
+        {
+            throw new InvalidOperationException($"Wall {wallId.Value} was not found in room {Id.Value}.");
+        }
+
+        _walls.Remove(wall);
+    }
+
     public Obstacle AddObstacle(Rect2D bounds, string description)
     {
         var obstacle = new Obstacle(ObstacleId.New(), Id, bounds, description);
         _obstacles.Add(obstacle);
         return obstacle;
+    }
+
+    public void RemoveObstacle(ObstacleId obstacleId)
+    {
+        var obstacle = _obstacles.FirstOrDefault(candidate => candidate.Id == obstacleId);
+        if (obstacle is null)
+        {
+            throw new InvalidOperationException($"Obstacle {obstacleId.Value} was not found in room {Id.Value}.");
+        }
+
+        _obstacles.Remove(obstacle);
     }
 
     private bool WallsFormClosedLoop()

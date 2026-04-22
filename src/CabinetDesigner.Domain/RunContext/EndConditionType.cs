@@ -4,6 +4,7 @@ public enum EndConditionType
 {
     Open,
     AgainstWall,
+    AdjacentCabinet,
     Filler,
     Scribe
 }

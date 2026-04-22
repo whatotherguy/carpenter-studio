@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using System.Threading;
+using System.Linq;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Handlers;
 using CabinetDesigner.Application.Services;
@@ -113,6 +114,20 @@ public sealed class RunServiceTests
     }
 
     [Fact]
+    public async Task DeleteRunAsync_RemovesRun_WhenEmpty()
+    {
+        var stateStore = new InMemoryDesignStateStore();
+        var (_, wall) = CreateRoomAndWall(stateStore);
+        var run = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(72m));
+        stateStore.AddRun(run, wall.StartPoint, wall.EndPoint);
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), stateStore);
+
+        await service.DeleteRunAsync(run.Id, default);
+
+        Assert.Null(stateStore.GetRun(run.Id));
+    }
+
+    [Fact]
     public async Task MoveCabinetAsync_UsesHandlerDispatchPath()
     {
         var handler = new RecordingDesignCommandHandler();
@@ -147,6 +162,25 @@ public sealed class RunServiceTests
     }
 
     [Fact]
+    public async Task SetCabinetOverrideAsync_UpdatesOverride()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+        var cabinetId = Guid.NewGuid();
+
+        await service.SetCabinetOverrideAsync(new SetCabinetOverrideRequestDto(
+            cabinetId,
+            "nominal_width",
+            new OverrideValueDto.OfDecimalInches(33.5m)));
+
+        var command = Assert.IsType<SetCabinetOverrideCommand>(handler.LastCommand);
+        Assert.Equal(new CabinetId(cabinetId), command.CabinetId);
+        Assert.Equal("nominal_width", command.OverrideKey);
+        var value = Assert.IsType<OverrideValue.OfLength>(command.Value);
+        Assert.Equal(33.5m, value.Value.Inches);
+    }
+
+    [Fact]
     public async Task SetCabinetOverrideAsync_UsesMaterialOverrideValue()
     {
         var handler = new RecordingDesignCommandHandler();
@@ -161,6 +195,110 @@ public sealed class RunServiceTests
         var command = Assert.IsType<SetCabinetOverrideCommand>(handler.LastCommand);
         var value = Assert.IsType<OverrideValue.OfMaterialId>(command.Value);
         Assert.Equal(new MaterialId(materialId), value.Value);
+    }
+
+    [Fact]
+    public async Task SetCabinetOverrideAsync_RejectsEmptyKey()
+    {
+        var handler = new RecordingDesignCommandHandler();
+        var service = new RunService(handler, new FixedClock(DateTimeOffset.UnixEpoch), new InMemoryDesignStateStore());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetCabinetOverrideAsync(new SetCabinetOverrideRequestDto(
+            Guid.NewGuid(),
+            string.Empty,
+            new OverrideValueDto.OfString("x"))));
+    }
+
+    [Fact]
+    public async Task CreateRunAsync_PersistsRun_AtRequestedPosition()
+    {
+        var stateStore = new InMemoryDesignStateStore();
+        var (room, wall) = CreateRoomAndWall(stateStore);
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), stateStore);
+
+        var run = await service.CreateRunAsync(room.Id, wall.Id, Length.FromInches(12m), Length.FromInches(24m));
+
+        Assert.Equal(wall.Id, run.WallId);
+        var spatialInfo = Assert.IsType<RunSpatialInfo>(stateStore.GetRunSpatialInfo(run.Id));
+        Assert.Equal(12m, spatialInfo.StartWorld.X);
+        Assert.Equal(0m, spatialInfo.StartWorld.Y);
+        Assert.Equal(36m, spatialInfo.EndWorld.X);
+        Assert.Equal(0m, spatialInfo.EndWorld.Y);
+    }
+
+    [Fact]
+    public async Task PlaceCabinetAsync_AppendsToEndOfRun_InInsertionOrder()
+    {
+        var stateStore = new InMemoryDesignStateStore();
+        var (_, wall) = CreateRoomAndWall(stateStore);
+        var run = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(72m));
+        stateStore.AddRun(run, wall.StartPoint, wall.EndPoint);
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), stateStore);
+
+        var first = await service.PlaceCabinetAsync(run.Id, "base-standard-24");
+        var second = await service.PlaceCabinetAsync(run.Id, "base-drawer-18");
+
+        var storedRun = Assert.IsType<CabinetRun>(stateStore.GetRun(run.Id));
+        Assert.Equal(2, storedRun.CabinetCount);
+        Assert.Equal(first.Id, storedRun.Slots[0].CabinetId);
+        Assert.Equal(second.Id, storedRun.Slots[1].CabinetId);
+        Assert.Equal(0, storedRun.Slots[0].SlotIndex);
+        Assert.Equal(1, storedRun.Slots[1].SlotIndex);
+    }
+
+    [Fact]
+    public async Task PlaceCabinetAsync_ExceedsCapacity_Throws_WithStableMessage()
+    {
+        var stateStore = new InMemoryDesignStateStore();
+        var (_, wall) = CreateRoomAndWall(stateStore);
+        var run = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(24m));
+        stateStore.AddRun(run, wall.StartPoint, wall.EndPoint);
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), stateStore);
+
+        await service.PlaceCabinetAsync(run.Id, "base-standard-24");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PlaceCabinetAsync(run.Id, "base-drawer-18"));
+
+        Assert.Equal("Cannot place cabinet: run capacity exceeded.", ex.Message);
+    }
+
+    [Fact]
+    public async Task DeleteCabinetAsync_RemovesCabinet_AndCompactsRun()
+    {
+        var stateStore = new InMemoryDesignStateStore();
+        var (_, wall) = CreateRoomAndWall(stateStore);
+        var run = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(72m));
+        stateStore.AddRun(run, wall.StartPoint, wall.EndPoint);
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), stateStore);
+
+        var first = await service.PlaceCabinetAsync(run.Id, "base-standard-24");
+        var second = await service.PlaceCabinetAsync(run.Id, "base-drawer-18");
+
+        await service.DeleteCabinetAsync(first.Id);
+
+        Assert.Null(stateStore.GetCabinet(first.Id));
+        var storedRun = Assert.IsType<CabinetRun>(stateStore.GetRun(run.Id));
+        Assert.Single(storedRun.Slots.Where(slot => slot.SlotType == RunSlotType.Cabinet));
+        Assert.Equal(second.Id, storedRun.Slots[0].CabinetId);
+        Assert.Equal(0, storedRun.Slots[0].SlotIndex);
+    }
+
+    [Fact]
+    public async Task DeleteRunAsync_Rejects_WhenRunHasCabinets()
+    {
+        var stateStore = new InMemoryDesignStateStore();
+        var (_, wall) = CreateRoomAndWall(stateStore);
+        var run = new CabinetRun(RunId.New(), wall.Id, Length.FromInches(72m));
+        stateStore.AddRun(run, wall.StartPoint, wall.EndPoint);
+        var service = new RunService(new RecordingDesignCommandHandler(), new FixedClock(DateTimeOffset.UnixEpoch), stateStore);
+
+        await service.PlaceCabinetAsync(run.Id, "base-standard-24");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteRunAsync(run.Id, default));
+
+        Assert.Equal("RUN_NOT_EMPTY", ex.Message);
+        Assert.NotNull(stateStore.GetRun(run.Id));
     }
 
     [Fact]
@@ -315,5 +453,15 @@ public sealed class RunServiceTests
     private sealed class FixedClock(DateTimeOffset now) : IClock
     {
         public DateTimeOffset Now => now;
+    }
+
+    private static (Room Room, Wall Wall) CreateRoomAndWall(IDesignStateStore stateStore)
+    {
+        var revisionId = RevisionId.New();
+        var room = new Room(RoomId.New(), revisionId, "Kitchen", Length.FromInches(96m));
+        var wall = room.AddWall(Point2D.Origin, new Point2D(96m, 0m), Thickness.Exact(Length.FromInches(4m)));
+        stateStore.AddRoom(room);
+        stateStore.AddWall(wall);
+        return (room, wall);
     }
 }

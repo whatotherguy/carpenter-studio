@@ -188,9 +188,7 @@ public sealed class EditorCanvasSessionAdapterTests
     {
         var adapter = CreateAdapter();
         // Content: 20" × 10" block starting at (10", 5").
-        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
-            new CabinetDesigner.Domain.Geometry.Point2D(10m, 5m),
-            new CabinetDesigner.Domain.Geometry.Point2D(30m, 15m));
+        var bounds = new ViewportBounds(10, 5, 30, 15);
 
         adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
 
@@ -210,9 +208,7 @@ public sealed class EditorCanvasSessionAdapterTests
     {
         var adapter = CreateAdapter();
         // Wide content: 100" × 1".  Width dominates the fit.
-        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
-            CabinetDesigner.Domain.Geometry.Point2D.Origin,
-            new CabinetDesigner.Domain.Geometry.Point2D(100m, 1m));
+        var bounds = new ViewportBounds(0, 0, 100, 1);
 
         adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
 
@@ -225,9 +221,7 @@ public sealed class EditorCanvasSessionAdapterTests
     {
         var adapter = CreateAdapter();
         // Tiny content: 0.01" × 0.01" — would produce a huge scale without clamping.
-        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
-            CabinetDesigner.Domain.Geometry.Point2D.Origin,
-            new CabinetDesigner.Domain.Geometry.Point2D(0.01m, 0.01m));
+        var bounds = new ViewportBounds(0, 0, 0.01, 0.01);
 
         adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
 
@@ -240,9 +234,7 @@ public sealed class EditorCanvasSessionAdapterTests
         var adapter = CreateAdapter();
         adapter.PanBy(50.0, 30.0);
         var viewport = adapter.Viewport;
-        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
-            CabinetDesigner.Domain.Geometry.Point2D.Origin,
-            new CabinetDesigner.Domain.Geometry.Point2D(10m, 10m));
+        var bounds = new ViewportBounds(0, 0, 10, 10);
 
         adapter.FitViewport(bounds, canvasWidth: 0, canvasHeight: 0);
 
@@ -255,9 +247,7 @@ public sealed class EditorCanvasSessionAdapterTests
         // A vertical wall segment collapses to zero width — the fit should still work by
         // treating width as near-zero rather than aborting.
         var adapter = CreateAdapter();
-        var bounds = CabinetDesigner.Domain.Geometry.Rect2D.FromCorners(
-            new CabinetDesigner.Domain.Geometry.Point2D(5m, 0m),
-            new CabinetDesigner.Domain.Geometry.Point2D(5m, 20m)); // zero-width line
+        var bounds = new ViewportBounds(5, 0, 5, 20); // zero-width line
 
         adapter.FitViewport(bounds, canvasWidth: 800, canvasHeight: 600);
 

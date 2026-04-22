@@ -1,8 +1,16 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
 using System.Windows;
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
+using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.Geometry;
+using CabinetDesigner.Domain.Identifiers;
+using CabinetDesigner.Domain.SpatialContext;
 using CabinetDesigner.Presentation;
 using CabinetDesigner.Presentation.Commands;
 
@@ -11,10 +19,16 @@ namespace CabinetDesigner.Presentation.ViewModels;
 public sealed class ShellViewModel : ObservableObject, IDisposable
 {
     private readonly IProjectService _projectService;
+    private readonly IRoomService _roomService;
     private readonly IUndoRedoService _undoRedoService;
     private readonly IApplicationEventBus _eventBus;
+    private readonly IAppLogger _logger;
     private readonly IDialogService _dialogService;
+    private readonly ICutListExportWorkflowService _cutListExportWorkflowService;
+    private readonly ProjectStartupViewModel _projectStartup;
+    private readonly RoomsPanelViewModel _roomsPanel;
     private ProjectSummaryDto? _activeProject;
+    private ShellMode _mode = ShellMode.Startup;
     private string _pendingProjectName = "New Project";
     private string _pendingProjectFilePath = string.Empty;
 
@@ -22,32 +36,59 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         IProjectService projectService,
         IUndoRedoService undoRedoService,
         IApplicationEventBus eventBus,
+        IAppLogger logger,
         EditorCanvasViewModel canvas,
         CatalogPanelViewModel catalog,
         PropertyInspectorViewModel propertyInspector,
         RunSummaryPanelViewModel runSummary,
         IssuePanelViewModel issuePanel,
         StatusBarViewModel statusBar,
-        IDialogService dialogService)
+        IDialogService dialogService,
+        ICutListExportWorkflowService cutListExportWorkflowService)
+        : this(projectService, null, undoRedoService, eventBus, logger, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar, dialogService, cutListExportWorkflowService)
+    {
+    }
+
+    public ShellViewModel(
+        IProjectService projectService,
+        IRoomService? roomService,
+        IUndoRedoService undoRedoService,
+        IApplicationEventBus eventBus,
+        IAppLogger logger,
+        EditorCanvasViewModel canvas,
+        CatalogPanelViewModel catalog,
+        PropertyInspectorViewModel propertyInspector,
+        RunSummaryPanelViewModel runSummary,
+        IssuePanelViewModel issuePanel,
+        StatusBarViewModel statusBar,
+        IDialogService dialogService,
+        ICutListExportWorkflowService cutListExportWorkflowService)
     {
         _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
+        _roomService = roomService ?? new NoOpRoomService();
         _undoRedoService = undoRedoService ?? throw new ArgumentNullException(nameof(undoRedoService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+        _cutListExportWorkflowService = cutListExportWorkflowService ?? throw new ArgumentNullException(nameof(cutListExportWorkflowService));
         Canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         Catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         PropertyInspector = propertyInspector ?? throw new ArgumentNullException(nameof(propertyInspector));
         RunSummary = runSummary ?? throw new ArgumentNullException(nameof(runSummary));
         IssuePanel = issuePanel ?? throw new ArgumentNullException(nameof(issuePanel));
         StatusBar = statusBar ?? throw new ArgumentNullException(nameof(statusBar));
+        _projectStartup = new ProjectStartupViewModel(_projectService, _eventBus, _logger);
+        _roomsPanel = new RoomsPanelViewModel(_roomService, _eventBus, _logger, Canvas.SetActiveRoom);
         Canvas.PropertyChanged += OnCanvasPropertyChanged;
         Catalog.ItemActivated += OnCatalogItemActivated;
         IssuePanel.SetSelectionCallback(SelectEntities);
 
-        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, () => !string.IsNullOrWhiteSpace(PendingProjectName), HandleCommandException);
-        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, onException: HandleCommandException);
-        SaveCommand = new AsyncRelayCommand(SaveAsync, () => HasActiveProject, HandleCommandException);
-        CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync, () => HasActiveProject, HandleCommandException);
+        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, _logger, _eventBus, () => !string.IsNullOrWhiteSpace(PendingProjectName));
+        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, _logger, _eventBus);
+        SaveCommand = new AsyncRelayCommand(SaveAsync, _logger, _eventBus, () => HasActiveProject);
+        CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync, _logger, _eventBus, () => HasActiveProject);
+        ExportCutListCommand = new AsyncRelayCommand(ExportCutListAsync, _logger, _eventBus, () => HasActiveProject);
+        PreviewHtmlCommand = new AsyncRelayCommand(PreviewHtmlAsync, _logger, _eventBus, () => HasActiveProject);
         UndoCommand = new RelayCommand(() => _ = _undoRedoService.Undo(), () => _undoRedoService.CanUndo);
         RedoCommand = new RelayCommand(() => _ = _undoRedoService.Redo(), () => _undoRedoService.CanRedo);
 
@@ -55,13 +96,18 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         OpenProjectCommand.PropertyChanged += OnCommandPropertyChanged;
         SaveCommand.PropertyChanged += OnCommandPropertyChanged;
         CloseProjectCommand.PropertyChanged += OnCommandPropertyChanged;
+        ExportCutListCommand.PropertyChanged += OnCommandPropertyChanged;
+        PreviewHtmlCommand.PropertyChanged += OnCommandPropertyChanged;
 
         _eventBus.Subscribe<ProjectOpenedEvent>(OnProjectOpened);
         _eventBus.Subscribe<ProjectClosedEvent>(OnProjectClosed);
+        _eventBus.Subscribe<ActiveRoomChangedEvent>(OnActiveRoomChanged);
         _eventBus.Subscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Subscribe<UndoAppliedEvent>(OnUndoRedoApplied);
         _eventBus.Subscribe<RedoAppliedEvent>(OnUndoRedoApplied);
 
+        _ = _projectStartup.InitializeAsync();
+        _ = _roomsPanel.InitializeAsync();
         SetActiveProject(_projectService.CurrentProject);
         StatusBar.SetStatusMessage(Canvas.StatusMessage);
         RefreshSelectionDrivenPanels();
@@ -79,6 +125,10 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
 
     public StatusBarViewModel StatusBar { get; }
 
+    public ProjectStartupViewModel ProjectStartup => _projectStartup;
+
+    public RoomsPanelViewModel RoomsPanel => _roomsPanel;
+
     public object CanvasView => Canvas.CanvasView;
 
     public bool IsBusy =>
@@ -86,7 +136,9 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         NewProjectCommand.IsExecuting ||
         OpenProjectCommand.IsExecuting ||
         SaveCommand.IsExecuting ||
-        CloseProjectCommand.IsExecuting;
+        CloseProjectCommand.IsExecuting ||
+        ExportCutListCommand.IsExecuting ||
+        PreviewHtmlCommand.IsExecuting;
 
     public string CanvasCurrentMode => Canvas.CurrentMode;
 
@@ -121,6 +173,12 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     public string WorkspaceSubtitle => ActiveProject is null
         ? "Canvas and shell controls"
         : $"{RevisionText} - {ProjectOpenText}";
+
+    public ShellMode Mode => _mode;
+
+    public bool IsStartupMode => Mode == ShellMode.Startup;
+
+    public bool IsEditorMode => Mode == ShellMode.Editor;
 
     internal void SelectEntities(IReadOnlyList<Guid> entityIds) => Canvas.SetSelectedCabinetIds(entityIds);
 
@@ -196,6 +254,10 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
 
     public AsyncRelayCommand CloseProjectCommand { get; }
 
+    public AsyncRelayCommand ExportCutListCommand { get; }
+
+    public AsyncRelayCommand PreviewHtmlCommand { get; }
+
     public RelayCommand UndoCommand { get; }
 
     public RelayCommand RedoCommand { get; }
@@ -208,6 +270,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
 
     public RelayCommand SelectNoneCommand => Canvas.SelectNoneCommand;
 
+    public AsyncRelayCommand DeleteSelectedCommand => Canvas.DeleteSelectedCommand;
+
     public void Dispose()
     {
         Canvas.PropertyChanged -= OnCanvasPropertyChanged;
@@ -216,11 +280,16 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         OpenProjectCommand.PropertyChanged -= OnCommandPropertyChanged;
         SaveCommand.PropertyChanged -= OnCommandPropertyChanged;
         CloseProjectCommand.PropertyChanged -= OnCommandPropertyChanged;
+        ExportCutListCommand.PropertyChanged -= OnCommandPropertyChanged;
+        PreviewHtmlCommand.PropertyChanged -= OnCommandPropertyChanged;
         _eventBus.Unsubscribe<ProjectOpenedEvent>(OnProjectOpened);
         _eventBus.Unsubscribe<ProjectClosedEvent>(OnProjectClosed);
+        _eventBus.Unsubscribe<ActiveRoomChangedEvent>(OnActiveRoomChanged);
         _eventBus.Unsubscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Unsubscribe<UndoAppliedEvent>(OnUndoRedoApplied);
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnUndoRedoApplied);
+        ProjectStartup.Dispose();
+        RoomsPanel.Dispose();
         PropertyInspector.Dispose();
         IssuePanel.Dispose();
         RunSummary.Dispose();
@@ -273,15 +342,67 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         await _projectService.CloseAsync().ConfigureAwait(false);
     }
 
+    private Task ExportCutListAsync()
+    {
+        var folderPath = _dialogService.ShowFolderPicker("Export Cut List");
+        if (string.IsNullOrWhiteSpace(folderPath))
+        {
+            return Task.CompletedTask;
+        }
+
+        var result = _cutListExportWorkflowService.BuildCurrentProjectCutList();
+        if (!result.Success || result.Export is null || string.IsNullOrWhiteSpace(result.FileStem))
+        {
+            StatusBar.SetStatusMessage(result.FailureMessage ?? "Cut list export failed.");
+            return Task.CompletedTask;
+        }
+
+        var csvPath = Path.Combine(folderPath, result.FileStem + ".cutlist.csv");
+        var txtPath = Path.Combine(folderPath, result.FileStem + ".cutlist.txt");
+        var htmlPath = Path.Combine(folderPath, result.FileStem + ".cutlist.html");
+        File.WriteAllBytes(csvPath, result.Export.Csv);
+        File.WriteAllBytes(txtPath, result.Export.Txt);
+        File.WriteAllBytes(htmlPath, result.Export.Html);
+        StatusBar.SetStatusMessage($"Cut list exported to {folderPath}.");
+        return Task.CompletedTask;
+    }
+
+    private Task PreviewHtmlAsync()
+    {
+        var result = _cutListExportWorkflowService.BuildCurrentProjectCutList();
+        if (!result.Success || result.Export is null || string.IsNullOrWhiteSpace(result.FileStem))
+        {
+            StatusBar.SetStatusMessage(result.FailureMessage ?? "HTML preview failed.");
+            return Task.CompletedTask;
+        }
+
+        var previewPath = Path.Combine(Path.GetTempPath(), result.FileStem + ".cutlist.preview.html");
+        File.WriteAllBytes(previewPath, result.Export.Html);
+        Process.Start(new ProcessStartInfo(previewPath)
+        {
+            UseShellExecute = true
+        });
+        StatusBar.SetStatusMessage("Cut list HTML preview opened in your browser.");
+        return Task.CompletedTask;
+    }
+
     private void OnProjectOpened(ProjectOpenedEvent @event) =>
-        DispatchIfNeeded(() => SetActiveProject(@event.Project));
+        DispatchIfNeeded(() =>
+        {
+            SetActiveProject(@event.Project);
+            SetMode(ShellMode.Editor);
+        });
 
     private void OnProjectClosed(ProjectClosedEvent _) =>
         DispatchIfNeeded(() =>
         {
             SetActiveProject(null);
+            SetMode(ShellMode.Startup);
             RefreshSelectionDrivenPanels();
         });
+
+    private void OnActiveRoomChanged(ActiveRoomChangedEvent _) =>
+        DispatchIfNeeded(() => OnPropertyChanged(nameof(IsEditorMode)));
 
     private void OnDesignChanged(DesignChangedEvent _) =>
         DispatchIfNeeded(() => SetActiveProject(_projectService.CurrentProject));
@@ -333,28 +454,56 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ProjectOpenText));
         OnPropertyChanged(nameof(RevisionText));
         OnPropertyChanged(nameof(SaveStateText));
+        OnPropertyChanged(nameof(Mode));
+        OnPropertyChanged(nameof(IsStartupMode));
+        OnPropertyChanged(nameof(IsEditorMode));
         StatusBar.SetProjectSummary(project);
         RefreshCommandStates();
+        SetMode(project is null ? ShellMode.Startup : ShellMode.Editor);
         return true;
+    }
+
+    private void SetMode(ShellMode mode)
+    {
+        if (SetProperty(ref _mode, mode, nameof(Mode)))
+        {
+            OnPropertyChanged(nameof(IsStartupMode));
+            OnPropertyChanged(nameof(IsEditorMode));
+        }
     }
 
     private void RefreshCommandStates()
     {
         SaveCommand.NotifyCanExecuteChanged();
         CloseProjectCommand.NotifyCanExecuteChanged();
+        ExportCutListCommand.NotifyCanExecuteChanged();
+        PreviewHtmlCommand.NotifyCanExecuteChanged();
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
-    }
-
-    private void HandleCommandException(Exception ex)
-    {
-        StatusBar.SetStatusMessage($"Error: {ex.Message}");
     }
 
     private void RefreshSelectionDrivenPanels()
     {
         PropertyInspector.OnSelectionChanged(Canvas.SelectedCabinetIds, Canvas.Scene);
         RunSummary.OnSelectionChanged(Canvas.SelectedCabinetIds);
+    }
+
+    private sealed class NoOpRoomService : IRoomService
+    {
+        public Task<Room> CreateRoomAsync(string name, Length ceilingHeight, CancellationToken ct) =>
+            Task.FromException<Room>(new InvalidOperationException("Room service is not configured."));
+
+        public Task<Wall> AddWallAsync(RoomId roomId, Point2D start, Point2D end, CabinetDesigner.Domain.Geometry.Thickness thickness, CancellationToken ct) =>
+            Task.FromException<Wall>(new InvalidOperationException("Room service is not configured."));
+
+        public Task RemoveWallAsync(WallId wallId, CancellationToken ct) =>
+            Task.FromException(new InvalidOperationException("Room service is not configured."));
+
+        public Task RenameRoomAsync(RoomId roomId, string newName, CancellationToken ct) =>
+            Task.FromException(new InvalidOperationException("Room service is not configured."));
+
+        public Task<IReadOnlyList<Room>> ListRoomsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<Room>>([]);
     }
 
     private void DispatchIfNeeded(Action action)

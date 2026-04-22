@@ -13,11 +13,11 @@ public sealed class CatalogPanelViewModelTests
 
         Assert.False(viewModel.IsPlaceholderData);
         Assert.Equal(string.Empty, viewModel.SearchText);
-        Assert.Equal(7, viewModel.AllItems.Count);
+        Assert.Collection(viewModel.AllItems, _ => { }, _ => { }, _ => { }, _ => { }, _ => { });
         Assert.Equal(viewModel.AllItems, viewModel.FilteredItems);
         Assert.True(viewModel.HasFilteredItems);
         Assert.Equal("Built-in catalog", viewModel.SourceLabel);
-        Assert.Equal("7 items", viewModel.ItemCountText);
+        Assert.Equal("5 items", viewModel.ItemCountText);
     }
 
     [Fact]
@@ -27,17 +27,17 @@ public sealed class CatalogPanelViewModelTests
 
         viewModel.SearchText = "wall";
 
-        Assert.Equal(2, viewModel.FilteredItems.Count);
+        Assert.Single(viewModel.FilteredItems);
         Assert.All(viewModel.FilteredItems, item => Assert.Equal("Wall", item.Category));
 
-        viewModel.SearchText = "36";
+        viewModel.SearchText = "18";
 
-        Assert.Equal(3, viewModel.FilteredItems.Count);
-        Assert.All(viewModel.FilteredItems, item => Assert.Contains("36", item.DefaultWidthDisplay));
+        Assert.Single(viewModel.FilteredItems);
+        Assert.All(viewModel.FilteredItems, item => Assert.Contains("18", item.DefaultWidthDisplay));
 
         viewModel.SearchText = "template";
 
-        Assert.Equal(7, viewModel.FilteredItems.Count);
+        Assert.Equal(5, viewModel.FilteredItems.Count);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class CatalogPanelViewModelTests
 
         Assert.Empty(viewModel.FilteredItems);
         Assert.False(viewModel.HasFilteredItems);
-        Assert.Equal("0 of 7 items", viewModel.ItemCountText);
+        Assert.Equal("0 of 5 items", viewModel.ItemCountText);
         Assert.Equal("Try another cabinet name, category, type id, or width.", viewModel.EmptyStateText);
     }
 

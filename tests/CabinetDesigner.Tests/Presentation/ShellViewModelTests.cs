@@ -188,7 +188,7 @@ public sealed class ShellViewModelTests
     [Fact]
     public async Task AsyncRelayCommand_WhenDelegateThrows_RoutesExceptionToStatusBar()
     {
-        using var shell = CreateShellViewModel(out _, out _, out _, out _, out _);
+        using var shell = CreateShellViewModel(out _, out _, out _, out var eventBus, out _);
 
         var exceptionRouted = false;
         shell.StatusBar.PropertyChanged += (_, args) =>
@@ -197,9 +197,11 @@ public sealed class ShellViewModelTests
                 exceptionRouted = true;
         };
 
+        var logger = new CapturingAppLogger();
         var thrower = new AsyncRelayCommand(
             () => throw new InvalidOperationException("test error"),
-            onException: ex => shell.StatusBar.SetStatusMessage($"Error: {ex.Message}"));
+            logger,
+            eventBus);
         await thrower.ExecuteAsync();
 
         Assert.True(exceptionRouted);
@@ -436,6 +438,7 @@ public sealed class ShellViewModelTests
         // Setup: Create shell with run service that will throw
         var projectService = new RecordingProjectService();
         var eventBus = new ApplicationEventBus();
+        var logger = new CapturingAppLogger();
         var throwingRunService = new ThrowingRunService();
         var currentState = new CurrentWorkingRevisionSource(new InMemoryDesignStateStore());
         var projector = new RecordingSceneProjector();
@@ -444,13 +447,15 @@ public sealed class ShellViewModelTests
             throwingRunService,
             eventBus,
             projector,
+            new NoOpRoomService(),
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             new RecordingCanvasHost(),
-            new NoOpInteractionService());
+            new NoOpInteractionService(),
+            logger);
 
         var catalog = new CatalogPanelViewModel(new CatalogService());
-        var propertyInspector = new PropertyInspectorViewModel(throwingRunService, eventBus);
+        var propertyInspector = new PropertyInspectorViewModel(throwingRunService, eventBus, logger);
         var validationService = new RecordingValidationSummaryService();
         var stateStore = new InMemoryDesignStateStore();
         var runSummary = new RunSummaryPanelViewModel(new RunSummaryService(currentState, stateStore), currentState, eventBus);
@@ -459,15 +464,18 @@ public sealed class ShellViewModelTests
 
         using var shell = new ShellViewModel(
             projectService,
+            new NoOpRoomService(),
             new RecordingUndoRedoService(),
             eventBus,
+            logger,
             canvas,
             catalog,
             propertyInspector,
             runSummary,
             issuePanel,
             statusBar,
-            new StubDialogService());
+            new StubDialogService(),
+            new NoOpCutListExportWorkflowService());
 
         // Setup: Open a project with a run so ResolveTargetRunId doesn't early-exit
         var project = new ProjectSummaryDto(Guid.NewGuid(), "Test Project", "C:\\test.cab", DateTimeOffset.UtcNow, "Rev 1", false);
@@ -497,7 +505,10 @@ public sealed class ShellViewModelTests
             "base-36",
             "Base Cabinet 36\"",
             "Base",
+            "Frameless",
             "Base cabinet 36 inches wide",
+            "36\" W x 24\" D x 34.5\" H",
+            "1 opening",
             "36\"",
             36m);
 
@@ -530,6 +541,7 @@ public sealed class ShellViewModelTests
         projectService = new RecordingProjectService();
         undoRedoService = new RecordingUndoRedoService();
         eventBus = new ApplicationEventBus();
+        var logger = new CapturingAppLogger();
         projectService.EventBus = eventBus;
         var validationSummaryService = new RecordingValidationSummaryService();
         var stateStore = new InMemoryDesignStateStore();
@@ -542,18 +554,20 @@ public sealed class ShellViewModelTests
             runService,
             eventBus,
             projector,
+            new NoOpRoomService(),
             new TestEditorCanvasSession(),
             new DefaultHitTester(),
             new RecordingCanvasHost(),
-            new NoOpInteractionService());
+            new NoOpInteractionService(),
+            logger);
 
         var catalog = new CatalogPanelViewModel(new CatalogService());
-        var propertyInspector = new PropertyInspectorViewModel(runService, eventBus);
+        var propertyInspector = new PropertyInspectorViewModel(runService, eventBus, logger);
         var runSummary = new RunSummaryPanelViewModel(runSummaryService, currentState, eventBus);
         var statusBar = new StatusBarViewModel(eventBus, validationSummaryService);
         var issuePanel = new IssuePanelViewModel(validationSummaryService, eventBus);
 
-        return new ShellViewModel(projectService, undoRedoService, eventBus, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar, dialogService);
+        return new ShellViewModel(projectService, new NoOpRoomService(), undoRedoService, eventBus, logger, canvas, catalog, propertyInspector, runSummary, issuePanel, statusBar, dialogService, new NoOpCutListExportWorkflowService());
     }
 
     private static void SeedRunSummaryState(CurrentWorkingRevisionSource currentState)
@@ -598,8 +612,14 @@ public sealed class ShellViewModelTests
         public Task<ProjectSummaryDto> OpenProjectAsync(string filePath, CancellationToken ct = default) =>
             Task.FromResult(CurrentProject = new ProjectSummaryDto(Guid.NewGuid(), "Opened", filePath, DateTimeOffset.UtcNow, "Rev 1", false));
 
+        public Task<ProjectSummaryDto> OpenProjectAsync(ProjectId projectId, CancellationToken ct = default) =>
+            Task.FromResult(CurrentProject = new ProjectSummaryDto(Guid.NewGuid(), "Opened", string.Empty, DateTimeOffset.UtcNow, "Rev 1", false));
+
         public Task<ProjectSummaryDto> CreateProjectAsync(string name, CancellationToken ct = default) =>
             Task.FromResult(CurrentProject = new ProjectSummaryDto(Guid.NewGuid(), name, string.Empty, DateTimeOffset.UtcNow, "Rev 1", false));
+
+        public Task<IReadOnlyList<ProjectSummaryDto>> ListProjectsAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ProjectSummaryDto>>(CurrentProject is null ? [] : [CurrentProject]);
 
         public Task SaveAsync(CancellationToken ct = default)
         {
@@ -677,6 +697,21 @@ public sealed class ShellViewModelTests
         public RunSummaryDto GetRunSummary(RunId runId) => throw new NotImplementedException();
     }
 
+    private sealed class NoOpRoomService : IRoomService
+    {
+        public Task<Room> CreateRoomAsync(string name, Length ceilingHeight, CancellationToken ct) =>
+            Task.FromException<Room>(new InvalidOperationException("Not used in this test."));
+
+        public Task<Wall> AddWallAsync(RoomId roomId, Point2D start, Point2D end, Thickness thickness, CancellationToken ct) =>
+            Task.FromException<Wall>(new InvalidOperationException("Not used in this test."));
+
+        public Task RemoveWallAsync(WallId wallId, CancellationToken ct) => Task.CompletedTask;
+
+        public Task RenameRoomAsync(RoomId roomId, string newName, CancellationToken ct) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<Room>> ListRoomsAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Room>>([]);
+    }
+
     private sealed class RecordingValidationSummaryService : IValidationSummaryService
     {
         public IReadOnlyList<ValidationIssueSummaryDto> GetAllIssues() => [];
@@ -740,7 +775,11 @@ public sealed class ShellViewModelTests
 
         public Guid? HoveredCabinetId => null;
 
+        public Guid? ActiveRoomId => null;
+
         public ViewportTransform Viewport => ViewportTransform.Default;
+
+        public CabinetDesigner.Editor.Snap.SnapSettings SnapSettings => CabinetDesigner.Editor.Snap.SnapSettings.Default;
 
         public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds)
         {
@@ -748,6 +787,10 @@ public sealed class ShellViewModelTests
         }
 
         public void SetHoveredCabinetId(Guid? cabinetId)
+        {
+        }
+
+        public void SetActiveRoom(Guid? roomId)
         {
         }
 
@@ -765,7 +808,7 @@ public sealed class ShellViewModelTests
 
         public void ResetViewport() { }
 
-        public void FitViewport(CabinetDesigner.Domain.Geometry.Rect2D contentBounds, double canvasWidth, double canvasHeight) { }
+        public void FitViewport(ViewportBounds contentBounds, double canvasWidth, double canvasHeight) { }
     }
 
     private sealed class NoOpInteractionService : IEditorInteractionService
@@ -795,7 +838,14 @@ public sealed class ShellViewModelTests
 
         public string? ShowSaveFileDialog(string title, string filter, string defaultFileName) => null;
 
+        public string? ShowFolderPicker(string title) => null;
+
         public bool ShowYesNoDialog(string title, string message) => YesNoResult;
+    }
+
+    private sealed class NoOpCutListExportWorkflowService : ICutListExportWorkflowService
+    {
+        public CutListWorkflowResult BuildCurrentProjectCutList() => new(false, null, null, "Not used in test.");
     }
 
     private sealed class ThrowingRunService : IRunService

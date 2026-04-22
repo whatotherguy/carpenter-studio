@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using CabinetDesigner.Editor;
 using CabinetDesigner.Rendering.DTOs;
 
@@ -27,4 +28,8 @@ public interface IEditorCanvasHost
     void SetMouseWheelHandler(Action<double, double, double> handler);
 
     void SetMiddleButtonDragHandler(Action<double, double> onStart, Action<double, double> onMove, Action onEnd);
+
+    void SetDragOverHandler(Func<double, double, object?, System.Windows.DragDropEffects> handler) { }
+
+    void SetDropHandler(Func<double, double, object?, Task<System.Windows.DragDropEffects>> handler) { }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CabinetDesigner.Domain.Identifiers;
 
 namespace CabinetDesigner.Domain.Commands.Modification;
@@ -48,8 +49,17 @@ public sealed record SetCabinetOverrideCommand : DesignCommandBase
         {
             issues.Add(new ValidationIssue(
                 ValidationSeverity.Error,
-                "MISSING_OVERRIDE_KEY",
+                "INVALID_OVERRIDE_KEY",
                 "Override key is required."));
+        }
+
+        if (!string.IsNullOrWhiteSpace(OverrideKey) &&
+            OverrideKey.Any(char.IsWhiteSpace))
+        {
+            issues.Add(new ValidationIssue(
+                ValidationSeverity.Error,
+                "INVALID_OVERRIDE_KEY",
+                "Override key cannot contain whitespace."));
         }
 
         return issues;

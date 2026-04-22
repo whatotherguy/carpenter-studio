@@ -1,6 +1,7 @@
 using CabinetDesigner.Application.Explanation;
 using CabinetDesigner.Application.Costing;
 using CabinetDesigner.Application.Diagnostics;
+using CabinetDesigner.Application.Export;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Projection;
 using CabinetDesigner.Application.State;
@@ -34,6 +35,7 @@ public static class ApplicationServiceRegistration
         services.AddSingleton<IValidationResultStore, InMemoryValidationResultStore>();
         services.AddSingleton<IPackagingResultStore, InMemoryPackagingResultStore>();
         services.AddSingleton<ICatalogService, CatalogService>();
+        services.AddSingleton<ICutListExporter, CutListExporter>();
         services.AddSingleton<ICostingPolicy, DefaultCostingPolicy>();
         services.AddSingleton<IPreviousApprovedCostLookup>(provider =>
         {
@@ -67,10 +69,12 @@ public static class ApplicationServiceRegistration
         services.AddScoped<IEditorCommandHandler, EditorCommandHandler>();
 
         services.AddScoped<IRunService, RunService>();
+        services.AddScoped<IRoomService, RoomService>();
         services.AddSingleton<IRunSummaryService, RunSummaryService>();
         services.AddScoped<IUndoRedoService, UndoRedoService>();
         services.AddScoped<IProjectService, ProjectService>();
         services.AddScoped<ISnapshotService, SnapshotService>();
+        services.AddScoped<ICutListExportWorkflowService, CutListExportWorkflowService>();
         services.AddSingleton<IValidationSummaryService, ValidationSummaryService>();
 
         return services;

@@ -39,6 +39,7 @@ public sealed class EditorSession
 
     private EditorMode _mode = EditorMode.Idle;
     private IReadOnlyList<CabinetId> _selectedCabinetIds = [];
+    private RoomId? _activeRoomId;
     private RunId? _activeRunId;
     private CabinetId? _hoveredCabinetId;
     private ViewportTransform _viewport = ViewportTransform.Default;
@@ -63,6 +64,14 @@ public sealed class EditorSession
         }
     }
 
+    public IReadOnlyList<Guid> SelectedCabinetIdsAsGuids
+    {
+        get
+        {
+            lock (_sync) return _selectedCabinetIds.Select(id => id.Value).ToArray();
+        }
+    }
+
     public RunId? ActiveRunId
     {
         get
@@ -71,11 +80,35 @@ public sealed class EditorSession
         }
     }
 
+    public RoomId? ActiveRoomId
+    {
+        get
+        {
+            lock (_sync) return _activeRoomId;
+        }
+    }
+
+    public Guid? ActiveRoomGuid
+    {
+        get
+        {
+            lock (_sync) return _activeRoomId?.Value;
+        }
+    }
+
     public CabinetId? HoveredCabinetId
     {
         get
         {
             lock (_sync) return _hoveredCabinetId;
+        }
+    }
+
+    public Guid? HoveredCabinetGuid
+    {
+        get
+        {
+            lock (_sync) return _hoveredCabinetId?.Value;
         }
     }
 
@@ -235,11 +268,35 @@ public sealed class EditorSession
         }
     }
 
+    public void SetActiveRoom(RoomId? roomId)
+    {
+        lock (_sync)
+        {
+            _activeRoomId = roomId;
+        }
+    }
+
+    public void SetActiveRoom(Guid? roomId)
+    {
+        lock (_sync)
+        {
+            _activeRoomId = roomId is null ? null : new RoomId(roomId.Value);
+        }
+    }
+
     public void SetHover(CabinetId? cabinetId)
     {
         lock (_sync)
         {
             _hoveredCabinetId = cabinetId;
+        }
+    }
+
+    public void SetHoveredCabinetId(Guid? cabinetId)
+    {
+        lock (_sync)
+        {
+            _hoveredCabinetId = cabinetId is null ? null : new CabinetId(cabinetId.Value);
         }
     }
 

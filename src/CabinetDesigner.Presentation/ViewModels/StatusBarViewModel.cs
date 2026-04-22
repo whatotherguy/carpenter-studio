@@ -33,6 +33,7 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
         _eventBus.Subscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Subscribe<UndoAppliedEvent>(OnDesignChanged);
         _eventBus.Subscribe<RedoAppliedEvent>(OnDesignChanged);
+        _eventBus.Subscribe<CommandExecutionFailedEvent>(OnCommandExecutionFailed);
 
         RefreshValidationCounts();
     }
@@ -138,6 +139,7 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Unsubscribe<UndoAppliedEvent>(OnDesignChanged);
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnDesignChanged);
+        _eventBus.Unsubscribe<CommandExecutionFailedEvent>(OnCommandExecutionFailed);
     }
 
     private void OnProjectOpened(ProjectOpenedEvent @event)
@@ -160,6 +162,9 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
 
     private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
         DispatchIfNeeded(RefreshValidationCounts);
+
+    private void OnCommandExecutionFailed(CommandExecutionFailedEvent @event) =>
+        DispatchIfNeeded(() => SetStatusMessage($"Error: {@event.Message}"));
 
     private void RefreshValidationCounts()
     {

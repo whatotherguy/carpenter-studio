@@ -39,7 +39,7 @@ public sealed class CurrentWorkingRevisionSource : IWorkingRevisionSource, ICurr
 
         var workingRevision = new WorkingRevision(
             CurrentState.Revision,
-            CurrentState.WorkingRevision.Rooms,
+            _stateStore.GetAllRooms(),
             _stateStore.GetAllWalls(),
             _stateStore.GetAllRuns(),
             BuildCabinets(CurrentState.Revision.Id),
@@ -63,7 +63,18 @@ public sealed class CurrentWorkingRevisionSource : IWorkingRevisionSource, ICurr
                     cabinet.Construction,
                     cabinet.NominalWidth,
                     cabinet.NominalDepth,
-                    cabinet.EffectiveNominalHeight);
+                    cabinet.EffectiveNominalHeight,
+                    cabinet.DefaultOpeningCount,
+                    cabinet.EffectiveOpenings
+                        .OrderBy(opening => opening.Index)
+                        .Select(opening => new CabinetOpening(
+                            new OpeningId(opening.OpeningId),
+                            cabinet.CabinetId,
+                            opening.Width,
+                            opening.Height,
+                            opening.Type,
+                            opening.Index))
+                        .ToArray());
 
                 foreach (var pair in cabinet.EffectiveOverrides.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using CabinetDesigner.Editor;
 using CabinetDesigner.Rendering;
@@ -21,6 +22,8 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
     private Action<double, double>? _panStartHandler;
     private Action<double, double>? _panMoveHandler;
     private Action? _panEndHandler;
+    private Func<double, double, object?, System.Windows.DragDropEffects>? _dragOverHandler;
+    private Func<double, double, object?, Task<System.Windows.DragDropEffects>>? _dropHandler;
     private System.Windows.Point? _middleDragOrigin;
     private bool _isLeftDragActive;
     private bool _disposed;
@@ -33,6 +36,9 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         _canvas.MouseMove += OnCanvasMouseMove;
         _canvas.MouseUp += OnCanvasMouseUp;
         _canvas.MouseWheel += OnCanvasMouseWheel;
+        _canvas.AllowDrop = true;
+        _canvas.DragOver += OnCanvasDragOver;
+        _canvas.Drop += OnCanvasDrop;
     }
 
     public object View => _canvas;
@@ -73,6 +79,10 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         _panEndHandler = onEnd;
     }
 
+    public void SetDragOverHandler(Func<double, double, object?, System.Windows.DragDropEffects> handler) => _dragOverHandler = handler;
+
+    public void SetDropHandler(Func<double, double, object?, Task<System.Windows.DragDropEffects>> handler) => _dropHandler = handler;
+
     public void Dispose()
     {
         if (_disposed)
@@ -85,6 +95,8 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
         _canvas.MouseMove -= OnCanvasMouseMove;
         _canvas.MouseUp -= OnCanvasMouseUp;
         _canvas.MouseWheel -= OnCanvasMouseWheel;
+        _canvas.DragOver -= OnCanvasDragOver;
+        _canvas.Drop -= OnCanvasDrop;
     }
 
     private void OnCanvasMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -163,6 +175,36 @@ public class WpfEditorCanvasHost : IEditorCanvasHost, IDisposable
 
         var pos = e.GetPosition(_canvas);
         _mouseWheelHandler(pos.X, pos.Y, e.Delta);
+        e.Handled = true;
+    }
+
+    private void OnCanvasDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (_disposed || _dragOverHandler is null)
+        {
+            return;
+        }
+
+        var pos = e.GetPosition(_canvas);
+        var payload = e.Data.GetDataPresent(typeof(CatalogTemplateDragPayload))
+            ? e.Data.GetData(typeof(CatalogTemplateDragPayload))
+            : null;
+        e.Effects = _dragOverHandler(pos.X, pos.Y, payload);
+        e.Handled = true;
+    }
+
+    private async void OnCanvasDrop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (_disposed || _dropHandler is null)
+        {
+            return;
+        }
+
+        var pos = e.GetPosition(_canvas);
+        var payload = e.Data.GetDataPresent(typeof(CatalogTemplateDragPayload))
+            ? e.Data.GetData(typeof(CatalogTemplateDragPayload))
+            : null;
+        e.Effects = await _dropHandler(pos.X, pos.Y, payload).ConfigureAwait(true);
         e.Handled = true;
     }
 }

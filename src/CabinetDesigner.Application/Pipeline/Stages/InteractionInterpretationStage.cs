@@ -1,6 +1,13 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using CabinetDesigner.Application.Pipeline.StageResults;
+using CabinetDesigner.Application.Services;
 using CabinetDesigner.Application.State;
 using CabinetDesigner.Domain;
+using CabinetDesigner.Domain.CabinetContext;
 using CabinetDesigner.Domain.Commands;
 using CabinetDesigner.Domain.Commands.Layout;
 using CabinetDesigner.Domain.Commands.Modification;
@@ -16,16 +23,18 @@ public sealed class InteractionInterpretationStage : IResolutionStage
 {
     private readonly IDeltaTracker _deltaTracker;
     private readonly IDesignStateStore _stateStore;
+    private readonly ICatalogService? _catalogService;
 
     public InteractionInterpretationStage()
-        : this(new InMemoryDeltaTracker(), new InMemoryDesignStateStore())
+        : this(new InMemoryDeltaTracker(), new InMemoryDesignStateStore(), null)
     {
     }
 
-    public InteractionInterpretationStage(IDeltaTracker deltaTracker, IDesignStateStore stateStore)
+    public InteractionInterpretationStage(IDeltaTracker deltaTracker, IDesignStateStore stateStore, ICatalogService? catalogService = null)
     {
         _deltaTracker = deltaTracker ?? throw new ArgumentNullException(nameof(deltaTracker));
         _stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
+        _catalogService = catalogService;
     }
 
     public int StageNumber => 2;
@@ -45,8 +54,14 @@ public sealed class InteractionInterpretationStage : IResolutionStage
                 InsertCabinetIntoRunCommand insertCabinet => ExecuteInsertCabinet(insertCabinet, context),
                 MoveCabinetCommand moveCabinet => ExecuteMoveCabinet(moveCabinet, context),
                 ResizeCabinetCommand resizeCabinet => ExecuteResizeCabinet(resizeCabinet, context),
+                SetCabinetConstructionCommand setCabinetConstruction => ExecuteSetCabinetConstruction(setCabinetConstruction, context),
+                SetCabinetCategoryCommand setCabinetCategory => ExecuteSetCabinetCategory(setCabinetCategory, context),
+                AddOpeningCommand addOpening => ExecuteAddOpening(addOpening, context),
+                RemoveOpeningCommand removeOpening => ExecuteRemoveOpening(removeOpening, context),
+                ReorderOpeningCommand reorderOpening => ExecuteReorderOpening(reorderOpening, context),
                 DeleteRunCommand deleteRun => ExecuteDeleteRun(deleteRun, context),
                 SetCabinetOverrideCommand setCabinetOverride => ExecuteSetCabinetOverride(setCabinetOverride, context),
+                RemoveCabinetOverrideCommand removeCabinetOverride => ExecuteRemoveCabinetOverride(removeCabinetOverride, context),
                 _ => [new DomainOperation.None()]
             };
 
@@ -219,10 +234,12 @@ public sealed class InteractionInterpretationStage : IResolutionStage
         // Remove the old slot and re-insert at the same index with the new width.
         var slotIndex = existingSlot.SlotIndex;
         run.RemoveSlot(existingSlot.Id);
-        var newSlot = run.InsertCabinetAt(slotIndex, command.CabinetId, command.NewNominalWidth);
+        var newSlot = run.InsertCabinetAt(slotIndex, command.CabinetId, command.NewWidth, CreateStableRunSlotId(command.CabinetId, run.Id, slotIndex, command.NewWidth));
 
         // Preserve depth while updating the cabinet to reference the replacement slot.
-        var updatedCabinet = cabinet with { NominalWidth = command.NewNominalWidth, SlotId = newSlot.Id };
+        var updatedCabinet = command.HasExplicitDimensions
+            ? cabinet with { NominalWidth = command.NewWidth, NominalDepth = command.NewDepth, NominalHeight = command.NewHeight, SlotId = newSlot.Id }
+            : cabinet with { NominalWidth = command.NewWidth, SlotId = newSlot.Id };
         _stateStore.UpdateCabinet(updatedCabinet);
 
         _deltaTracker.RecordDelta(new StateDelta(
@@ -239,7 +256,111 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             previousCabinetValues,
             _stateStore.CaptureCabinetValues(updatedCabinet)));
 
-        return [new DomainOperation.ResizeCabinet(command.CabinetId, command.NewNominalWidth)];
+        return [new DomainOperation.ResizeCabinet(command.CabinetId, command.NewWidth)];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteSetCabinetConstruction(SetCabinetConstructionCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+        var updatedCabinet = ApplyCatalogMatch(cabinet, cabinet.Category, command.Construction)
+            ?? cabinet with
+        {
+            Construction = command.Construction
+        };
+
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.None()];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteSetCabinetCategory(SetCabinetCategoryCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+        var updatedCabinet = ApplyCatalogMatch(cabinet, command.Category, cabinet.Construction);
+        if (updatedCabinet is null)
+        {
+            throw new InteractionFailureException("CABINET_CATEGORY_INVALID", $"Cabinet {cabinet.CabinetId} could not be rebuilt as {command.Category} with its current dimensions.");
+        }
+
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.None()];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteAddOpening(AddOpeningCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+        var openings = cabinet.EffectiveOpenings.ToList();
+        var insertIndex = command.InsertIndex is null ? openings.Count : Math.Clamp(command.InsertIndex.Value, 0, openings.Count);
+        openings.Insert(insertIndex, new CabinetOpeningStateRecord(CreateStableOpeningId(cabinet.CabinetId, insertIndex).Value, insertIndex, command.OpeningType, command.Width, command.Height));
+        var updatedCabinet = cabinet with { Openings = ReindexOpenings(openings) };
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.None()];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteRemoveOpening(RemoveOpeningCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+        var openings = cabinet.EffectiveOpenings.Where(opening => opening.OpeningId != command.OpeningId.Value).ToList();
+        var updatedCabinet = cabinet with { Openings = ReindexOpenings(openings) };
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.None()];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteReorderOpening(ReorderOpeningCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+        var openings = cabinet.EffectiveOpenings.OrderBy(opening => opening.Index).ToList();
+        var opening = openings.FirstOrDefault(candidate => candidate.OpeningId == command.OpeningId.Value)
+            ?? throw new InteractionFailureException("OPENING_NOT_FOUND", $"Opening {command.OpeningId} was not found.");
+        openings.Remove(opening);
+        openings.Insert(Math.Clamp(command.NewIndex, 0, openings.Count), opening);
+        var updatedCabinet = cabinet with { Openings = ReindexOpenings(openings) };
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.None()];
     }
 
     private IReadOnlyList<DomainOperation> ExecuteDeleteRun(DeleteRunCommand command, ResolutionContext context)
@@ -281,6 +402,67 @@ public sealed class InteractionInterpretationStage : IResolutionStage
             _stateStore.CaptureCabinetValues(updatedCabinet)));
 
         return [new DomainOperation.SetCabinetOverride(command.CabinetId, command.OverrideKey)];
+    }
+
+    private IReadOnlyList<DomainOperation> ExecuteRemoveCabinetOverride(RemoveCabinetOverrideCommand command, ResolutionContext context)
+    {
+        var cabinet = ((ResolvedCabinetEntity)context.InputCapture.ResolvedEntities["cabinet"]).Cabinet;
+        var previousCabinetValues = _stateStore.CaptureCabinetValues(cabinet);
+        var updatedOverrides = new Dictionary<string, OverrideValue>(cabinet.EffectiveOverrides, StringComparer.Ordinal);
+        updatedOverrides.Remove(command.OverrideKey);
+        var updatedCabinet = cabinet with { Overrides = updatedOverrides };
+        _stateStore.UpdateCabinet(updatedCabinet);
+
+        _deltaTracker.RecordDelta(new StateDelta(
+            command.CabinetId.Value.ToString(),
+            "Cabinet",
+            DeltaOperation.Modified,
+            previousCabinetValues,
+            _stateStore.CaptureCabinetValues(updatedCabinet)));
+
+        return [new DomainOperation.None()];
+    }
+
+    private CabinetStateRecord? ApplyCatalogMatch(CabinetStateRecord cabinet, CabinetCategory category, ConstructionMethod construction)
+    {
+        if (_catalogService is null)
+        {
+            return cabinet with { Category = category, Construction = construction };
+        }
+
+        var match = _catalogService.GetAllItems().FirstOrDefault(item =>
+            item.Category == category.ToString() &&
+            item.ConstructionMethod == construction &&
+            item.NominalWidth == cabinet.NominalWidth &&
+            item.Depth == cabinet.NominalDepth &&
+            item.Height == cabinet.EffectiveNominalHeight);
+
+        return match is null
+            ? null
+            : cabinet with
+            {
+                CabinetTypeId = match.TypeId,
+                Category = category,
+                Construction = construction,
+                DefaultOpeningCount = match.DefaultOpenings
+            };
+    }
+
+    private static IReadOnlyList<CabinetOpeningStateRecord> ReindexOpenings(IReadOnlyList<CabinetOpeningStateRecord> openings) =>
+        openings.Select((opening, index) => opening with { Index = index }).ToArray();
+
+    private static OpeningId CreateStableOpeningId(CabinetId cabinetId, int ordinal)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes($"opening:{cabinetId.Value:D}:{ordinal}");
+        var hashBytes = System.Security.Cryptography.SHA256.HashData(bytes);
+        return new OpeningId(new Guid(hashBytes.AsSpan(0, 16)));
+    }
+
+    private static RunSlotId CreateStableRunSlotId(CabinetId cabinetId, RunId runId, int slotIndex, Length width)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes($"slot:{cabinetId.Value:D}:{runId.Value:D}:{slotIndex}:{width.Inches:0.###}");
+        var hashBytes = System.Security.Cryptography.SHA256.HashData(bytes);
+        return new RunSlotId(new Guid(hashBytes.AsSpan(0, 16)));
     }
 
     private static int ResolveTargetIndex(MoveCabinetCommand command, CabinetRun targetRun, bool isSameRunMove, int sourceIndex)

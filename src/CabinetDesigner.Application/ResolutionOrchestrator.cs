@@ -13,6 +13,7 @@ namespace CabinetDesigner.Application;
 public sealed class ResolutionOrchestrator : IResolutionOrchestrator
 {
     private const int MaxRecursionDepth = 3;
+    private const string StageNotImplementedCode = "STAGE_NOT_IMPLEMENTED";
     private static readonly IReadOnlyDictionary<string, DeltaValue> EmptyDeltaValues = new Dictionary<string, DeltaValue>();
 
     private readonly IDeltaTracker _deltaTracker;
@@ -224,11 +225,11 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
         }
 
         yield return new InputCaptureStage(stateStore);
-        yield return new InteractionInterpretationStage(deltaTracker, stateStore);
+        yield return new InteractionInterpretationStage(deltaTracker, stateStore, catalogService);
         yield return new SpatialResolutionStage(stateStore);
         yield return new EngineeringResolutionStage(stateStore);
-        yield return new ConstraintPropagationStage(catalogService, stateStore);
         yield return new PartGenerationStage(stateStore);
+        yield return new ConstraintPropagationStage(catalogService, stateStore);
         yield return new ManufacturingPlanningStage();
         yield return new InstallPlanningStage();
         yield return new CostingStage(
@@ -283,17 +284,6 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
     private static ValidationIssue CreateInternalErrorIssue() =>
         new(ValidationSeverity.Error, "INTERNAL_ERROR", "Resolution failed due to an unexpected internal error.");
 
-    private static ValidationIssue CreateNotImplementedIssue(IResolutionStage stage, ResolutionMode mode) =>
-        mode == ResolutionMode.Full
-            ? new ValidationIssue(
-                ValidationSeverity.Error,
-                "STAGE_NOT_IMPLEMENTED",
-                $"Stage {stage.StageNumber} ({stage.StageName}) is not yet implemented. Full runs are blocked because the result is a placeholder.")
-            : new ValidationIssue(
-                ValidationSeverity.Warning,
-                "STAGE_NOT_IMPLEMENTED",
-                $"Stage {stage.StageNumber} ({stage.StageName}) is not yet implemented. Preview mode returns preview-only placeholder results.");
-
     private bool ExecuteStages(ResolutionContext context)
     {
         foreach (var stage in _stages)
@@ -310,7 +300,10 @@ public sealed class ResolutionOrchestrator : IResolutionOrchestrator
 
             if (result.IsNotImplemented)
             {
-                context.AccumulatedIssues.Add(CreateNotImplementedIssue(stage, context.Mode));
+                context.AccumulatedIssues.Add(new ValidationIssue(
+                    context.Mode == ResolutionMode.Full ? ValidationSeverity.Error : ValidationSeverity.Warning,
+                    StageNotImplementedCode,
+                    $"Stage {stage.StageNumber} '{stage.StageName}' is not implemented."));
 
                 if (context.Mode == ResolutionMode.Full)
                 {

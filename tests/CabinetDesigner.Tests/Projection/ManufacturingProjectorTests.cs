@@ -24,7 +24,7 @@ public sealed class ManufacturingProjectorTests
         Assert.False(plan.Readiness.IsReady);
         var blocker = Assert.Single(plan.Readiness.Blockers);
         Assert.Equal(ManufacturingBlockerCode.NoPartsProduced, blocker.Code);
-        Assert.Equal("No parts were produced for manufacturing.", blocker.Message);
+        Assert.Equal("No parts were produced by part generation.", blocker.Message);
         Assert.Empty(plan.CutList);
         Assert.Empty(plan.MaterialGroups);
         Assert.Empty(plan.Operations);

@@ -1,5 +1,5 @@
-using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Editor;
+using CabinetDesigner.Editor.Snap;
 
 namespace CabinetDesigner.Presentation.ViewModels;
 
@@ -11,11 +11,17 @@ public interface IEditorCanvasSession
 
     Guid? HoveredCabinetId { get; }
 
+    Guid? ActiveRoomId { get; }
+
     ViewportTransform Viewport { get; }
+
+    SnapSettings SnapSettings { get; }
 
     void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds);
 
     void SetHoveredCabinetId(Guid? cabinetId);
+
+    void SetActiveRoom(Guid? roomId);
 
     void ZoomAt(double screenX, double screenY, double scaleFactor);
 
@@ -27,5 +33,5 @@ public interface IEditorCanvasSession
 
     void ResetViewport();
 
-    void FitViewport(Rect2D contentBounds, double canvasWidth, double canvasHeight);
+    void FitViewport(ViewportBounds contentBounds, double canvasWidth, double canvasHeight);
 }

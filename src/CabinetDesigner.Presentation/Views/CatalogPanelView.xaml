@@ -48,7 +48,9 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Style="{StaticResource ShellCatalogItemCardStyle}"
-                                        PreviewMouseLeftButtonDown="OnItemPreviewMouseLeftButtonDown">
+                                        PreviewMouseLeftButtonDown="OnItemPreviewMouseLeftButtonDown"
+                                        PreviewMouseMove="OnItemPreviewMouseMove"
+                                        PreviewMouseLeftButtonUp="OnItemMouseLeftButtonUp">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -68,6 +70,15 @@
                                             <TextBlock Text="{Binding DisplayName}"
                                                        Style="{StaticResource ShellCatalogDisplayNameStyle}" />
                                             <TextBlock Text="{Binding Description}"
+                                                       Style="{StaticResource ShellCatalogMetaStyle}"
+                                                       Margin="0,3,0,0" />
+                                            <TextBlock Text="{Binding ConstructionMethod}"
+                                                       Style="{StaticResource ShellCatalogMetaStyle}"
+                                                       Margin="0,3,0,0" />
+                                            <TextBlock Text="{Binding DimensionsDisplay}"
+                                                       Style="{StaticResource ShellCatalogMetaStyle}"
+                                                       Margin="0,3,0,0" />
+                                            <TextBlock Text="{Binding DefaultOpeningsDisplay}"
                                                        Style="{StaticResource ShellCatalogMetaStyle}"
                                                        Margin="0,3,0,0" />
                                             <TextBlock Text="{Binding DefaultWidthDisplay}"

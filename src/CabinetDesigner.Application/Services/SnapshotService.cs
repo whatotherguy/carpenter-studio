@@ -14,6 +14,7 @@ public sealed class SnapshotService : ISnapshotService
     private readonly ISnapshotRepository _snapshotRepository;
     private readonly IWorkingRevisionSource _workingRevisionSource;
     private readonly IValidationHistoryRepository _validationHistoryRepository;
+    private readonly IValidationResultStore _validationResultStore;
     private readonly IPackagingResultStore _packagingResultStore;
     private readonly IApplicationEventBus _eventBus;
     private readonly IClock _clock;
@@ -26,6 +27,7 @@ public sealed class SnapshotService : ISnapshotService
         ISnapshotRepository snapshotRepository,
         IWorkingRevisionSource workingRevisionSource,
         IValidationHistoryRepository validationHistoryRepository,
+        IValidationResultStore validationResultStore,
         IPackagingResultStore packagingResultStore,
         IApplicationEventBus eventBus,
         IClock clock,
@@ -37,6 +39,7 @@ public sealed class SnapshotService : ISnapshotService
         _snapshotRepository = snapshotRepository;
         _workingRevisionSource = workingRevisionSource;
         _validationHistoryRepository = validationHistoryRepository;
+        _validationResultStore = validationResultStore ?? throw new ArgumentNullException(nameof(validationResultStore));
         _packagingResultStore = packagingResultStore ?? throw new ArgumentNullException(nameof(packagingResultStore));
         _eventBus = eventBus;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -47,6 +50,11 @@ public sealed class SnapshotService : ISnapshotService
     {
         var state = _workingRevisionSource.CaptureCurrentState();
         var approvedAt = _clock.Now;
+        if (_validationResultStore.Current is { IsValid: false })
+        {
+            throw new InvalidOperationException("Cannot approve an invalid design.");
+        }
+
         var packaging = _packagingResultStore.Current;
         if (packaging is null || packaging.RevisionId != state.Revision.Id || string.IsNullOrWhiteSpace(packaging.ContentHash))
         {

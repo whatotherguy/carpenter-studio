@@ -11,6 +11,8 @@ namespace CabinetDesigner.Application.State;
 
 public interface IDesignStateStore
 {
+    Room? GetRoom(RoomId id);
+
     CabinetRun? GetRun(RunId id);
 
     Wall? GetWall(WallId id);
@@ -21,9 +23,15 @@ public interface IDesignStateStore
 
     IReadOnlyList<CabinetRun> GetAllRuns();
 
+    IReadOnlyList<Room> GetAllRooms();
+
+    IReadOnlyList<Wall> GetAllWalls();
+
     IReadOnlyList<CabinetStateRecord> GetAllCabinets();
 
     RunSpatialInfo? GetRunSpatialInfo(RunId runId);
+
+    void AddRoom(Room room);
 
     void AddWall(Wall wall);
 
@@ -35,7 +43,17 @@ public interface IDesignStateStore
 
     void UpdateCabinet(CabinetStateRecord cabinet);
 
+    void RemoveCabinet(CabinetId cabinetId);
+
     void RemoveRun(RunId runId);
+
+    void RemoveWall(WallId wallId);
+
+    void RemoveEntity(string entityId, string entityType);
+
+    void RestoreEntity(string entityId, string entityType, IReadOnlyDictionary<string, DeltaValue> values);
+
+    IReadOnlyDictionary<string, DeltaValue> CaptureRoomValues(Room room);
 
     IReadOnlyDictionary<string, DeltaValue> CaptureRunValues(CabinetRun run);
 
@@ -56,7 +74,9 @@ public sealed record CabinetStateRecord(
     CabinetCategory Category,
     ConstructionMethod Construction,
     Length NominalHeight = default,
-    IReadOnlyDictionary<string, OverrideValue>? Overrides = null) : IDomainEntity
+    IReadOnlyList<CabinetOpeningStateRecord>? Openings = null,
+    IReadOnlyDictionary<string, OverrideValue>? Overrides = null,
+    int DefaultOpeningCount = 0) : IDomainEntity
 {
     private static readonly IReadOnlyDictionary<string, OverrideValue> EmptyOverrides =
         new Dictionary<string, OverrideValue>(StringComparer.Ordinal);
@@ -76,7 +96,46 @@ public sealed record CabinetStateRecord(
             };
 
     public IReadOnlyDictionary<string, OverrideValue> EffectiveOverrides => Overrides ?? EmptyOverrides;
+
+    public IReadOnlyList<CabinetOpeningStateRecord> EffectiveOpenings => Openings ?? [];
+
+    public int EffectiveDefaultOpeningCount => Math.Max(0, DefaultOpeningCount);
+
+    public CabinetStateRecord(
+        CabinetId CabinetId,
+        string CabinetTypeId,
+        Length NominalWidth,
+        Length NominalDepth,
+        RunId RunId,
+        RunSlotId SlotId,
+        CabinetCategory Category,
+        ConstructionMethod Construction,
+        Length NominalHeight,
+        IReadOnlyDictionary<string, OverrideValue>? Overrides,
+        int DefaultOpeningCount = 0)
+        : this(
+            CabinetId,
+            CabinetTypeId,
+            NominalWidth,
+            NominalDepth,
+            RunId,
+            SlotId,
+            Category,
+            Construction,
+            NominalHeight,
+            null,
+            Overrides,
+            DefaultOpeningCount)
+    {
+    }
 }
+
+public sealed record CabinetOpeningStateRecord(
+    Guid OpeningId,
+    int Index,
+    OpeningType Type,
+    Length Width,
+    Length Height);
 
 public sealed record ResolvedRunEntity(CabinetRun Run) : IDomainEntity
 {

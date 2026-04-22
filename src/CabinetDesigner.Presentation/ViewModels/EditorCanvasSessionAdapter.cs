@@ -1,6 +1,5 @@
-using CabinetDesigner.Domain.Geometry;
-using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Editor;
+using CabinetDesigner.Editor.Snap;
 
 namespace CabinetDesigner.Presentation.ViewModels;
 
@@ -18,11 +17,15 @@ public sealed class EditorCanvasSessionAdapter : IEditorCanvasSession
 
     public EditorMode CurrentMode => _session.Mode;
 
-    public IReadOnlyList<Guid> SelectedCabinetIds => _session.SelectedCabinetIds.Select(id => id.Value).ToArray();
+    public IReadOnlyList<Guid> SelectedCabinetIds => _session.SelectedCabinetIdsAsGuids;
 
-    public Guid? HoveredCabinetId => _session.HoveredCabinetId?.Value;
+    public Guid? HoveredCabinetId => _session.HoveredCabinetGuid;
+
+    public Guid? ActiveRoomId => _session.ActiveRoomGuid;
 
     public ViewportTransform Viewport => _session.Viewport;
+
+    public SnapSettings SnapSettings => _session.SnapSettings;
 
     public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds)
     {
@@ -30,7 +33,9 @@ public sealed class EditorCanvasSessionAdapter : IEditorCanvasSession
         _session.SetSelection(cabinetIds);
     }
 
-    public void SetHoveredCabinetId(Guid? cabinetId) => _session.SetHover(cabinetId is null ? null : new CabinetId(cabinetId.Value));
+    public void SetHoveredCabinetId(Guid? cabinetId) => _session.SetHoveredCabinetId(cabinetId);
+
+    public void SetActiveRoom(Guid? roomId) => _session.SetActiveRoom(roomId);
 
     public void ZoomAt(double screenX, double screenY, double scaleFactor)
     {
@@ -53,15 +58,15 @@ public sealed class EditorCanvasSessionAdapter : IEditorCanvasSession
 
     public void EndPan() => _session.EndPan();
 
-    public void FitViewport(Rect2D contentBounds, double canvasWidth, double canvasHeight)
+    public void FitViewport(ViewportBounds contentBounds, double canvasWidth, double canvasHeight)
     {
         if (canvasWidth <= 0 || canvasHeight <= 0)
         {
             return;
         }
 
-        var contentWidthInches = (double)(contentBounds.Max.X - contentBounds.Min.X);
-        var contentHeightInches = (double)(contentBounds.Max.Y - contentBounds.Min.Y);
+        var contentWidthInches = contentBounds.MaxX - contentBounds.MinX;
+        var contentHeightInches = contentBounds.MaxY - contentBounds.MinY;
 
         if (contentWidthInches < 0 || contentHeightInches < 0)
         {
@@ -81,8 +86,8 @@ public sealed class EditorCanvasSessionAdapter : IEditorCanvasSession
         var scale = Math.Clamp(Math.Min(scaleX, scaleY), MinScalePixelsPerInch, MaxScalePixelsPerInch);
 
         // Centre the content in the canvas.
-        var contentCentreWorldX = (double)((contentBounds.Min.X + contentBounds.Max.X) / 2);
-        var contentCentreWorldY = (double)((contentBounds.Min.Y + contentBounds.Max.Y) / 2);
+        var contentCentreWorldX = (contentBounds.MinX + contentBounds.MaxX) / 2;
+        var contentCentreWorldY = (contentBounds.MinY + contentBounds.MaxY) / 2;
         var offsetX = (canvasWidth / 2) - (contentCentreWorldX * scale);
         var offsetY = (canvasHeight / 2) - (contentCentreWorldY * scale);
 

@@ -65,7 +65,7 @@ public sealed class InstallReadinessRuleTests
         var rule = new InstallReadinessRule();
 
         Assert.Equal("install.readiness", rule.RuleCode);
-        Assert.Equal(ValidationRuleCategory.Installation, rule.Category);
+        Assert.Equal(ValidationRuleCategory.Install, rule.Category);
         Assert.Equal(ValidationRuleScope.Project, rule.Scope);
         Assert.False(rule.PreviewSafe);
     }

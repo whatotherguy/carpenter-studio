@@ -103,6 +103,51 @@ public sealed class InputCaptureStage : IResolutionStage
                 resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToResize);
                 break;
 
+            case SetCabinetConstructionCommand setCabinetConstruction:
+                if (_stateStore.GetCabinet(setCabinetConstruction.CabinetId) is not { } cabinetToReconstruct)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {setCabinetConstruction.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToReconstruct);
+                break;
+
+            case SetCabinetCategoryCommand setCabinetCategory:
+                if (_stateStore.GetCabinet(setCabinetCategory.CabinetId) is not { } cabinetToRetag)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {setCabinetCategory.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToRetag);
+                break;
+
+            case AddOpeningCommand addOpening:
+                if (_stateStore.GetCabinet(addOpening.CabinetId) is not { } cabinetToOpen)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {addOpening.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToOpen);
+                break;
+
+            case RemoveOpeningCommand removeOpening:
+                if (_stateStore.GetCabinet(removeOpening.CabinetId) is not { } cabinetToRemoveOpening)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {removeOpening.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToRemoveOpening);
+                break;
+
+            case ReorderOpeningCommand reorderOpening:
+                if (_stateStore.GetCabinet(reorderOpening.CabinetId) is not { } cabinetToReorder)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {reorderOpening.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToReorder);
+                break;
+
             case SetCabinetOverrideCommand setCabinetOverride:
                 if (_stateStore.GetCabinet(setCabinetOverride.CabinetId) is not { } cabinetToOverride)
                 {
@@ -110,6 +155,15 @@ public sealed class InputCaptureStage : IResolutionStage
                 }
 
                 resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToOverride);
+                break;
+
+            case RemoveCabinetOverrideCommand removeCabinetOverride:
+                if (_stateStore.GetCabinet(removeCabinetOverride.CabinetId) is not { } cabinetToClearOverride)
+                {
+                    return StageResult.Failed(StageNumber, [CreateIssue("CABINET_NOT_FOUND", $"Cabinet {removeCabinetOverride.CabinetId} was not found.")]);
+                }
+
+                resolvedEntities["cabinet"] = new ResolvedCabinetEntity(cabinetToClearOverride);
                 break;
         }
 

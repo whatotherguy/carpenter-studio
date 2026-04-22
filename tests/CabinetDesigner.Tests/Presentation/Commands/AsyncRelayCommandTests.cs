@@ -1,4 +1,7 @@
+using CabinetDesigner.Application.Diagnostics;
+using CabinetDesigner.Application.Events;
 using CabinetDesigner.Presentation.Commands;
+using CabinetDesigner.Tests.Presentation;
 using Xunit;
 
 namespace CabinetDesigner.Tests.Presentation.Commands;
@@ -6,60 +9,39 @@ namespace CabinetDesigner.Tests.Presentation.Commands;
 public sealed class AsyncRelayCommandTests
 {
     [Fact]
-    public async Task ExecuteAsync_WhenDelegateThrows_CallsExceptionHandler()
+    public async Task Execute_ExceptionThrown_IsLoggedAndSurfacedOnEventBus()
     {
-        var capturedEx = (Exception?)null;
+        var logger = new CapturingAppLogger();
+        var eventBus = new ApplicationEventBus();
+        CommandExecutionFailedEvent? capturedEvent = null;
+        eventBus.Subscribe<CommandExecutionFailedEvent>(@event => capturedEvent = @event);
         var command = new AsyncRelayCommand(
             () => throw new InvalidOperationException("boom"),
-            onException: ex => capturedEx = ex);
+            logger,
+            eventBus);
 
         await command.ExecuteAsync();
 
-        Assert.NotNull(capturedEx);
-        Assert.Equal("boom", capturedEx!.Message);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_WhenDelegateThrows_ResetsIsExecutingToFalse()
-    {
-        var command = new AsyncRelayCommand(
-            () => throw new InvalidOperationException("boom"),
-            onException: _ => { });
-
-        await command.ExecuteAsync();
-
+        var logEntry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, logEntry.Level);
+        Assert.Equal("Presentation", logEntry.Category);
+        Assert.Equal("Async command execution failed.", logEntry.Message);
+        Assert.IsType<InvalidOperationException>(logEntry.Exception);
+        Assert.Equal("boom", logEntry.Exception!.Message);
+        Assert.NotNull(capturedEvent);
+        Assert.Equal("boom", capturedEvent!.Message);
+        Assert.IsType<InvalidOperationException>(capturedEvent.Exception);
         Assert.False(command.IsExecuting);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenNoExceptionHandler_DoesNotPropagateExceptionToCaller()
+    public void Constructor_RequiresLogger()
     {
-        var command = new AsyncRelayCommand(() => throw new InvalidOperationException("silent"));
+        var eventBus = new ApplicationEventBus();
 
-        // Should not throw — exception is swallowed when no handler is provided.
-        var ex = await Record.ExceptionAsync(() => command.ExecuteAsync());
-        Assert.Null(ex);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_WhenDelegateSucceeds_ExceptionHandlerIsNotCalled()
-    {
-        var handlerCalled = false;
-        var command = new AsyncRelayCommand(
+        Assert.Throws<ArgumentNullException>(() => new AsyncRelayCommand(
             () => Task.CompletedTask,
-            onException: _ => handlerCalled = true);
-
-        await command.ExecuteAsync();
-
-        Assert.False(handlerCalled);
-    }
-    [Fact]
-    public async Task ExecuteAsync_WhenNoExceptionHandler_ResetsIsExecutingToFalse()
-    {
-        var command = new AsyncRelayCommand(() => throw new InvalidOperationException("silent"));
-
-        await command.ExecuteAsync();
-
-        Assert.False(command.IsExecuting);
+            null!,
+            eventBus));
     }
 }

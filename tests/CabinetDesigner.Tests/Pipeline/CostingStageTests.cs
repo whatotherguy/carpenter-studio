@@ -1,4 +1,5 @@
-using CabinetDesigner.Application.Costing;
+﻿using CabinetDesigner.Application.Costing;
+using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Pipeline.Stages;
 using CabinetDesigner.Application.Pipeline.StageResults;
@@ -21,7 +22,7 @@ public sealed class CostingStageTests
     public void Execute_MaterialCost_MatchesSumOfPartAreaTimesPrice()
     {
         var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000001"));
-        var catalog = new CatalogService();
+        var catalog = new PricingCatalogStub();
         var materialId = catalog.ResolvePartMaterial("LeftSide", CabinetCategory.Base, ConstructionMethod.Frameless);
         var thickness = catalog.ResolvePartThickness("LeftSide", CabinetCategory.Base);
         var context = CreateContext(
@@ -54,7 +55,7 @@ public sealed class CostingStageTests
         var context = CreateContext(
             parts: [CreatePart(cabinetId, "part:1", "Panel", Length.FromInches(24m), Length.FromInches(30m), materialId, thickness)],
             cutList: [CreateCutListItem(cabinetId, "part:1", "Panel", Length.FromInches(24m), Length.FromInches(30m), materialId, thickness)]);
-        var stage = new CostingStage(new CatalogService(), new TestCostingPolicy());
+        var stage = new CostingStage(new PricingCatalogStub(), new TestCostingPolicy());
 
         var result = stage.Execute(context);
 
@@ -69,10 +70,10 @@ public sealed class CostingStageTests
         var cabinetA = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000003"));
         var cabinetB = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000004"));
         var runId = new RunId(Guid.Parse("20000000-0000-0000-0000-000000000003"));
-        var catalog = new CatalogService();
+        var catalog = new PricingCatalogStub();
         var baseMaterial = catalog.ResolvePartMaterial("LeftSide", CabinetCategory.Base, ConstructionMethod.Frameless);
         var baseThickness = catalog.ResolvePartThickness("LeftSide", CabinetCategory.Base);
-        var hardwareId = catalog.ResolveHardwareForOpening(CreateOpeningId(cabinetA, 0), CabinetCategory.Base).First();
+        var hardwareId = new HardwareItemId(Guid.Parse("55000000-0000-0000-0000-000000000001"));
         var parts =
             new[]
             {
@@ -156,7 +157,7 @@ public sealed class CostingStageTests
     public void Execute_WithEmptyParts_Fails_WithBlocker()
     {
         var context = CreateContext(parts: [], cutList: []);
-        var stage = new CostingStage(new CatalogService(), new TestCostingPolicy());
+        var stage = new CostingStage(new PricingCatalogStub(), new TestCostingPolicy());
 
         var result = stage.Execute(context);
 
@@ -169,7 +170,7 @@ public sealed class CostingStageTests
     public void Execute_RevisionDelta_NullWhenNoPriorApprovedSnapshot()
     {
         var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000010"));
-        var catalog = new CatalogService();
+        var catalog = new PricingCatalogStub();
         var materialId = catalog.ResolvePartMaterial("LeftSide", CabinetCategory.Base, ConstructionMethod.Frameless);
         var thickness = catalog.ResolvePartThickness("LeftSide", CabinetCategory.Base);
         var context = CreateContext(
@@ -190,7 +191,7 @@ public sealed class CostingStageTests
     public void Execute_RevisionDelta_PopulatedWhenPriorApprovedSnapshotExists()
     {
         var cabinetId = new CabinetId(Guid.Parse("10000000-0000-0000-0000-000000000011"));
-        var catalog = new CatalogService();
+        var catalog = new PricingCatalogStub();
         var materialId = catalog.ResolvePartMaterial("LeftSide", CabinetCategory.Base, ConstructionMethod.Frameless);
         var thickness = catalog.ResolvePartThickness("LeftSide", CabinetCategory.Base);
         var context = CreateContext(
@@ -372,6 +373,37 @@ public sealed class CostingStageTests
     private static string FormatBreakdown(CabinetCostBreakdown breakdown) =>
         $"{breakdown.CabinetId}|{breakdown.MaterialCost}|{breakdown.HardwareCost}|{breakdown.LaborCost}|{breakdown.InstallCost}|{breakdown.Subtotal}";
 
+    private sealed class PricingCatalogStub : ICatalogService
+    {
+        private readonly CatalogService _catalog = new();
+
+        public bool IsPricingConfigured => true;
+
+        public IReadOnlyList<CatalogItemDto> GetAllItems() => _catalog.GetAllItems();
+
+        public MaterialId ResolvePartMaterial(string partType, CabinetCategory category, ConstructionMethod construction) =>
+            _catalog.ResolvePartMaterial(partType, category, construction);
+
+        public Thickness ResolvePartThickness(string partType, CabinetCategory category) =>
+            _catalog.ResolvePartThickness(partType, category);
+
+        public bool IsKnownMaterial(MaterialId id) => _catalog.IsKnownMaterial(id);
+
+        public string GetMaterialDisplayName(MaterialId id) => _catalog.GetMaterialDisplayName(id);
+
+        public Thickness ResolveMaterialThickness(MaterialId id) => _catalog.ResolveMaterialThickness(id);
+
+        public GrainDirection ResolveMaterialGrain(MaterialId id) => _catalog.ResolveMaterialGrain(id);
+
+        public IReadOnlyList<HardwareItemId> ResolveHardwareForOpening(OpeningId openingId, CabinetCategory category) =>
+            _catalog.ResolveHardwareForOpening(openingId, category);
+
+        public decimal GetMaterialPricePerSquareFoot(MaterialId id, Thickness thickness) =>
+            _catalog.IsKnownMaterial(id) ? 4.85m : 0m;
+
+        public decimal GetHardwarePrice(HardwareItemId id) => 9.5m;
+    }
+
     private sealed record TestDesignCommand : IDesignCommand
     {
         public CommandMetadata Metadata { get; } =
@@ -403,3 +435,5 @@ public sealed class CostingStageTests
         public decimal TaxFraction => taxFraction;
     }
 }
+
+

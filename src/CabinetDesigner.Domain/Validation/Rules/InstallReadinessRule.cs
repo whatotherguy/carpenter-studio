@@ -12,7 +12,7 @@ public sealed class InstallReadinessRule : IValidationRule
 
     public string Description => "Install-readiness blockers must be resolved before a revision can be approved.";
 
-    public ValidationRuleCategory Category => ValidationRuleCategory.Installation;
+    public ValidationRuleCategory Category => ValidationRuleCategory.Install;
 
     public ValidationRuleScope Scope => ValidationRuleScope.Project;
 

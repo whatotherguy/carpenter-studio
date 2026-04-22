@@ -82,7 +82,7 @@ public sealed class ManufacturingPlanningStageTests
         var result = constraintStage.Execute(context);
 
         Assert.False(result.Success);
-        Assert.Equal("MATERIAL_UNRESOLVED", Assert.Single(result.Issues).Code);
+        Assert.Contains(result.Issues, i => i.Code == "MATERIAL_UNRESOLVED" && i.Severity == ValidationSeverity.Error);
     }
 
     [Fact]

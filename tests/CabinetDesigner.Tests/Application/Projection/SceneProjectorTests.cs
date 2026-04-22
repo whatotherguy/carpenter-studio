@@ -5,6 +5,7 @@ using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Domain.RunContext;
 using CabinetDesigner.Domain.SpatialContext;
 using CabinetDesigner.Presentation.Projection;
+using CabinetDesigner.Presentation.ViewModels;
 using CabinetDesigner.Rendering.DTOs;
 using Xunit;
 
@@ -15,7 +16,7 @@ public sealed class SceneProjectorTests
     [Fact]
     public void Project_EmptyState_ReturnsEmptyScene()
     {
-        var projector = new SceneProjector(new InMemoryDesignStateStore());
+        var projector = new SceneProjector(new InMemoryDesignStateStore(), new TestEditorCanvasSession());
 
         var scene = projector.Project();
 
@@ -37,7 +38,7 @@ public sealed class SceneProjectorTests
         store.AddRun(run, wall.StartPoint, wall.EndPoint);
         store.AddCabinet(new CabinetStateRecord(cabinetId, "base-30", Length.FromInches(30m), Length.FromInches(24m), run.Id, slot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
-        var scene = new SceneProjector(store).Project();
+        var scene = new SceneProjector(store, new TestEditorCanvasSession()).Project();
 
         Assert.NotNull(scene);
         var projectedWall = Assert.Single(scene.Walls);
@@ -66,11 +67,62 @@ public sealed class SceneProjectorTests
         store.AddCabinet(new CabinetStateRecord(firstCabinetId, "diag-1", Length.FromInches(24m), Length.FromInches(24m), run.Id, firstSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
         store.AddCabinet(new CabinetStateRecord(secondCabinetId, "diag-2", Length.FromInches(24m), Length.FromInches(24m), run.Id, secondSlot.Id, CabinetCategory.Base, ConstructionMethod.Frameless));
 
-        var scene = new SceneProjector(store).Project();
+        var scene = new SceneProjector(store, new TestEditorCanvasSession()).Project();
 
         Assert.NotNull(scene);
         Assert.Equal(2, scene.Cabinets.Count);
         Assert.True(scene.Cabinets[1].WorldBounds.Origin.X > scene.Cabinets[0].WorldBounds.Origin.X);
         Assert.True(scene.Cabinets[1].WorldBounds.Origin.Y > scene.Cabinets[0].WorldBounds.Origin.Y);
+}
+
+    private sealed class TestEditorCanvasSession : CabinetDesigner.Presentation.ViewModels.IEditorCanvasSession
+    {
+        public CabinetDesigner.Editor.EditorMode CurrentMode => CabinetDesigner.Editor.EditorMode.Idle;
+
+        public IReadOnlyList<Guid> SelectedCabinetIds => [];
+
+        public Guid? HoveredCabinetId => null;
+
+        public Guid? ActiveRoomId => null;
+
+        public CabinetDesigner.Editor.ViewportTransform Viewport => CabinetDesigner.Editor.ViewportTransform.Default;
+
+        public CabinetDesigner.Editor.Snap.SnapSettings SnapSettings => CabinetDesigner.Editor.Snap.SnapSettings.Default;
+
+        public void SetSelectedCabinetIds(IReadOnlyList<Guid> cabinetIds)
+        {
+        }
+
+        public void SetHoveredCabinetId(Guid? cabinetId)
+        {
+        }
+
+        public void SetActiveRoom(Guid? roomId)
+        {
+        }
+
+        public void ZoomAt(double screenX, double screenY, double scaleFactor)
+        {
+        }
+
+        public void PanBy(double dx, double dy)
+        {
+        }
+
+        public void BeginPan()
+        {
+        }
+
+        public void EndPan()
+        {
+        }
+
+        public void ResetViewport()
+        {
+        }
+
+        public void FitViewport(ViewportBounds contentBounds, double canvasWidth, double canvasHeight)
+        {
+        }
     }
 }

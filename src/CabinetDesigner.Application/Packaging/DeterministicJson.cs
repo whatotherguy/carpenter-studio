@@ -1,45 +1,37 @@
-using System.Buffers;
-using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
+using System.IO;
 
 namespace CabinetDesigner.Application.Packaging;
 
 public static class DeterministicJson
 {
-    private static readonly JsonSerializerOptions SerializeOptions = new(JsonSerializerDefaults.Web)
+    private static readonly JsonSerializerOptions SerializeOptions = new()
     {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        WriteIndented = false
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = false,
+        TypeInfoResolver = CreateResolver()
     };
 
-    private static readonly JsonWriterOptions WriterOptions = new()
-    {
-        Indented = false,
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-    };
-
-    public static string Serialize<T>(T value)
+    public static byte[] Serialize<T>(T value)
     {
         var node = JsonSerializer.SerializeToNode(value, SerializeOptions)
             ?? throw new InvalidOperationException("DeterministicJson could not serialize a null JSON node.");
 
-        return SerializeNode(node);
-    }
+        if (node is JsonObject jsonObject &&
+            !jsonObject.ContainsKey("schema_version"))
+        {
+            jsonObject["schema_version"] = 1;
+        }
 
-    public static byte[] SerializeToUtf8Bytes<T>(T value) =>
-        Encoding.UTF8.GetBytes(Serialize(value));
-
-    private static string SerializeNode(JsonNode node)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer, WriterOptions))
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false }))
         {
             WriteNode(writer, node);
         }
 
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+        return stream.ToArray();
     }
 
     private static void WriteNode(Utf8JsonWriter writer, JsonNode? node)
@@ -74,5 +66,29 @@ public static class DeterministicJson
             default:
                 throw new InvalidOperationException($"Unsupported JsonNode type '{node.GetType().Name}'.");
         }
+    }
+
+    private static IJsonTypeInfoResolver CreateResolver()
+    {
+        var resolver = new DefaultJsonTypeInfoResolver();
+        resolver.Modifiers.Add(typeInfo =>
+        {
+            if (typeInfo.Kind != JsonTypeInfoKind.Object)
+            {
+                return;
+            }
+
+            var orderedProperties = typeInfo.Properties
+                .OrderBy(property => property.Name, StringComparer.Ordinal)
+                .ToArray();
+
+            typeInfo.Properties.Clear();
+            foreach (var property in orderedProperties)
+            {
+                typeInfo.Properties.Add(property);
+            }
+        });
+
+        return resolver;
     }
 }

@@ -18,6 +18,24 @@ public sealed class HardwareAssignmentRuleTests
     }
 
     [Fact]
+    public void Evaluate_NoHardwareCatalog_EmitsWarning()
+    {
+        var rule = new HardwareAssignmentRule();
+
+        var result = rule.Evaluate(CreateContext([
+            new ConstraintViolationSnapshot(
+                "NO_HARDWARE_CATALOG",
+                "No hardware catalog configured for Base opening. V2 will integrate vendor hardware.",
+                ValidationSeverity.Warning,
+                ["cabinet:1"])
+        ]));
+
+        var issue = Assert.Single(result);
+        Assert.Equal("constraint.hardware_missing", issue.Code);
+        Assert.Equal(ValidationSeverity.Warning, issue.Severity);
+    }
+
+    [Fact]
     public void Evaluate_HardwareMissing_EmitsWarning()
     {
         var rule = new HardwareAssignmentRule();

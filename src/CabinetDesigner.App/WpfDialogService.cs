@@ -23,6 +23,15 @@ public sealed class WpfDialogService : IDialogService
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
+    public string? ShowFolderPicker(string title)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = title
+        };
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
+
     public bool ShowYesNoDialog(string title, string message) =>
         MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
             == MessageBoxResult.Yes;

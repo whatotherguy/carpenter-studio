@@ -28,133 +28,86 @@
         <KeyBinding Key="Y" Modifiers="Ctrl" Command="{Binding RedoCommand}" />
         <KeyBinding Key="D0" Modifiers="Ctrl" Command="{Binding ResetZoomCommand}" />
         <KeyBinding Key="F" Modifiers="Ctrl+Shift" Command="{Binding FitToViewCommand}" />
+        <KeyBinding Key="Delete" Command="{Binding DeleteSelectedCommand}" />
+        <KeyBinding Key="Escape" Command="{Binding Canvas.CancelWallDrawingCommand}" />
     </Window.InputBindings>
 
-    <DockPanel LastChildFill="True">
-        <ProgressBar DockPanel.Dock="Top"
-                     Height="3"
-                     IsIndeterminate="True"
-                     Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" />
-        <Menu DockPanel.Dock="Top"
-              Background="{StaticResource ShellSurfaceBrush}"
-              BorderBrush="{StaticResource ShellBorderSoftBrush}"
-              BorderThickness="0,0,0,1">
-            <MenuItem Header="_File">
-                <MenuItem Header="_New Project"
-                          Command="{Binding NewProjectCommand}"
-                          InputGestureText="Ctrl+N" />
-                <MenuItem Header="_Open Project"
-                          Command="{Binding OpenProjectCommand}"
-                          InputGestureText="Ctrl+O" />
-                <MenuItem Header="_Save"
-                          Command="{Binding SaveCommand}"
-                          InputGestureText="Ctrl+S" />
-                <Separator />
-                <MenuItem Header="_Close Project"
-                          Command="{Binding CloseProjectCommand}"
-                          InputGestureText="Ctrl+W" />
-            </MenuItem>
-            <MenuItem Header="_Edit">
-                <MenuItem Header="_Undo"
-                          Command="{Binding UndoCommand}"
-                          InputGestureText="Ctrl+Z" />
-                <MenuItem Header="_Redo"
-                          Command="{Binding RedoCommand}"
-                          InputGestureText="Ctrl+Y" />
-                <Separator />
-                <MenuItem Header="Select _All"
-                          Command="{Binding SelectAllCommand}" />
-                <MenuItem Header="Select _None"
-                          Command="{Binding SelectNoneCommand}" />
-            </MenuItem>
-            <MenuItem Header="_View">
-                <MenuItem Header="_Fit to View"
-                          Command="{Binding FitToViewCommand}"
-                          InputGestureText="Ctrl+Shift+F" />
-                <MenuItem Header="_Reset Zoom"
-                          Command="{Binding ResetZoomCommand}"
-                          InputGestureText="Ctrl+0" />
-                <Separator />
-                <MenuItem Header="Workspace Layout" IsEnabled="False" />
-                <MenuItem Header="Canvas Grid" IsEnabled="False" />
-            </MenuItem>
-            <MenuItem Header="_Design">
-                <MenuItem Header="Selection Mode" IsEnabled="False" />
-                <MenuItem Header="Run Layout Mode" IsEnabled="False" />
-            </MenuItem>
-            <MenuItem Header="_Tools">
-                <MenuItem Header="Validation" IsEnabled="False" />
-                <MenuItem Header="Project Settings" IsEnabled="False" />
-            </MenuItem>
-            <MenuItem Header="_Help">
-                <MenuItem Header="About" IsEnabled="False" />
-            </MenuItem>
-        </Menu>
+    <Grid>
+        <Grid Background="{StaticResource ShellWindowBrush}">
+            <DockPanel LastChildFill="True"
+                       Visibility="{Binding IsEditorMode, Converter={StaticResource BoolToVisibilityConverter}}">
+                <ProgressBar DockPanel.Dock="Top"
+                             Height="3"
+                             IsIndeterminate="True"
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <Menu DockPanel.Dock="Top"
+                      Background="{StaticResource ShellSurfaceBrush}"
+                      BorderBrush="{StaticResource ShellBorderSoftBrush}"
+                      BorderThickness="0,0,0,1">
+                    <MenuItem Header="_File">
+                        <MenuItem Header="_New Project"
+                                  Command="{Binding NewProjectCommand}"
+                                  InputGestureText="Ctrl+N" />
+                        <MenuItem Header="_Open Project"
+                                  Command="{Binding OpenProjectCommand}"
+                                  InputGestureText="Ctrl+O" />
+                        <MenuItem Header="_Save"
+                                  Command="{Binding SaveCommand}"
+                                  InputGestureText="Ctrl+S" />
+                        <Separator />
+                        <MenuItem Header="_Close Project"
+                                  Command="{Binding CloseProjectCommand}"
+                                  InputGestureText="Ctrl+W" />
+                    </MenuItem>
+                    <MenuItem Header="_Edit">
+                        <MenuItem Header="_Undo"
+                                  Command="{Binding UndoCommand}"
+                                  InputGestureText="Ctrl+Z" />
+                        <MenuItem Header="_Redo"
+                                  Command="{Binding RedoCommand}"
+                                  InputGestureText="Ctrl+Y" />
+                        <Separator />
+                        <MenuItem Header="Select _All"
+                                  Command="{Binding SelectAllCommand}" />
+                        <MenuItem Header="Select _None"
+                                  Command="{Binding SelectNoneCommand}" />
+                        <MenuItem Header="_Delete Selected"
+                                  Command="{Binding DeleteSelectedCommand}"
+                                  InputGestureText="Delete" />
+                    </MenuItem>
+                    <MenuItem Header="_View">
+                        <MenuItem Header="_Fit to View"
+                                  Command="{Binding FitToViewCommand}"
+                                  InputGestureText="Ctrl+Shift+F" />
+                        <MenuItem Header="_Reset Zoom"
+                                  Command="{Binding ResetZoomCommand}"
+                                  InputGestureText="Ctrl+0" />
+                        <Separator />
+                        <MenuItem Header="Workspace Layout" IsEnabled="False" />
+                        <MenuItem Header="Canvas Grid" IsEnabled="False" />
+                    </MenuItem>
+                    <MenuItem Header="_Design">
+                        <MenuItem Header="Selection Mode" IsEnabled="False" />
+                        <MenuItem Header="Run Layout Mode" IsEnabled="False" />
+                    </MenuItem>
+                    <MenuItem Header="_Tools">
+                        <MenuItem Header="Validation" IsEnabled="False" />
+                        <MenuItem Header="Project Settings" IsEnabled="False" />
+                    </MenuItem>
+                    <MenuItem Header="_Help">
+                        <MenuItem Header="About" IsEnabled="False" />
+                    </MenuItem>
+                </Menu>
 
-        <views:ShellToolbarView DockPanel.Dock="Top" />
-        <views:StatusBarView DockPanel.Dock="Bottom"
-                             DataContext="{Binding StatusBar}" />
+                <views:ShellToolbarView DockPanel.Dock="Top" />
+                <views:StatusBarView DockPanel.Dock="Bottom"
+                                     DataContext="{Binding StatusBar}" />
 
-        <Grid Margin="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" MinWidth="200" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <GridSplitter Grid.Column="1"
-                          Width="8"
-                          HorizontalAlignment="Stretch"
-                          VerticalAlignment="Stretch"
-                          ResizeDirection="Columns"
-                          ResizeBehavior="PreviousAndNext"
-                          Background="{StaticResource ShellBorderSoftBrush}"
-                          Cursor="SizeWE" />
-
-            <Grid Grid.Column="0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" MinHeight="120" />
-                    <RowDefinition Height="8" />
-                    <RowDefinition Height="260" MinHeight="120" />
-                </Grid.RowDefinitions>
-
-                <GridSplitter Grid.Row="1"
-                              Height="8"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              ResizeDirection="Rows"
-                              ResizeBehavior="PreviousAndNext"
-                              Background="{StaticResource ShellBorderSoftBrush}"
-                              Cursor="SizeNS" />
-
-                <views:CatalogPanelView Grid.Row="0"
-                                        DataContext="{Binding Catalog}" />
-
-                <views:RunSummaryPanelView Grid.Row="2"
-                                           DataContext="{Binding RunSummary}" />
-            </Grid>
-
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" MinHeight="120" />
-                    <RowDefinition Height="8" />
-                    <RowDefinition Height="260" MinHeight="120" />
-                </Grid.RowDefinitions>
-
-                <GridSplitter Grid.Row="1"
-                              Height="8"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              ResizeDirection="Rows"
-                              ResizeBehavior="PreviousAndNext"
-                              Background="{StaticResource ShellBorderSoftBrush}"
-                              Cursor="SizeNS" />
-
-                <Grid Grid.Row="0">
+                <Grid Margin="12">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="3*" MinWidth="400" />
+                        <ColumnDefinition Width="320" MinWidth="200" />
                         <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="2*" MinWidth="200" />
+                        <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
                     <GridSplitter Grid.Column="1"
@@ -166,61 +119,138 @@
                                   Background="{StaticResource ShellBorderSoftBrush}"
                                   Cursor="SizeWE" />
 
-                    <Border Grid.Column="0"
-                            Style="{StaticResource ShellCardStyle}"
-                            Padding="0">
-                        <DockPanel>
-                            <Border DockPanel.Dock="Top"
-                                    Style="{StaticResource ShellPanelHeaderBorderStyle}"
-                                    Margin="14,14,14,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding WorkspaceTitle}"
-                                                   Style="{StaticResource ShellSectionTitleStyle}" />
-                                        <TextBlock Text="{Binding WorkspaceSubtitle}"
-                                                   Style="{StaticResource ShellSectionSubtitleStyle}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1"
-                                                Orientation="Horizontal"
-                                                VerticalAlignment="Center">
-                                        <Border Style="{StaticResource ShellBadgeStyle}"
-                                                Margin="0,0,8,0">
-                                            <TextBlock Text="{Binding CanvasCurrentMode}"
-                                                       Style="{StaticResource ShellBadgeTextStyle}" />
-                                        </Border>
-                                        <Border Style="{StaticResource ShellBadgeStyle}">
-                                            <TextBlock Text="{Binding SaveStateText}"
-                                                       Style="{StaticResource ShellBadgeTextStyle}" />
-                                        </Border>
-                                    </StackPanel>
-                                </Grid>
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" MinHeight="180" />
+                            <RowDefinition Height="8" />
+                            <RowDefinition Height="260" MinHeight="120" />
+                        </Grid.RowDefinitions>
+
+                        <GridSplitter Grid.Row="1"
+                                      Height="8"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      ResizeDirection="Rows"
+                                      ResizeBehavior="PreviousAndNext"
+                                      Background="{StaticResource ShellBorderSoftBrush}"
+                                      Cursor="SizeNS" />
+
+                        <TabControl Grid.Row="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Margin="0,0,0,0">
+                            <TabItem Header="Rooms">
+                                <views:RoomsPanelView DataContext="{Binding RoomsPanel}" />
+                            </TabItem>
+                            <TabItem Header="Catalog">
+                                <views:CatalogPanelView DataContext="{Binding Catalog}" />
+                            </TabItem>
+                        </TabControl>
+
+                        <views:RunSummaryPanelView Grid.Row="2"
+                                                   DataContext="{Binding RunSummary}" />
+                    </Grid>
+
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*" MinHeight="120" />
+                            <RowDefinition Height="8" />
+                            <RowDefinition Height="260" MinHeight="120" />
+                        </Grid.RowDefinitions>
+
+                        <GridSplitter Grid.Row="1"
+                                      Height="8"
+                                      HorizontalAlignment="Stretch"
+                                      VerticalAlignment="Stretch"
+                                      ResizeDirection="Rows"
+                                      ResizeBehavior="PreviousAndNext"
+                                      Background="{StaticResource ShellBorderSoftBrush}"
+                                      Cursor="SizeNS" />
+
+                        <Grid Grid.Row="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="3*" MinWidth="400" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="2*" MinWidth="200" />
+                            </Grid.ColumnDefinitions>
+
+                            <GridSplitter Grid.Column="1"
+                                          Width="8"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          ResizeDirection="Columns"
+                                          ResizeBehavior="PreviousAndNext"
+                                          Background="{StaticResource ShellBorderSoftBrush}"
+                                          Cursor="SizeWE" />
+
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource ShellCardStyle}"
+                                    Padding="0">
+                                <DockPanel>
+                                    <Border DockPanel.Dock="Top"
+                                            Style="{StaticResource ShellPanelHeaderBorderStyle}"
+                                            Margin="14,14,14,12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding WorkspaceTitle}"
+                                                           Style="{StaticResource ShellSectionTitleStyle}" />
+                                                <TextBlock Text="{Binding WorkspaceSubtitle}"
+                                                           Style="{StaticResource ShellSectionSubtitleStyle}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1"
+                                                        Orientation="Horizontal"
+                                                        VerticalAlignment="Center">
+                                                <Border Style="{StaticResource ShellBadgeStyle}"
+                                                        Margin="0,0,8,0">
+                                                    <TextBlock Text="{Binding CanvasCurrentMode}"
+                                                               Style="{StaticResource ShellBadgeTextStyle}" />
+                                                </Border>
+                                                <Border Style="{StaticResource ShellBadgeStyle}">
+                                                    <TextBlock Text="{Binding SaveStateText}"
+                                                               Style="{StaticResource ShellBadgeTextStyle}" />
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
+                                    <Border Background="{StaticResource ShellSurfaceDarkBrush}"
+                                            BorderBrush="#314152"
+                                            BorderThickness="1"
+                                            CornerRadius="12"
+                                            ClipToBounds="True"
+                                            Margin="14,0,14,14">
+                                        <ContentControl Content="{Binding Canvas.CanvasView}"
+                                                        HorizontalAlignment="Stretch"
+                                                        VerticalAlignment="Stretch"
+                                                        AutomationProperties.Name="Canvas" />
+                                    </Border>
+                                </DockPanel>
                             </Border>
 
-                            <Border Background="{StaticResource ShellSurfaceDarkBrush}"
-                                    BorderBrush="#314152"
-                                    BorderThickness="1"
-                                    CornerRadius="12"
-                                    ClipToBounds="True"
-                                    Margin="14,0,14,14">
-                                <ContentControl Content="{Binding Canvas.CanvasView}"
-                                                HorizontalAlignment="Stretch"
-                                                VerticalAlignment="Stretch"
-                                                AutomationProperties.Name="Canvas" />
-                            </Border>
-                        </DockPanel>
-                    </Border>
+                            <views:PropertyInspectorView Grid.Column="2"
+                                                         DataContext="{Binding PropertyInspector}" />
+                        </Grid>
 
-                    <views:PropertyInspectorView Grid.Column="2"
-                                                 DataContext="{Binding PropertyInspector}" />
+                        <views:IssuePanelView Grid.Row="2"
+                                              DataContext="{Binding IssuePanel}" />
+                    </Grid>
                 </Grid>
-
-                <views:IssuePanelView Grid.Row="2"
-                                      DataContext="{Binding IssuePanel}" />
-            </Grid>
+            </DockPanel>
         </Grid>
-    </DockPanel>
+
+        <Grid Visibility="{Binding IsStartupMode, Converter={StaticResource BoolToVisibilityConverter}}"
+              Background="#BFE9EDF2">
+            <Border Width="860"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource ShellCardStyle}"
+                    Padding="0">
+                <views:ProjectStartupView DataContext="{Binding ProjectStartup}" />
+            </Border>
+        </Grid>
+    </Grid>
 </Window>

@@ -1,8 +1,11 @@
+using System.Threading;
 using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Services;
+using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.Identifiers;
+using CabinetDesigner.Domain.SpatialContext;
 using CabinetDesigner.Editor;
 using CabinetDesigner.Presentation.Commands;
 using CabinetDesigner.Presentation.Projection;
@@ -18,6 +21,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     private readonly IRunService _runService;
     private readonly IApplicationEventBus _eventBus;
     private readonly ISceneProjector _sceneProjector;
+    private readonly IRoomService _roomService;
+    private readonly ICatalogService _catalogService;
     private readonly IEditorCanvasSession _editorSession;
     private readonly IHitTester _hitTester;
     private readonly IEditorCanvasHost _canvasHost;
@@ -37,6 +42,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     private bool _isDragActive;
     private bool _isCommitInFlight;
     private bool _isResizingAtMinimum;
+    private bool _isWallDrawingMode;
+    private Point2D? _pendingWallStartWorld;
 
     public EditorCanvasViewModel(
         IRunService runService,
@@ -46,21 +53,42 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         IHitTester hitTester,
         IEditorCanvasHost canvasHost,
         IEditorInteractionService interactionService,
-        IAppLogger? logger = null)
+        IAppLogger logger,
+        ICatalogService? catalogService = null)
+        : this(runService, eventBus, sceneProjector, new NoOpRoomService(), editorSession, hitTester, canvasHost, interactionService, logger, catalogService)
+    {
+    }
+
+    public EditorCanvasViewModel(
+        IRunService runService,
+        IApplicationEventBus eventBus,
+        ISceneProjector sceneProjector,
+        IRoomService roomService,
+        IEditorCanvasSession editorSession,
+        IHitTester hitTester,
+        IEditorCanvasHost canvasHost,
+        IEditorInteractionService interactionService,
+        IAppLogger logger,
+        ICatalogService? catalogService = null)
     {
         _runService = runService ?? throw new ArgumentNullException(nameof(runService));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _sceneProjector = sceneProjector ?? throw new ArgumentNullException(nameof(sceneProjector));
+        _roomService = roomService ?? throw new ArgumentNullException(nameof(roomService));
+        _catalogService = catalogService ?? new CatalogService();
         _editorSession = editorSession ?? throw new ArgumentNullException(nameof(editorSession));
         _hitTester = hitTester ?? throw new ArgumentNullException(nameof(hitTester));
         _canvasHost = canvasHost ?? throw new ArgumentNullException(nameof(canvasHost));
         _interactionService = interactionService ?? throw new ArgumentNullException(nameof(interactionService));
-        _logger = logger;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         ResetZoomCommand = new RelayCommand(ExecuteResetZoom);
         FitToViewCommand = new RelayCommand(ExecuteFitToView);
+        ToggleWallDrawingCommand = new RelayCommand(ToggleWallDrawingMode);
+        CancelWallDrawingCommand = new RelayCommand(CancelWallDrawingMode, () => IsWallDrawingMode);
         SelectAllCommand = new RelayCommand(ExecuteSelectAll, () => Scene is not null);
         SelectNoneCommand = new RelayCommand(ExecuteSelectNone, () => Scene is not null);
+        DeleteSelectedCommand = new AsyncRelayCommand(ExecuteDeleteSelectedAsync, logger, eventBus, CanDeleteSelected);
 
         _eventBus.Subscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Subscribe<UndoAppliedEvent>(OnUndoApplied);
@@ -71,6 +99,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         _canvasHost.SetMouseUpHandler(OnMouseUp);
         _canvasHost.SetMouseWheelHandler(OnMouseWheel);
         _canvasHost.SetMiddleButtonDragHandler(OnPanStart, OnPanMove, OnPanEnd);
+        _canvasHost.SetDragOverHandler((x, y, payload) => OnCatalogDragOver(payload, x, y));
+        _canvasHost.SetDropHandler((x, y, payload) => OnCatalogDropAsync(payload, x, y));
         RefreshScene();
     }
 
@@ -85,6 +115,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             {
                 SelectAllCommand.NotifyCanExecuteChanged();
                 SelectNoneCommand.NotifyCanExecuteChanged();
+                DeleteSelectedCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -111,6 +142,22 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
     public bool IsBusy => _busyCount > 0;
 
+    public bool IsWallDrawingMode
+    {
+        get => _isWallDrawingMode;
+        set
+        {
+            if (SetProperty(ref _isWallDrawingMode, value))
+            {
+                CancelWallDrawingCommand.NotifyCanExecuteChanged();
+                if (!value)
+                {
+                    _pendingWallStartWorld = null;
+                }
+            }
+        }
+    }
+
     public RelayCommand ResetZoomCommand { get; }
 
     public RelayCommand FitToViewCommand { get; }
@@ -118,6 +165,12 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     public RelayCommand SelectAllCommand { get; }
 
     public RelayCommand SelectNoneCommand { get; }
+
+    public AsyncRelayCommand DeleteSelectedCommand { get; }
+
+    public RelayCommand ToggleWallDrawingCommand { get; }
+
+    public RelayCommand CancelWallDrawingCommand { get; }
 
     public void SetStatusMessage(string statusMessage) => StatusMessage = statusMessage;
 
@@ -138,6 +191,221 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             EndBusy();
         }
     }
+
+    public System.Windows.DragDropEffects OnCatalogDragOver(object? payload, double screenX, double screenY)
+    {
+        if (payload is not CatalogTemplateDragPayload catalogPayload)
+        {
+            return System.Windows.DragDropEffects.None;
+        }
+
+        var template = FindCatalogTemplate(catalogPayload.CabinetTypeId);
+        if (template is null)
+        {
+            StatusMessage = $"Unknown cabinet template '{catalogPayload.CabinetTypeId}'.";
+            return System.Windows.DragDropEffects.None;
+        }
+
+        EnsureCatalogDragPreview(template, screenX, screenY);
+        return System.Windows.DragDropEffects.Copy;
+    }
+
+    public async Task<System.Windows.DragDropEffects> OnCatalogDropAsync(object? payload, double screenX, double screenY)
+    {
+        try
+        {
+            if (payload is not CatalogTemplateDragPayload catalogPayload)
+            {
+                return System.Windows.DragDropEffects.None;
+            }
+
+            var template = FindCatalogTemplate(catalogPayload.CabinetTypeId);
+            if (template is null)
+            {
+                StatusMessage = $"Unknown cabinet template '{catalogPayload.CabinetTypeId}'.";
+                return System.Windows.DragDropEffects.None;
+            }
+
+            var worldPoint = _editorSession.Viewport.ToWorld(screenX, screenY);
+            DropTarget? dropTarget = ResolveDropTarget(worldPoint);
+            if (dropTarget is null)
+            {
+                StatusMessage = "Select a room before dropping cabinets.";
+                return System.Windows.DragDropEffects.None;
+            }
+
+            if (dropTarget.RunId is null && dropTarget.WallId is null)
+            {
+                StatusMessage = "Select a room before dropping cabinets.";
+                return System.Windows.DragDropEffects.None;
+            }
+
+            if (dropTarget.RunId is not null)
+            {
+                await _runService.PlaceCabinetAsync(new RunId(dropTarget.RunId.Value), template.TypeId).ConfigureAwait(true);
+            }
+            else
+            {
+                if (_editorSession.ActiveRoomId is null)
+                {
+                    StatusMessage = "Select a room before dropping cabinets.";
+                    return System.Windows.DragDropEffects.None;
+                }
+
+                var createdRun = await _runService.CreateRunAsync(
+                    new RoomId(_editorSession.ActiveRoomId.Value),
+                    new WallId(dropTarget.WallId!.Value),
+                    dropTarget.StartOffset,
+                    template.NominalWidth).ConfigureAwait(true);
+                await _runService.PlaceCabinetAsync(createdRun.Id, template.TypeId).ConfigureAwait(true);
+            }
+
+            RefreshScene();
+            StatusMessage = "Cabinet placed.";
+            return System.Windows.DragDropEffects.Copy;
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusMessage = exception.Message == "Cannot place cabinet: run capacity exceeded."
+                ? "Cannot place cabinet: run capacity exceeded."
+                : exception.Message;
+            RefreshScene();
+            return System.Windows.DragDropEffects.None;
+        }
+        finally
+        {
+            _interactionService.OnDragAborted();
+        }
+    }
+
+    private CatalogItemDto? FindCatalogTemplate(string cabinetTypeId) =>
+        _catalogService.GetAllItems().FirstOrDefault(item =>
+            string.Equals(item.TypeId, cabinetTypeId, StringComparison.Ordinal));
+
+    private void EnsureCatalogDragPreview(CatalogItemDto template, double screenX, double screenY)
+    {
+        if (_editorSession.CurrentMode != EditorMode.PlacingCabinet)
+        {
+            _interactionService.BeginPlaceCabinet(
+                template.TypeId,
+                template.NominalWidth,
+                template.Depth,
+                screenX,
+                screenY);
+        }
+
+        var worldPoint = _editorSession.Viewport.ToWorld(screenX, screenY);
+        var hit = Scene is null
+            ? new HitTestResult(HitTestTarget.None, null, null)
+            : _hitTester.HitTest(screenX, screenY, Scene, _editorSession.Viewport);
+
+        if (hit.Target == HitTestTarget.Run && hit.EntityId is Guid runId)
+        {
+            _interactionService.OnDragMoved(screenX, screenY);
+            StatusMessage = "Previewing placement.";
+        }
+        else
+        {
+            StatusMessage = _editorSession.ActiveRoomId is null
+                ? "Drop onto a room wall to create a run."
+                : "Previewing cabinet placement.";
+        }
+    }
+
+    private DropTarget? ResolveDropTarget(Point2D worldPoint)
+    {
+        if (Scene is null)
+        {
+            return null;
+        }
+
+        var hit = _hitTester.HitTest(
+            _editorSession.Viewport.ToScreen(worldPoint).X,
+            _editorSession.Viewport.ToScreen(worldPoint).Y,
+            Scene,
+            _editorSession.Viewport);
+
+        return hit.Target switch
+        {
+            HitTestTarget.Run when hit.EntityId is Guid runId => new DropTarget(runId, null, Length.Zero),
+            HitTestTarget.Cabinet when hit.EntityId is Guid cabinetId => new DropTarget(
+                Scene.Cabinets.FirstOrDefault(cabinet => cabinet.CabinetId == cabinetId)?.RunId,
+                null,
+                Length.Zero),
+            HitTestTarget.Wall when hit.EntityId is Guid wallId => BuildWallDropTarget(wallId, worldPoint),
+            _ => _editorSession.ActiveRoomId is null ? null : FindNearestWallDropTarget(worldPoint)
+        };
+    }
+
+    private DropTarget? FindNearestWallDropTarget(Point2D worldPoint)
+    {
+        if (Scene is null || Scene.Walls.Count == 0)
+        {
+            return null;
+        }
+
+        var nearest = Scene.Walls
+            .Select(wall => new
+            {
+                Wall = wall,
+                Distance = DistanceToSegment(worldPoint, wall.Segment),
+                Projection = ProjectOntoSegment(worldPoint, wall.Segment)
+            })
+            .OrderBy(candidate => candidate.Distance)
+            .FirstOrDefault();
+
+        return nearest is null
+            ? null
+            : BuildWallDropTarget(nearest.Wall.WallId, nearest.Projection);
+    }
+
+    private DropTarget? BuildWallDropTarget(Guid wallId, Point2D worldPoint)
+    {
+        if (Scene is null)
+        {
+            return null;
+        }
+
+        var wall = Scene.Walls.FirstOrDefault(candidate => candidate.WallId == wallId);
+        if (wall is null)
+        {
+            return null;
+        }
+
+        if (_editorSession.ActiveRoomId is null)
+        {
+            return null;
+        }
+
+        var startOffset = DistanceAlongSegment(wall.Segment, worldPoint);
+        return new DropTarget(null, wall.WallId, startOffset);
+    }
+
+    private static Point2D ProjectOntoSegment(Point2D point, LineSegment2D segment)
+    {
+        var vector = segment.End - segment.Start;
+        var lengthSquared = vector.Dx * vector.Dx + vector.Dy * vector.Dy;
+        if (lengthSquared <= 0m)
+        {
+            return segment.Start;
+        }
+
+        var toPoint = point - segment.Start;
+        var t = (toPoint.Dx * vector.Dx + toPoint.Dy * vector.Dy) / lengthSquared;
+        t = Math.Clamp(t, 0m, 1m);
+        return new Point2D(segment.Start.X + (vector.Dx * t), segment.Start.Y + (vector.Dy * t));
+    }
+
+    private static decimal DistanceToSegment(Point2D point, LineSegment2D segment) =>
+        point.DistanceTo(ProjectOntoSegment(point, segment)).Inches;
+
+    private static Length DistanceAlongSegment(LineSegment2D segment, Point2D point)
+    {
+        var projected = ProjectOntoSegment(point, segment);
+        return segment.Start.DistanceTo(projected);
+    }
+
+    private sealed record DropTarget(Guid? RunId, Guid? WallId, Length StartOffset);
 
     public async Task<CommandResultDto> MoveCabinetAsync(Guid cabinetId, Guid sourceRunId, Guid targetRunId, int? targetIndex = null)
     {
@@ -164,7 +432,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         RefreshInteractionState();
     }
 
-    public void OnMouseDown(double screenX, double screenY)
+    public async void OnMouseDown(double screenX, double screenY)
     {
         // Guard: if a drag commit is still in flight, abort the session before accepting new input.
         if (_isCommitInFlight || _isDragActive)
@@ -174,6 +442,67 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             _isResizingAtMinimum = false;
             _pendingDragCabinetId = null;
             _interactionService.OnDragAborted();
+        }
+
+        if (IsWallDrawingMode)
+        {
+            if (_scene is null)
+            {
+                StatusMessage = "Open a project and select a room before drawing walls.";
+                return;
+            }
+
+            var activeRoomId = _editorSession.ActiveRoomId;
+            if (activeRoomId is null)
+            {
+                StatusMessage = "Select a room before drawing walls.";
+                return;
+            }
+
+            var worldPoint = _editorSession.Viewport.ToWorld(screenX, screenY);
+            var snappedPoint = ResolveWallSnapPoint(worldPoint);
+            if (_pendingWallStartWorld is null)
+            {
+                _pendingWallStartWorld = snappedPoint;
+                StatusMessage = "Wall start point set.";
+                return;
+            }
+
+            if (_pendingWallStartWorld.Value.DistanceTo(snappedPoint) <= Length.Zero)
+            {
+                StatusMessage = "Wall length must be greater than zero.";
+                _pendingWallStartWorld = null;
+                return;
+            }
+
+            try
+            {
+                await _roomService.AddWallAsync(
+                    new RoomId(activeRoomId.Value),
+                    _pendingWallStartWorld.Value,
+                    snappedPoint,
+                    Thickness.Exact(Length.FromInches(4m)),
+                    CancellationToken.None).ConfigureAwait(true);
+                StatusMessage = "Wall added.";
+            }
+            catch (Exception exception)
+            {
+                _logger?.Log(new LogEntry
+                {
+                    Level = LogLevel.Error,
+                    Category = "EditorCanvasViewModel",
+                    Message = "Unhandled exception while adding a wall.",
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Exception = exception
+                });
+                StatusMessage = $"Failed to add wall: {exception.Message}";
+            }
+            finally
+            {
+                _pendingWallStartWorld = null;
+            }
+
+            return;
         }
 
         if (Scene is null)
@@ -352,6 +681,19 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         RefreshInteractionState();
     }
 
+    public void SetActiveRoom(Guid? roomId)
+    {
+        if (roomId is null)
+        {
+            _editorSession.SetActiveRoom(null);
+            RefreshScene();
+            return;
+        }
+
+        _editorSession.SetActiveRoom(roomId);
+        RefreshScene();
+    }
+
     public void Dispose()
     {
         _eventBus.Unsubscribe<DesignChangedEvent>(OnDesignChanged);
@@ -401,7 +743,14 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _editorSession.FitViewport(bounds.Value, canvasWidth, canvasHeight);
+        _editorSession.FitViewport(
+            new ViewportBounds(
+                (double)bounds.Value.Min.X,
+                (double)bounds.Value.Min.Y,
+                (double)bounds.Value.Max.X,
+                (double)bounds.Value.Max.Y),
+            canvasWidth,
+            canvasHeight);
         RefreshScene();
         StatusMessage = "Fit to view.";
     }
@@ -434,6 +783,64 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         _editorSession.SetSelectedCabinetIds([]);
         RefreshScene();
         StatusMessage = "Selection cleared.";
+    }
+
+    private bool CanDeleteSelected() => Scene is not null && _editorSession.SelectedCabinetIds.Count > 0;
+
+    private async Task ExecuteDeleteSelectedAsync()
+    {
+        if (!CanDeleteSelected())
+        {
+            return;
+        }
+
+        BeginBusy();
+        try
+        {
+            var selectedIds = _editorSession.SelectedCabinetIds.ToArray();
+            foreach (var cabinetId in selectedIds)
+            {
+                await _runService.DeleteCabinetAsync(new CabinetId(cabinetId)).ConfigureAwait(true);
+            }
+
+            _editorSession.SetSelectedCabinetIds([]);
+            RefreshScene();
+            StatusMessage = selectedIds.Length == 1
+                ? "Cabinet deleted."
+                : $"{selectedIds.Length} cabinets deleted.";
+        }
+        catch (InvalidOperationException exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            EndBusy();
+        }
+    }
+
+    private void ToggleWallDrawingMode()
+    {
+        IsWallDrawingMode = !IsWallDrawingMode;
+        StatusMessage = IsWallDrawingMode
+            ? "Wall drawing mode enabled."
+            : "Wall drawing mode disabled.";
+        if (!IsWallDrawingMode)
+        {
+            _pendingWallStartWorld = null;
+        }
+    }
+
+    private void CancelWallDrawingMode()
+    {
+        if (!IsWallDrawingMode)
+        {
+            return;
+        }
+
+        IsWallDrawingMode = false;
+        _pendingWallStartWorld = null;
+        StatusMessage = "Wall drawing mode cancelled.";
     }
 
     private void BeginDrag(Guid cabinetId, HitTestTarget target, double screenX, double screenY)
@@ -512,6 +919,42 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
     }
 
+    private Point2D ResolveWallSnapPoint(Point2D worldPoint)
+    {
+        var snapRadius = _editorSession.SnapSettings.SnapRadius.Inches;
+        var bestPoint = worldPoint;
+        var bestDistance = decimal.MaxValue;
+
+        var gridSize = _editorSession.SnapSettings.GridSize.Inches;
+        if (gridSize > 0m)
+        {
+            var snappedX = Math.Round(worldPoint.X / gridSize, MidpointRounding.AwayFromZero) * gridSize;
+            var snappedY = Math.Round(worldPoint.Y / gridSize, MidpointRounding.AwayFromZero) * gridSize;
+            var gridPoint = new Point2D(snappedX, snappedY);
+            var distance = worldPoint.DistanceTo(gridPoint).Inches;
+            if (distance <= snapRadius && distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestPoint = gridPoint;
+            }
+        }
+
+        if (_scene is not null)
+        {
+            foreach (var endpoint in _scene.Walls.SelectMany(wall => new[] { wall.Segment.Start, wall.Segment.End }))
+            {
+                var distance = worldPoint.DistanceTo(endpoint).Inches;
+                if (distance <= snapRadius && distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPoint = endpoint;
+                }
+            }
+        }
+
+        return bestPoint;
+    }
+
     private void OnDesignChanged(DesignChangedEvent _) =>
         DispatchIfNeeded(() =>
         {
@@ -543,6 +986,8 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
 
             _pendingDragCabinetId = null;
             _isDragActive = false;
+            _pendingWallStartWorld = null;
+            IsWallDrawingMode = false;
             Scene = null;
             SelectedCabinetIds = [];
             HoveredCabinetId = null;
@@ -576,6 +1021,9 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         SelectedCabinetIds = _editorSession.SelectedCabinetIds.ToArray();
         HoveredCabinetId = _editorSession.HoveredCabinetId;
         OnPropertyChanged(nameof(CurrentMode));
+        SelectAllCommand.NotifyCanExecuteChanged();
+        SelectNoneCommand.NotifyCanExecuteChanged();
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
     }
 
     private void BeginBusy()
@@ -604,5 +1052,23 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
 
         dispatcher.Invoke(action);
+    }
+
+    private sealed class NoOpRoomService : IRoomService
+    {
+        public Task<Room> CreateRoomAsync(string name, Length ceilingHeight, CancellationToken ct) =>
+            Task.FromException<Room>(new InvalidOperationException("Room service is not configured."));
+
+        public Task<Wall> AddWallAsync(RoomId roomId, Point2D start, Point2D end, Thickness thickness, CancellationToken ct) =>
+            Task.FromException<Wall>(new InvalidOperationException("Room service is not configured."));
+
+        public Task RemoveWallAsync(WallId wallId, CancellationToken ct) =>
+            Task.FromException(new InvalidOperationException("Room service is not configured."));
+
+        public Task RenameRoomAsync(RoomId roomId, string newName, CancellationToken ct) =>
+            Task.FromException(new InvalidOperationException("Room service is not configured."));
+
+        public Task<IReadOnlyList<Room>> ListRoomsAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<Room>>([]);
     }
 }

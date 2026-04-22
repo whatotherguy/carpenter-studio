@@ -9,7 +9,6 @@ using CabinetDesigner.Domain.Geometry;
 using CabinetDesigner.Domain.HardwareContext;
 using CabinetDesigner.Domain.Identifiers;
 using CabinetDesigner.Domain.MaterialContext;
-using CabinetDesigner.Domain.TemplateContext;
 
 namespace CabinetDesigner.Application.Services;
 
@@ -27,6 +26,12 @@ public sealed class CatalogService : ICatalogService
         .OrderBy(record => record.Key, StringComparer.Ordinal)
         .ToDictionary(record => record.Id.Value, record => record);
 
+    public bool IsPricingConfigured
+    {
+        // V2: Vendor-managed pricing tables will seed real prices here. See docs/V2_enhancements.md.
+        get => false;
+    }
+
     public IReadOnlyList<CatalogItemDto> GetAllItems() => Items;
 
     public MaterialId ResolvePartMaterial(string partType, CabinetCategory category, ConstructionMethod construction)
@@ -35,11 +40,14 @@ public sealed class CatalogService : ICatalogService
 
         var materialKey = partType switch
         {
-            "Back" => "material:back-panel-quarter",
+            "Back" or "DrawerBoxBottom" => "material:back-panel-quarter",
             "AdjustableShelf" => "material:shelf-melamine-three-quarter",
+            "DrawerBoxLeftSide" or "DrawerBoxRightSide" or "DrawerBoxFront" or "DrawerBoxBack"
+                => "material:drawer-box-half",
             "FrameStile" or "FrameRail" or "FrameMullion" when construction == ConstructionMethod.FaceFrame
                 => "material:face-frame-hardwood-three-quarter",
             "LeftSide" or "RightSide" or "Top" or "Bottom" or "ToeKick" or "StructuralBase"
+            or "Door" or "DrawerFront"
                 => category == CabinetCategory.Wall
                     ? "material:wall-case-plywood-three-quarter"
                     : "material:case-plywood-three-quarter",
@@ -55,10 +63,13 @@ public sealed class CatalogService : ICatalogService
     {
         var materialKey = partType switch
         {
-            "Back" => "material:back-panel-quarter",
+            "Back" or "DrawerBoxBottom" => "material:back-panel-quarter",
             "AdjustableShelf" => "material:shelf-melamine-three-quarter",
+            "DrawerBoxLeftSide" or "DrawerBoxRightSide" or "DrawerBoxFront" or "DrawerBoxBack"
+                => "material:drawer-box-half",
             "FrameStile" or "FrameRail" or "FrameMullion" => "material:face-frame-hardwood-three-quarter",
             "LeftSide" or "RightSide" or "Top" or "Bottom" or "ToeKick" or "StructuralBase"
+            or "Door" or "DrawerFront"
                 => category == CabinetCategory.Wall
                     ? "material:wall-case-plywood-three-quarter"
                     : "material:case-plywood-three-quarter",
@@ -73,6 +84,13 @@ public sealed class CatalogService : ICatalogService
     public bool IsKnownMaterial(MaterialId id) =>
         id != default && MaterialsById.ContainsKey(id.Value);
 
+    public string GetMaterialDisplayName(MaterialId id) =>
+        MaterialsById.TryGetValue(id.Value, out var material)
+            ? material.Name
+            : id == default
+                ? "Unassigned"
+                : id.Value.ToString("D");
+
     public Thickness ResolveMaterialThickness(MaterialId id) =>
         MaterialsById.TryGetValue(id.Value, out var material)
             ? material.Thickness
@@ -85,17 +103,19 @@ public sealed class CatalogService : ICatalogService
 
     public IReadOnlyList<HardwareItemId> ResolveHardwareForOpening(OpeningId openingId, CabinetCategory category)
     {
+        // V2: vendor hardware catalog will return hinges/slides per opening type (Door → hinge, Drawer → slide)
         _ = openingId;
-        return HardwareByCategory.TryGetValue(category, out var hardware)
-            ? hardware
-                .OrderBy(item => item.Key, StringComparer.Ordinal)
-                .Select(item => item.Id)
-                .ToArray()
-            : [];
+        _ = category;
+        return [];
     }
 
     public decimal GetMaterialPricePerSquareFoot(MaterialId id, Thickness thickness)
     {
+        if (!IsPricingConfigured)
+        {
+            return 0m;
+        }
+
         if (!MaterialsById.TryGetValue(id.Value, out var material))
         {
             return 0m;
@@ -107,6 +127,9 @@ public sealed class CatalogService : ICatalogService
     }
 
     public decimal GetHardwarePrice(HardwareItemId id) =>
+        !IsPricingConfigured
+            ? 0m
+            :
         HardwareById.TryGetValue(id.Value, out var hardware)
             ? hardware.Price
             : 0m;
@@ -115,51 +138,71 @@ public sealed class CatalogService : ICatalogService
     {
         var templates = new[]
         {
-            CreateTemplate("base-24", "Base Cabinet 24\"", Length.FromInches(24m), Length.FromInches(24m), Length.FromInches(34.5m)),
-            CreateTemplate("base-30", "Base Cabinet 30\"", Length.FromInches(30m), Length.FromInches(24m), Length.FromInches(34.5m)),
-            CreateTemplate("base-36", "Base Cabinet 36\"", Length.FromInches(36m), Length.FromInches(24m), Length.FromInches(34.5m)),
-            CreateTemplate("wall-30", "Wall Cabinet 30\"", Length.FromInches(30m), Length.FromInches(12m), Length.FromInches(30m)),
-            CreateTemplate("wall-36", "Wall Cabinet 36\"", Length.FromInches(36m), Length.FromInches(12m), Length.FromInches(30m)),
-            CreateTemplate("tall-24", "Tall Cabinet 24\"", Length.FromInches(24m), Length.FromInches(24m), Length.FromInches(84m)),
-            CreateTemplate("tall-36", "Tall Cabinet 36\"", Length.FromInches(36m), Length.FromInches(24m), Length.FromInches(84m))
+            new CatalogTemplate(
+                "base-standard-24",
+                "Base Standard 24",
+                CabinetCategory.Base,
+                ConstructionMethod.Frameless,
+                Length.FromInches(24m),
+                Length.FromInches(24m),
+                Length.FromInches(34.5m),
+                1),
+            new CatalogTemplate(
+                "base-drawer-18",
+                "Base Drawer 18",
+                CabinetCategory.Base,
+                ConstructionMethod.Frameless,
+                Length.FromInches(18m),
+                Length.FromInches(24m),
+                Length.FromInches(34.5m),
+                3),
+            new CatalogTemplate(
+                "wall-standard-30",
+                "Wall Standard 30",
+                CabinetCategory.Wall,
+                ConstructionMethod.Frameless,
+                Length.FromInches(30m),
+                Length.FromInches(12m),
+                Length.FromInches(30m),
+                2),
+            new CatalogTemplate(
+                "tall-pantry-24",
+                "Tall Pantry 24",
+                CabinetCategory.Tall,
+                ConstructionMethod.Frameless,
+                Length.FromInches(24m),
+                Length.FromInches(24m),
+                Length.FromInches(84m),
+                2),
+            new CatalogTemplate(
+                "base-faceframe-24",
+                "Base FaceFrame 24",
+                CabinetCategory.Base,
+                ConstructionMethod.FaceFrame,
+                Length.FromInches(24m),
+                Length.FromInches(24m),
+                Length.FromInches(34.5m),
+                1)
         };
 
         return templates.Select(Map).ToArray();
     }
 
-    private static CabinetTemplate CreateTemplate(
-        string cabinetTypeId,
-        string name,
-        Length width,
-        Length depth,
-        Length height) =>
-        new(
-            new TemplateId(StableIdFor(cabinetTypeId)),
-            name,
-            cabinetTypeId,
-            width,
-            depth,
-            height,
-            new Dictionary<string, OverrideValue>());
-
-    private static CatalogItemDto Map(CabinetTemplate template)
+    private static CatalogItemDto Map(CatalogTemplate template)
     {
-        var category = InferCategory(template.CabinetTypeId);
-        var description = $"{category} cabinet template. {template.DefaultWidth.Inches:0.##}\" W x {template.DefaultDepth.Inches:0.##}\" D x {template.DefaultHeight.Inches:0.##}\" H.";
+        var description = $"{template.Category} cabinet template. {template.NominalWidth.Inches:0.##}\" W x {template.Depth.Inches:0.##}\" D x {template.Height.Inches:0.##}\" H.";
 
         return new CatalogItemDto(
             template.CabinetTypeId,
-            template.Name,
-            category,
-            description,
-            template.DefaultWidth.Inches);
+            template.DisplayName,
+            template.Category.ToString(),
+            template.ConstructionMethod,
+            template.NominalWidth,
+            template.Depth,
+            template.Height,
+            template.DefaultOpenings,
+            description);
     }
-
-    private static string InferCategory(string cabinetTypeId) =>
-        cabinetTypeId.StartsWith("base-", StringComparison.OrdinalIgnoreCase) ? "Base"
-        : cabinetTypeId.StartsWith("wall-", StringComparison.OrdinalIgnoreCase) ? "Wall"
-        : cabinetTypeId.StartsWith("tall-", StringComparison.OrdinalIgnoreCase) ? "Tall"
-        : "Cabinet";
 
     internal static Guid StableIdFor(string cabinetTypeId)
     {
@@ -205,7 +248,14 @@ public sealed class CatalogService : ICatalogService
                 MaterialCategory.HardwoodSolid,
                 Thickness.Exact(Length.FromInches(0.75m)),
                 GrainDirection.LengthWise,
-                6.5m)
+                6.5m),
+            new MaterialRecord(
+                "material:drawer-box-half",
+                "Drawer Box Half-Inch Baltic Birch",
+                MaterialCategory.Plywood,
+                Thickness.Exact(Length.FromInches(0.5m)),
+                GrainDirection.LengthWise,
+                0m)
         };
 
         return materials.ToDictionary(material => material.Key, material => material, StringComparer.Ordinal);
@@ -252,4 +302,14 @@ public sealed class CatalogService : ICatalogService
     {
         public HardwareItemId Id { get; } = new(StableIdFor(Key));
     }
+
+    private sealed record CatalogTemplate(
+        string CabinetTypeId,
+        string DisplayName,
+        CabinetCategory Category,
+        ConstructionMethod ConstructionMethod,
+        Length NominalWidth,
+        Length Depth,
+        Length Height,
+        int DefaultOpenings);
 }

@@ -28,25 +28,32 @@ internal sealed class WorkingRevisionRepository : SqliteRepositoryBase, IWorking
                 var (cabinets, cabinetRows) = await LoadCabinetsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
                 var parts = await LoadPartsAsync(connection, transaction, revision.Id, ct).ConfigureAwait(false);
 
-                var runsById = runs.ToDictionary(run => run.Id);
-                var cabinetsById = cabinets.ToDictionary(cabinet => cabinet.Id);
-
-                foreach (var row in cabinetRows.OrderBy(row => row.RunId, StringComparer.Ordinal).ThenBy(row => row.SlotIndex).ThenBy(row => row.Id, StringComparer.Ordinal))
+                try
                 {
-                    if (!runsById.TryGetValue(new RunId(Guid.Parse(row.RunId)), out var run))
-                    {
-                        continue;
-                    }
+                    var runsById = runs.ToDictionary(run => run.Id);
+                    var cabinetsById = cabinets.ToDictionary(cabinet => cabinet.Id);
 
-                    if (!cabinetsById.TryGetValue(new CabinetId(Guid.Parse(row.Id)), out var cabinet))
+                    foreach (var row in cabinetRows.OrderBy(row => row.RunId, StringComparer.Ordinal).ThenBy(row => row.SlotIndex).ThenBy(row => row.Id, StringComparer.Ordinal))
                     {
-                        continue;
-                    }
+                        if (!runsById.TryGetValue(new RunId(Guid.Parse(row.RunId)), out var run))
+                        {
+                            continue;
+                        }
 
-                    run.AppendCabinet(cabinet.Id, cabinet.NominalWidth);
+                        if (!cabinetsById.TryGetValue(new CabinetId(Guid.Parse(row.Id)), out var cabinet))
+                        {
+                            continue;
+                        }
+
+                        run.AppendCabinet(cabinet.Id, cabinet.NominalWidth);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("WORKING_REVISION_CORRUPT", ex);
                 }
 
-                return new WorkingRevision(revision, rooms, walls, runsById.Values.ToArray(), cabinets, parts);
+                return new WorkingRevision(revision, rooms, walls, runs, cabinets, parts);
             },
             ct);
 

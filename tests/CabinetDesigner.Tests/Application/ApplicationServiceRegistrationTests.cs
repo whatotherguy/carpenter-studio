@@ -3,6 +3,7 @@ using CabinetDesigner.Application;
 using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Handlers;
+using CabinetDesigner.Application.Export;
 using CabinetDesigner.Application.Pipeline;
 using CabinetDesigner.Application.Persistence;
 using CabinetDesigner.Domain;
@@ -29,6 +30,7 @@ public sealed class ApplicationServiceRegistrationTests
         Assert.NotNull(provider.GetRequiredService<IResolutionOrchestrator>());
         Assert.NotNull(provider.GetRequiredService<IDesignCommandHandler>());
         Assert.NotNull(provider.GetRequiredService<IClock>());
+        Assert.NotNull(provider.GetRequiredService<ICutListExporter>());
         Assert.IsType<RecordingAppLogger>(provider.GetRequiredService<IAppLogger>());
     }
 

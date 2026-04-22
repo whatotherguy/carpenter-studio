@@ -99,12 +99,12 @@ public sealed class CabinetRun
         return slot;
     }
 
-    public RunSlot InsertCabinetAt(int index, CabinetId cabinetId, Length nominalWidth)
+    public RunSlot InsertCabinetAt(int index, CabinetId cabinetId, Length nominalWidth, RunSlotId? slotId = null)
     {
         if (index < 0 || index > _slots.Count)
             throw new ArgumentOutOfRangeException(nameof(index));
 
-        var slot = RunSlot.ForCabinet(RunSlotId.New(), Id, cabinetId, nominalWidth, index);
+        var slot = RunSlot.ForCabinet(slotId ?? RunSlotId.New(), Id, cabinetId, nominalWidth, index);
         ValidateSlotFits(slot);
         _slots.Insert(index, slot);
         ReindexSlots();

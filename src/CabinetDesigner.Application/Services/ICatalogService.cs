@@ -7,6 +7,8 @@ namespace CabinetDesigner.Application.Services;
 
 public interface ICatalogService
 {
+    bool IsPricingConfigured { get; }
+
     IReadOnlyList<CatalogItemDto> GetAllItems();
 
     MaterialId ResolvePartMaterial(string partType, CabinetCategory category, ConstructionMethod construction);
@@ -14,6 +16,8 @@ public interface ICatalogService
     Thickness ResolvePartThickness(string partType, CabinetCategory category);
 
     bool IsKnownMaterial(MaterialId id);
+
+    string GetMaterialDisplayName(MaterialId id);
 
     Thickness ResolveMaterialThickness(MaterialId id);
 

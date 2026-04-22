@@ -34,6 +34,7 @@ public sealed class SnapshotServiceTests
             snapshotRepository,
             new RecordingWorkingRevisionSource(state),
             new RecordingValidationHistoryRepository(),
+            new RecordingValidationResultStore(BuildValidResult()),
             new RecordingPackagingResultStore(CreatePackagingResult(state.Revision.Id, clock.Now)),
             eventBus,
             clock,
@@ -61,6 +62,7 @@ public sealed class SnapshotServiceTests
             new RecordingSnapshotRepository(),
             new RecordingWorkingRevisionSource(state),
             new RecordingValidationHistoryRepository(),
+            new RecordingValidationResultStore(BuildValidResult()),
             new RecordingPackagingResultStore(CreatePackagingResult(state.Revision.Id, DateTimeOffset.Now)),
             new RecordingEventBus(),
             new FixedClock(DateTimeOffset.Now));
@@ -95,6 +97,7 @@ public sealed class SnapshotServiceTests
             new RecordingSnapshotRepository(),
             new RecordingWorkingRevisionSource(state),
             new RecordingValidationHistoryRepository(),
+            new RecordingValidationResultStore(BuildValidResult()),
             new RecordingPackagingResultStore(CreatePackagingResult(revision1.Id, createdAt)),
             new RecordingEventBus(),
             new FixedClock(createdAt));
@@ -131,6 +134,7 @@ public sealed class SnapshotServiceTests
             new RecordingSnapshotRepository(),
             new RecordingWorkingRevisionSourceThrowsInvalidOperation(),
             new RecordingValidationHistoryRepository(),
+            new RecordingValidationResultStore(BuildValidResult()),
             new RecordingPackagingResultStore(null),
             new RecordingEventBus(),
             new FixedClock(DateTimeOffset.Now));
@@ -158,7 +162,7 @@ public sealed class SnapshotServiceTests
             RevisionId = revisionId,
             CreatedAt = createdAt,
             ContentHash = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
-            Summary = new CabinetDesigner.Application.Pipeline.StageResults.SnapshotSummary(1, 1, 1, 0, 125m),
+            Summary = new CabinetDesigner.Application.Pipeline.StageResults.SnapshotSummary(1, 1, 1, 0, CostingStatus.Calculated),
             DesignBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"design":true}}""",
             PartsBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"parts":true}}""",
             ManufacturingBlob = """{"schema_version":1,"revision_id":"00000000-0000-0000-0000-000000000001","payload":{"manufacturing":true}}""",
@@ -267,6 +271,15 @@ public sealed class SnapshotServiceTests
         public void Clear() => Current = null;
     }
 
+    private sealed class RecordingValidationResultStore(FullValidationResult? current) : IValidationResultStore
+    {
+        public FullValidationResult? Current { get; private set; } = current;
+
+        public void Update(FullValidationResult result) => Current = result;
+
+        public void Clear() => Current = null;
+    }
+
     private sealed class RecordingRevisionRepositoryMultiple(IReadOnlyList<RevisionRecord> revisions) : IRevisionRepository
     {
         public Task<RevisionRecord?> FindAsync(RevisionId id, CancellationToken ct = default) =>
@@ -287,4 +300,11 @@ public sealed class SnapshotServiceTests
         public PersistedProjectState CaptureCurrentState(PartGenerationResult? partResult = null) =>
             throw new InvalidOperationException("No project state is currently loaded.");
     }
+
+    private static FullValidationResult BuildValidResult() =>
+        new()
+        {
+            CrossCuttingIssues = [],
+            ContextualIssues = []
+        };
 }
