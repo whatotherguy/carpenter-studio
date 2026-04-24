@@ -13,4 +13,7 @@ public interface IDialogService
 
     /// <summary>Returns true if the user chose Yes.</summary>
     bool ShowYesNoDialog(string title, string message);
+
+    /// <summary>Shows the modal alpha limitations dialog.</summary>
+    void ShowAlphaLimitationsDialog() { }
 }

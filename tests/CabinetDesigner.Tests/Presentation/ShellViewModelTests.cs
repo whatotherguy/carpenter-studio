@@ -200,12 +200,13 @@ public sealed class ShellViewModelTests
         var logger = new CapturingAppLogger();
         var thrower = new AsyncRelayCommand(
             () => throw new InvalidOperationException("test error"),
+            "test.command",
             logger,
             eventBus);
         await thrower.ExecuteAsync();
 
         Assert.True(exceptionRouted);
-        Assert.StartsWith("Error:", shell.StatusBar.StatusMessage);
+        Assert.StartsWith("Error in test.command: test error (ref: ", shell.StatusBar.StatusMessage);
     }
 
     [Fact]
@@ -252,13 +253,13 @@ public sealed class ShellViewModelTests
         eventBus.Publish(new ProjectClosedEvent(Guid.NewGuid()));
 
         Assert.False(shell.PropertyInspector.HasSelection);
-        Assert.Equal("Open a project to inspect properties.", shell.PropertyInspector.EmptyStateText);
+        Assert.Equal("No project is open, so there are no cabinet properties to inspect yet. Open or create a project to populate this panel.", shell.PropertyInspector.EmptyStateText);
         Assert.Equal("No editable properties", shell.PropertyInspector.EditabilityStatusDisplay);
         Assert.Equal("-", shell.PropertyInspector.NominalWidthDisplay);
         Assert.False(shell.RunSummary.HasSelection);
         Assert.False(shell.RunSummary.IsProjectOpen);
         Assert.Equal("No project open", shell.RunSummary.SourceLabel);
-        Assert.Equal("Open a project to see the run summary.", shell.RunSummary.EmptyStateText);
+        Assert.Equal("No project is open, so there is no run summary yet. Open or create a project to populate this panel.", shell.RunSummary.EmptyStateText);
         Assert.Equal("Project closed.", shell.StatusBar.StatusMessage);
     }
 
@@ -274,7 +275,7 @@ public sealed class ShellViewModelTests
 
         await shell.SaveCommand.ExecuteAsync();
 
-        Assert.StartsWith("Error:", shell.StatusBar.StatusMessage);
+        Assert.StartsWith("Error in project.save: Save failed. (ref: ", shell.StatusBar.StatusMessage);
         Assert.False(shell.SaveCommand.IsExecuting);
     }
 
@@ -518,8 +519,8 @@ public sealed class ShellViewModelTests
         // Wait for the async void handler to complete
         await Task.Delay(200);
 
-        // Assert: Error message was set without throwing unhandled exception
-        Assert.StartsWith("Failed to add cabinet:", statusBar.StatusMessage);
+        // Assert: Error was surfaced to the status bar with a stable correlation reference.
+        Assert.StartsWith("Error in project.catalog.add: Simulated error when adding cabinet to run (ref: ", statusBar.StatusMessage);
     }
 
     private static ShellViewModel CreateShellViewModel(

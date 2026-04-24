@@ -54,7 +54,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
     private string _selectionSummaryDisplay = "Nothing selected";
     private string _sourceLabel = "Selection idle";
     private string _editabilityStatusDisplay = "No editable properties";
-    private string _statusMessage = "Open a project to inspect properties.";
+    private string _statusMessage = "No project is open, so there are no cabinet properties to inspect yet. Open or create a project to populate this panel.";
     private string _lastErrorMessage = string.Empty;
     private string _displayName = "—";
     private string _nominalWidth = "—";
@@ -66,6 +66,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
     private string _toeKickHeight = "—";
     private string _notes = "—";
     private string _nominalWidthEditValue = string.Empty;
+    private int _selectionBringIntoViewToken;
     private bool _isProjectOpen;
     private bool _hasSelection;
     private bool _hasSingleSelection;
@@ -89,7 +90,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         _statusSink = statusSink;
 
         BeginNominalWidthEditCommand = new RelayCommand(BeginNominalWidthEdit, () => CanEditNominalWidth && !IsEditingNominalWidth);
-        CommitNominalWidthEditCommand = new AsyncRelayCommand(CommitNominalWidthEditAsync, logger, eventBus, () => CanEditNominalWidth && IsEditingNominalWidth);
+        CommitNominalWidthEditCommand = new AsyncRelayCommand(CommitNominalWidthEditAsync, "property.nominal-width.commit", logger, eventBus, () => CanEditNominalWidth && IsEditingNominalWidth);
         CancelNominalWidthEditCommand = new RelayCommand(CancelNominalWidthEdit, () => IsEditingNominalWidth);
 
         _eventBus.Subscribe<ProjectOpenedEvent>(OnProjectOpened);
@@ -109,7 +110,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         Action<string>? statusSink = null)
         : this(
             runService as ICabinetPropertyService
-                ?? new NoOpCabinetPropertyService(),
+                ?? new NoOpCabinetPropertyService(eventBus),
             eventBus,
             logger,
             catalogService,
@@ -280,12 +281,12 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
     }
 
     public string EmptyStateText => !IsProjectOpen
-        ? "Open a project to inspect properties."
+        ? "No project is open, so there are no cabinet properties to inspect yet. Open or create a project to populate this panel."
         : !HasSelection
-            ? "No cabinet selected. Click a cabinet on the canvas to inspect it."
+            ? "No cabinet is selected on the canvas right now. Click a cabinet to inspect its properties here."
             : HasSingleSelection
-                ? "Editing is available for the selected cabinet."
-                : "Multiple cabinets are selected. Shared fields can be edited together.";
+                ? $"A cabinet is selected, so its current properties are shown below. Edit only the supported fields for now while {AlphaLimitations.AllByCode["ALPHA-PROPERTIES-NOOP-FALLBACK"].Title.ToLowerInvariant()} remains in effect (press F1 for alpha notes)."
+                : $"Multiple cabinets are selected, so shared properties are summarized below. Edit supported shared fields here while {AlphaLimitations.AllByCode["ALPHA-PROPERTIES-NOOP-FALLBACK"].Title.ToLowerInvariant()} remains in effect (press F1 for alpha notes).";
 
     public string PropertySummaryDisplay => HasSelection
         ? $"{Properties.Count} details"
@@ -320,6 +321,12 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand CommitNominalWidthEditCommand { get; }
 
     public RelayCommand CancelNominalWidthEditCommand { get; }
+
+    public int SelectionBringIntoViewToken
+    {
+        get => _selectionBringIntoViewToken;
+        private set => SetProperty(ref _selectionBringIntoViewToken, value);
+    }
 
     public void OnSelectionChanged(IReadOnlyList<Guid> selectedCabinetIds, object? selectionContext = null)
     {
@@ -513,12 +520,12 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
 
     private bool CanEditSelection => IsProjectOpen && HasSelection;
 
-    private void OnProjectOpened(ProjectOpenedEvent _) => DispatchIfNeeded(() => SetProjectOpen(true));
+    private void OnProjectOpened(ProjectOpenedEvent _) => UiDispatchHelper.Run(() => SetProjectOpen(true));
 
-    private void OnProjectClosed(ProjectClosedEvent _) => DispatchIfNeeded(() => SetProjectOpen(false));
+    private void OnProjectClosed(ProjectClosedEvent _) => UiDispatchHelper.Run(() => SetProjectOpen(false));
 
     private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
-        DispatchIfNeeded(RefreshSelectionState);
+        UiDispatchHelper.Run(RefreshSelectionState);
 
     private void SetProjectOpen(bool isOpen)
     {
@@ -540,7 +547,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
 
         if (!IsProjectOpen)
         {
-            ClearSelectionProperties("No project open", "No project open", "Open a project to inspect properties.", "No editable properties");
+            ClearSelectionProperties("No project open", "No project open", "No project is open, so there are no cabinet properties to inspect yet. Open or create a project to populate this panel.", "No editable properties");
             return;
         }
 
@@ -552,7 +559,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            ClearSelectionProperties("No cabinet selected", "Nothing selected", "No cabinet selected. Click a cabinet on the canvas to inspect it.", "No editable properties");
+            ClearSelectionProperties("No cabinet selected", "Nothing selected", "No cabinet is selected on the canvas right now. Click a cabinet to inspect its properties here.", "No editable properties");
             return;
         }
 
@@ -577,6 +584,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         EditabilityStatusDisplay = "Editable";
         StatusMessage = "Editing the selected cabinet.";
         LastErrorMessage = string.Empty;
+        RequestSelectionBringIntoView();
         OnPropertyChanged(nameof(CanEditNominalWidth));
         PopulateFieldProperties([cabinet], isMultiSelect: false);
     }
@@ -594,6 +602,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         EditabilityStatusDisplay = "Multi-edit";
         StatusMessage = "Multiple cabinets are selected.";
         LastErrorMessage = string.Empty;
+        RequestSelectionBringIntoView();
         OnPropertyChanged(nameof(CanEditNominalWidth));
         PopulateFieldProperties(cabinets, isMultiSelect: true);
     }
@@ -673,6 +682,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         ThicknessOverrides = [];
         Properties = BuildPropertyRows();
         SetEditableWidth(render.WorldBounds.Width.Inches);
+        RequestSelectionBringIntoView();
         OnPropertyChanged(nameof(IsProjectOpen));
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasSingleSelection));
@@ -859,6 +869,7 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var alphaLimitationEncountered = false;
         var tasks = _selectedCabinets.Select(async cabinet =>
         {
             var bounds = ResolveWidthBounds(cabinet);
@@ -874,6 +885,13 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
                 cabinet.NominalDepth.Inches,
                 cabinet.EffectiveNominalHeight.Inches).ConfigureAwait(true);
 
+            if (IsAlphaNoOpResult(result))
+            {
+                LastErrorMessage = string.Empty;
+                alphaLimitationEncountered = true;
+                return;
+            }
+
             if (!result.Success)
             {
                 Fail(result.Issues.FirstOrDefault()?.Message ?? "Cabinet width update rejected.");
@@ -881,6 +899,13 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         });
 
         await Task.WhenAll(tasks).ConfigureAwait(true);
+        if (alphaLimitationEncountered)
+        {
+            IsEditingNominalWidth = false;
+            RefreshSelectionState();
+            return;
+        }
+
         IsEditingNominalWidth = false;
         RefreshSelectionState();
         SetStatus("Cabinet width updated.");
@@ -958,6 +983,8 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanEditNominalWidth));
     }
 
+    private void RequestSelectionBringIntoView() => SelectionBringIntoViewToken++;
+
     private async Task ApplyToSelectionAsync(Func<CabinetStateRecord, Task<CommandResultDto>> action)
     {
         var cabinets = _selectedCabinets.ToArray();
@@ -969,6 +996,12 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         foreach (var cabinet in cabinets)
         {
             var result = await action(cabinet).ConfigureAwait(true);
+            if (IsAlphaNoOpResult(result))
+            {
+                LastErrorMessage = string.Empty;
+                return;
+            }
+
             if (!result.Success)
             {
                 Fail(result.Issues.FirstOrDefault()?.Message ?? "Edit rejected.");
@@ -985,6 +1018,12 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         foreach (var cabinet in _selectedCabinets)
         {
             var result = await _cabinetService.RemoveCabinetOverrideAsync(cabinet.CabinetId.Value, overrideKey).ConfigureAwait(true);
+            if (IsAlphaNoOpResult(result))
+            {
+                LastErrorMessage = string.Empty;
+                return;
+            }
+
             if (!result.Success)
             {
                 Fail(result.Issues.FirstOrDefault()?.Message ?? "Edit rejected.");
@@ -1008,41 +1047,80 @@ public sealed class PropertyInspectorViewModel : ObservableObject, IDisposable
         SetStatus(message);
     }
 
-    private static void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
-    }
+    private static bool IsAlphaNoOpResult(CommandResultDto result) =>
+        !result.Success &&
+        result.CommandId == Guid.Empty &&
+        result.Issues.Count == 0;
 
     private sealed class NoOpCabinetPropertyService : ICabinetPropertyService
     {
+        private readonly IApplicationEventBus _eventBus;
+
+        public NoOpCabinetPropertyService(IApplicationEventBus eventBus)
+        {
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        }
+
         public IReadOnlyList<CabinetStateRecord> GetAllCabinets() => [];
 
         public CabinetStateRecord? GetCabinet(Guid cabinetId) => null;
 
         public IReadOnlyList<CabinetStateRecord> GetCabinets(IReadOnlyList<Guid> cabinetIds) => [];
 
-        public Task<CommandResultDto> ResizeCabinetAsync(Guid cabinetId, decimal widthInches, decimal depthInches, decimal heightInches) => Task.FromResult(CommandResultDto.NoOp("resize_cabinet"));
+        public Task<CommandResultDto> ResizeCabinetAsync(Guid cabinetId, decimal widthInches, decimal depthInches, decimal heightInches)
+        {
+            PublishAlphaLimitation($"resize cabinet {cabinetId}");
+            return Task.FromResult(CommandResultDto.NoOp("resize_cabinet"));
+        }
 
-        public Task<CommandResultDto> SetCabinetCategoryAsync(Guid cabinetId, CabinetCategory category) => Task.FromResult(CommandResultDto.NoOp("set_cabinet_category"));
+        public Task<CommandResultDto> SetCabinetCategoryAsync(Guid cabinetId, CabinetCategory category)
+        {
+            PublishAlphaLimitation($"set category {category} for cabinet {cabinetId}");
+            return Task.FromResult(CommandResultDto.NoOp("set_cabinet_category"));
+        }
 
-        public Task<CommandResultDto> SetCabinetConstructionAsync(Guid cabinetId, ConstructionMethod construction) => Task.FromResult(CommandResultDto.NoOp("set_cabinet_construction"));
+        public Task<CommandResultDto> SetCabinetConstructionAsync(Guid cabinetId, ConstructionMethod construction)
+        {
+            PublishAlphaLimitation($"set construction {construction} for cabinet {cabinetId}");
+            return Task.FromResult(CommandResultDto.NoOp("set_cabinet_construction"));
+        }
 
-        public Task<CommandResultDto> AddOpeningAsync(Guid cabinetId, OpeningType openingType, decimal widthInches, decimal heightInches, int? insertIndex) => Task.FromResult(CommandResultDto.NoOp("add_opening"));
+        public Task<CommandResultDto> AddOpeningAsync(Guid cabinetId, OpeningType openingType, decimal widthInches, decimal heightInches, int? insertIndex)
+        {
+            PublishAlphaLimitation($"add {openingType} opening to cabinet {cabinetId}");
+            return Task.FromResult(CommandResultDto.NoOp("add_opening"));
+        }
 
-        public Task<CommandResultDto> RemoveOpeningAsync(Guid cabinetId, Guid openingId) => Task.FromResult(CommandResultDto.NoOp("remove_opening"));
+        public Task<CommandResultDto> RemoveOpeningAsync(Guid cabinetId, Guid openingId)
+        {
+            PublishAlphaLimitation($"remove opening {openingId} from cabinet {cabinetId}");
+            return Task.FromResult(CommandResultDto.NoOp("remove_opening"));
+        }
 
-        public Task<CommandResultDto> ReorderOpeningAsync(Guid cabinetId, Guid openingId, int newIndex) => Task.FromResult(CommandResultDto.NoOp("reorder_opening"));
+        public Task<CommandResultDto> ReorderOpeningAsync(Guid cabinetId, Guid openingId, int newIndex)
+        {
+            PublishAlphaLimitation($"reorder opening {openingId} on cabinet {cabinetId} to index {newIndex}");
+            return Task.FromResult(CommandResultDto.NoOp("reorder_opening"));
+        }
 
-        public Task<CommandResultDto> SetCabinetOverrideAsync(Guid cabinetId, string overrideKey, OverrideValueDto value) => Task.FromResult(CommandResultDto.NoOp("set_cabinet_override"));
+        public Task<CommandResultDto> SetCabinetOverrideAsync(Guid cabinetId, string overrideKey, OverrideValueDto value)
+        {
+            PublishAlphaLimitation($"set override {overrideKey} on cabinet {cabinetId}");
+            return Task.FromResult(CommandResultDto.NoOp("set_cabinet_override"));
+        }
 
-        public Task<CommandResultDto> RemoveCabinetOverrideAsync(Guid cabinetId, string overrideKey) => Task.FromResult(CommandResultDto.NoOp("remove_cabinet_override"));
+        public Task<CommandResultDto> RemoveCabinetOverrideAsync(Guid cabinetId, string overrideKey)
+        {
+            PublishAlphaLimitation($"remove override {overrideKey} from cabinet {cabinetId}");
+            return Task.FromResult(CommandResultDto.NoOp("remove_cabinet_override"));
+        }
+
+        private void PublishAlphaLimitation(string contextHint)
+        {
+            _eventBus.Publish(new AlphaLimitationEncounteredEvent(
+                AlphaLimitations.AllByCode["ALPHA-PROPERTIES-NOOP-FALLBACK"],
+                contextHint));
+        }
     }
 }
 

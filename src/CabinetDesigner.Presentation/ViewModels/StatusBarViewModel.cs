@@ -34,6 +34,7 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
         _eventBus.Subscribe<UndoAppliedEvent>(OnDesignChanged);
         _eventBus.Subscribe<RedoAppliedEvent>(OnDesignChanged);
         _eventBus.Subscribe<CommandExecutionFailedEvent>(OnCommandExecutionFailed);
+        _eventBus.Subscribe<AlphaLimitationEncounteredEvent>(OnAlphaLimitationEncountered);
 
         RefreshValidationCounts();
     }
@@ -140,17 +141,18 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<UndoAppliedEvent>(OnDesignChanged);
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnDesignChanged);
         _eventBus.Unsubscribe<CommandExecutionFailedEvent>(OnCommandExecutionFailed);
+        _eventBus.Unsubscribe<AlphaLimitationEncounteredEvent>(OnAlphaLimitationEncountered);
     }
 
     private void OnProjectOpened(ProjectOpenedEvent @event)
-        => DispatchIfNeeded(() =>
+        => UiDispatchHelper.Run(() =>
         {
             SetProjectSummary(@event.Project);
             RefreshValidationCounts();
         });
 
     private void OnProjectClosed(ProjectClosedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             SetProjectSummary(null);
             ErrorCount = 0;
@@ -161,10 +163,21 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
         });
 
     private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
-        DispatchIfNeeded(RefreshValidationCounts);
+        UiDispatchHelper.Run(RefreshValidationCounts);
 
     private void OnCommandExecutionFailed(CommandExecutionFailedEvent @event) =>
-        DispatchIfNeeded(() => SetStatusMessage($"Error: {@event.Message}"));
+        UiDispatchHelper.Run(() =>
+        {
+            var refSuffix = @event.CorrelationId.ToString("N")[..8];
+            SetStatusMessage($"Error in {@event.CommandName}: {@event.Message} (ref: {refSuffix})");
+        });
+
+    private void OnAlphaLimitationEncountered(AlphaLimitationEncounteredEvent @event) =>
+        UiDispatchHelper.Run(() =>
+        {
+            var limitation = @event.Limitation;
+            SetStatusMessage($"Not yet in alpha: {limitation.Title}. {limitation.UserFacingMessage}");
+        });
 
     private void RefreshValidationCounts()
     {
@@ -175,17 +188,5 @@ public sealed class StatusBarViewModel : ObservableObject, IDisposable
         HasManufactureBlockers = _validationSummaryService.HasManufactureBlockers;
 
         OnPropertyChanged(nameof(IssueSummaryDisplay));
-    }
-
-    private static void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
     }
 }

@@ -110,8 +110,10 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
     }
 
     public string EmptyStateText => string.IsNullOrWhiteSpace(SeverityFilter)
-        ? (HasValidationData ? "No validation issues." : "No validation issues are available yet.")
-        : $"No issues match '{SeverityFilter}'.";
+        ? (HasValidationData
+            ? "No validation issues match the current view. Keep designing or change the filter to see other diagnostics."
+            : "Validation issues are unavailable because no project is open. Open a project to load diagnostics for the current design.")
+        : $"No issues match '{SeverityFilter}'. Clear or change the filter to inspect a different severity.";
 
     public string CountSummaryDisplay => $"{ErrorCount}E {WarningCount}W {InfoCount}I";
 
@@ -141,14 +143,14 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
         _eventBus.Unsubscribe<RedoAppliedEvent>(OnDesignChanged);
     }
 
-    private void OnProjectOpened(ProjectOpenedEvent _) => DispatchIfNeeded(RefreshIssues);
+    private void OnProjectOpened(ProjectOpenedEvent _) => UiDispatchHelper.Run(RefreshIssues);
 
     private void OnProjectClosed(ProjectClosedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
             ResetToPlaceholderState("Validation issues are not available while no project is open."));
 
     private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
-        DispatchIfNeeded(RefreshIssues);
+        UiDispatchHelper.Run(RefreshIssues);
 
     private void RefreshIssues()
     {
@@ -248,16 +250,4 @@ public sealed class IssuePanelViewModel : ObservableObject, IDisposable
 
     private bool CanGoToEntity(IssueRowViewModel? issue) =>
         issue is not null && issue.AffectedEntityIds.Any(id => Guid.TryParse(id, out _));
-
-    private static void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
-    }
 }

@@ -83,12 +83,13 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         Catalog.ItemActivated += OnCatalogItemActivated;
         IssuePanel.SetSelectionCallback(SelectEntities);
 
-        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, _logger, _eventBus, () => !string.IsNullOrWhiteSpace(PendingProjectName));
-        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, _logger, _eventBus);
-        SaveCommand = new AsyncRelayCommand(SaveAsync, _logger, _eventBus, () => HasActiveProject);
-        CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync, _logger, _eventBus, () => HasActiveProject);
-        ExportCutListCommand = new AsyncRelayCommand(ExportCutListAsync, _logger, _eventBus, () => HasActiveProject);
-        PreviewHtmlCommand = new AsyncRelayCommand(PreviewHtmlAsync, _logger, _eventBus, () => HasActiveProject);
+        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, "project.create", _logger, _eventBus, () => !string.IsNullOrWhiteSpace(PendingProjectName));
+        OpenProjectCommand = new AsyncRelayCommand(OpenProjectAsync, "project.open", _logger, _eventBus);
+        SaveCommand = new AsyncRelayCommand(SaveAsync, "project.save", _logger, _eventBus, () => HasActiveProject);
+        CloseProjectCommand = new AsyncRelayCommand(CloseProjectAsync, "project.close", _logger, _eventBus, () => HasActiveProject);
+        ExportCutListCommand = new AsyncRelayCommand(ExportCutListAsync, "project.export.cutlist", _logger, _eventBus, () => HasActiveProject);
+        PreviewHtmlCommand = new AsyncRelayCommand(PreviewHtmlAsync, "project.export.cutlist.preview-html", _logger, _eventBus, () => HasActiveProject);
+        ShowAlphaLimitationsCommand = new RelayCommand(ShowAlphaLimitations);
         UndoCommand = new RelayCommand(() => _ = _undoRedoService.Undo(), () => _undoRedoService.CanUndo);
         RedoCommand = new RelayCommand(() => _ = _undoRedoService.Redo(), () => _undoRedoService.CanRedo);
 
@@ -203,7 +204,13 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            StatusBar.SetStatusMessage($"Failed to add cabinet: {ex.Message}");
+            UserActionErrorReporter.Report(
+                _logger,
+                _eventBus,
+                "Presentation",
+                "project.catalog.add",
+                "Failed to add cabinet from catalog item activation.",
+                ex);
         }
     }
 
@@ -257,6 +264,8 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand ExportCutListCommand { get; }
 
     public AsyncRelayCommand PreviewHtmlCommand { get; }
+
+    public RelayCommand ShowAlphaLimitationsCommand { get; }
 
     public RelayCommand UndoCommand { get; }
 
@@ -386,15 +395,17 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         return Task.CompletedTask;
     }
 
+    private void ShowAlphaLimitations() => _dialogService.ShowAlphaLimitationsDialog();
+
     private void OnProjectOpened(ProjectOpenedEvent @event) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             SetActiveProject(@event.Project);
             SetMode(ShellMode.Editor);
         });
 
     private void OnProjectClosed(ProjectClosedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             SetActiveProject(null);
             SetMode(ShellMode.Startup);
@@ -402,10 +413,10 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
         });
 
     private void OnActiveRoomChanged(ActiveRoomChangedEvent _) =>
-        DispatchIfNeeded(() => OnPropertyChanged(nameof(IsEditorMode)));
+        UiDispatchHelper.Run(() => OnPropertyChanged(nameof(IsEditorMode)));
 
     private void OnDesignChanged(DesignChangedEvent _) =>
-        DispatchIfNeeded(() => SetActiveProject(_projectService.CurrentProject));
+        UiDispatchHelper.Run(() => SetActiveProject(_projectService.CurrentProject));
 
     private void OnCanvasPropertyChanged(object? _, PropertyChangedEventArgs e)
     {
@@ -428,7 +439,7 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
     }
 
     private void OnUndoRedoApplied<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
-        DispatchIfNeeded(() => RefreshCommandStates());
+        UiDispatchHelper.Run(() => RefreshCommandStates());
 
     private void OnCommandPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -504,27 +515,5 @@ public sealed class ShellViewModel : ObservableObject, IDisposable
 
         public Task<IReadOnlyList<Room>> ListRoomsAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<Room>>([]);
-    }
-
-    private void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
-        {
-            // No healthy dispatcher available (e.g., unit tests or a disposed WPF app); execute directly.
-            action();
-            return;
-        }
-
-        // Check if we're already on the UI thread
-        if (dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            // We're on a background thread, dispatch to UI thread
-            dispatcher.Invoke(action);
-        }
     }
 }

@@ -32,8 +32,8 @@ public sealed class RoomsPanelViewModel : ObservableObject, IDisposable
         _setActiveRoom = setActiveRoom ?? throw new ArgumentNullException(nameof(setActiveRoom));
         ArgumentNullException.ThrowIfNull(logger);
 
-        AddRoomCommand = new AsyncRelayCommand(AddRoomAsync, logger, eventBus, () => !string.IsNullOrWhiteSpace(PendingRoomName));
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync, logger, eventBus);
+        AddRoomCommand = new AsyncRelayCommand(AddRoomAsync, "rooms.add", logger, eventBus, () => !string.IsNullOrWhiteSpace(PendingRoomName));
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, "rooms.refresh", logger, eventBus);
 
         _eventBus.Subscribe<ProjectOpenedEvent>(OnProjectOpened);
         _eventBus.Subscribe<ProjectClosedEvent>(OnProjectClosed);
@@ -86,8 +86,8 @@ public sealed class RoomsPanelViewModel : ObservableObject, IDisposable
     public bool HasRooms => Rooms.Count > 0;
 
     public string EmptyStateText => HasRooms
-        ? "Select a room to make it active."
-        : "Create a room to begin the design session.";
+        ? "Rooms are available for selection in this project. Choose one from the list to make it active on the canvas."
+        : "No rooms have been created for this project yet. Add a room to start drawing walls and placing cabinets.";
 
     public AsyncRelayCommand AddRoomCommand { get; }
 
@@ -167,13 +167,13 @@ public sealed class RoomsPanelViewModel : ObservableObject, IDisposable
     }
 
     private void OnProjectOpened(ProjectOpenedEvent @event) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             _ = RefreshAsync();
         });
 
     private void OnProjectClosed(ProjectClosedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             Rooms = [];
             SelectedRoom = null;
@@ -182,7 +182,7 @@ public sealed class RoomsPanelViewModel : ObservableObject, IDisposable
         });
 
     private void OnActiveRoomChanged(ActiveRoomChangedEvent @event) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             if (@event.RoomId is null)
             {
@@ -208,16 +208,4 @@ public sealed class RoomsPanelViewModel : ObservableObject, IDisposable
     }
 
     private static string FormatLength(Length length) => $"{length.Inches:0.##}\"";
-
-    private static void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
-    }
 }

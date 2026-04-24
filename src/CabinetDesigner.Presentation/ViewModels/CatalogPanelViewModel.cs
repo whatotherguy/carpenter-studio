@@ -53,7 +53,7 @@ public sealed class CatalogPanelViewModel : ObservableObject
 
     public string SourceLabel => "Built-in catalog";
 
-    public string EmptyStateText => "Try another cabinet name, category, type id, or width.";
+    public string EmptyStateText => "No catalog items match the current search. Try another cabinet name, category, type id, or width.";
 
     public string ItemCountText => FilteredItems.Count == AllItems.Count
         ? $"{FilteredItems.Count} items"

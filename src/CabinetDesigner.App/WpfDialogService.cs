@@ -1,5 +1,7 @@
 using System.Windows;
 using CabinetDesigner.Presentation;
+using CabinetDesigner.Presentation.ViewModels;
+using CabinetDesigner.Presentation.Views;
 using Microsoft.Win32;
 
 namespace CabinetDesigner.App;
@@ -35,4 +37,18 @@ public sealed class WpfDialogService : IDialogService
     public bool ShowYesNoDialog(string title, string message) =>
         MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question)
             == MessageBoxResult.Yes;
+
+    public void ShowAlphaLimitationsDialog()
+    {
+        AlphaLimitationsDialog? dialog = null;
+        var viewModel = new AlphaLimitationsDialogViewModel(() => dialog?.Close());
+        dialog = new AlphaLimitationsDialog(viewModel);
+
+        if (System.Windows.Application.Current?.MainWindow is Window owner)
+        {
+            dialog.Owner = owner;
+        }
+
+        dialog.ShowDialog();
+    }
 }

@@ -22,9 +22,9 @@ public sealed class ProjectStartupViewModel : ObservableObject, IDisposable
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         ArgumentNullException.ThrowIfNull(logger);
 
-        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, logger, eventBus, () => !string.IsNullOrWhiteSpace(NewProjectName));
-        OpenSelectedProjectCommand = new AsyncRelayCommand(OpenSelectedProjectAsync, logger, eventBus, () => SelectedProject is not null);
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync, logger, eventBus);
+        NewProjectCommand = new AsyncRelayCommand(CreateProjectAsync, "project.startup.create", logger, eventBus, () => !string.IsNullOrWhiteSpace(NewProjectName));
+        OpenSelectedProjectCommand = new AsyncRelayCommand(OpenSelectedProjectAsync, "project.startup.open-selected", logger, eventBus, () => SelectedProject is not null);
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, "project.startup.refresh", logger, eventBus);
 
         _eventBus.Subscribe<ProjectOpenedEvent>(OnProjectOpened);
         _eventBus.Subscribe<ProjectClosedEvent>(OnProjectClosed);
@@ -69,8 +69,8 @@ public sealed class ProjectStartupViewModel : ObservableObject, IDisposable
     public bool HasProjects => RecentProjects.Count > 0;
 
     public string EmptyStateText => HasProjects
-        ? "Select a recent project or create a new one."
-        : "Create your first project to begin.";
+        ? "Recent projects are available to reopen here. Select one from the list or enter a name to create a new project."
+        : "There are no recent projects yet. Enter a project name and create one to start designing.";
 
     public AsyncRelayCommand NewProjectCommand { get; }
 
@@ -138,28 +138,16 @@ public sealed class ProjectStartupViewModel : ObservableObject, IDisposable
     }
 
     private void OnProjectOpened(ProjectOpenedEvent @event) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             SelectedProject = @event.Project;
             _ = RefreshAsync();
         });
 
     private void OnProjectClosed(ProjectClosedEvent @event) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             SelectedProject = null;
             _ = RefreshAsync();
         });
-
-    private static void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
-    }
 }

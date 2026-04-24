@@ -1,3 +1,5 @@
+using CabinetDesigner.Application.Diagnostics;
+
 namespace CabinetDesigner.Application.Events;
 
 public sealed record DesignChangedEvent(CommandResultDto Result) : IApplicationEvent;
@@ -14,4 +16,6 @@ public sealed record UndoAppliedEvent(CommandResultDto Result) : IApplicationEve
 
 public sealed record RedoAppliedEvent(CommandResultDto Result) : IApplicationEvent;
 
-public sealed record CommandExecutionFailedEvent(string Message, Exception Exception) : IApplicationEvent;
+public sealed record CommandExecutionFailedEvent(string CommandName, string Message, Exception Exception, Guid CorrelationId) : IApplicationEvent;
+
+public sealed record AlphaLimitationEncounteredEvent(AlphaLimitation Limitation, string? ContextHint) : IApplicationEvent;

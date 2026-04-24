@@ -5,129 +5,173 @@
              Background="Transparent">
     <Border Style="{StaticResource ShellCardStyle}"
             Padding="0">
-        <DockPanel LastChildFill="True">
-            <views:ShellPanelHeaderView DockPanel.Dock="Top"
-                                        Title="Rooms"
-                                        Subtitle="Create rooms and choose the active room for wall drawing."
-                                        Margin="0,0,0,12">
-                <views:ShellPanelHeaderView.RightContent>
-                    <StackPanel Orientation="Vertical"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Center">
-                        <Border Style="{StaticResource ShellBadgeStyle}"
-                                Margin="0,0,0,6">
-                            <TextBlock Text="{Binding Rooms.Count, StringFormat={}{0} rooms}"
-                                       Style="{StaticResource ShellBadgeTextStyle}" />
-                        </Border>
-                        <TextBlock Text="{Binding EmptyStateText}"
-                                   Style="{StaticResource ShellMiniLabelStyle}"
-                                   HorizontalAlignment="Right"
-                                   TextAlignment="Right"
-                                   MaxWidth="240" />
-                    </StackPanel>
-                </views:ShellPanelHeaderView.RightContent>
-            </views:ShellPanelHeaderView>
+        <Grid>
+            <DockPanel x:Name="RoomsContent"
+                       LastChildFill="True">
+                <DockPanel.Style>
+                    <Style TargetType="DockPanel">
+                        <Setter Property="Opacity" Value="1" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DockPanel.Style>
 
-            <StackPanel DockPanel.Dock="Top"
-                        Margin="0,0,0,16">
-                <TextBlock Text="Room name"
-                           Style="{StaticResource ShellMiniLabelStyle}"
-                           Margin="2,0,0,6" />
-                <TextBox Text="{Binding PendingRoomName, UpdateSourceTrigger=PropertyChanged}"
-                         Style="{StaticResource ShellToolbarTextBoxStyle}" />
-
-                <TextBlock Text="Ceiling height (inches)"
-                           Style="{StaticResource ShellMiniLabelStyle}"
-                           Margin="2,12,0,6" />
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0"
-                             Text="{Binding PendingCeilingHeightText, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource ShellToolbarTextBoxStyle}"
-                             Margin="0,0,10,0" />
-                    <Button Grid.Column="1"
-                            Content="Add Room"
-                            Command="{Binding AddRoomCommand}"
-                            Style="{StaticResource ShellToolbarButtonStyle}"
-                            Margin="0,0,8,0" />
-                    <Button Grid.Column="2"
-                            Content="Refresh"
-                            Command="{Binding RefreshCommand}"
-                            Style="{StaticResource ShellToolbarButtonStyle}"
-                            Margin="0" />
-                </Grid>
-            </StackPanel>
-
-            <Grid>
-                <ListBox ItemsSource="{Binding Rooms}"
-                         SelectedItem="{Binding SelectedRoom, Mode=TwoWay}"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <Border Style="{StaticResource ShellCatalogItemCardStyle}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding Name}"
-                                                   Style="{StaticResource ShellCatalogDisplayNameStyle}" />
-                                        <TextBlock Text="{Binding CeilingHeightDisplay}"
-                                                   Style="{StaticResource ShellCatalogMetaStyle}"
-                                                   Margin="0,4,0,0" />
-                                    </StackPanel>
-
-                                    <Border Grid.Column="1"
-                                            Style="{StaticResource ShellCatalogWidthBadgeStyle}"
-                                            VerticalAlignment="Center">
-                                        <StackPanel>
-                                            <TextBlock Text="Walls"
-                                                       Style="{StaticResource ShellMiniLabelStyle}" />
-                                            <TextBlock Text="{Binding WallCountDisplay}"
-                                                       Style="{StaticResource ShellCatalogWidthBadgeTextStyle}" />
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
+                <views:ShellPanelHeaderView DockPanel.Dock="Top"
+                                            Title="Rooms"
+                                            Subtitle="Create rooms and choose the active room for wall drawing."
+                                            Margin="0,0,0,12">
+                    <views:ShellPanelHeaderView.RightContent>
+                        <StackPanel Orientation="Vertical"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                            <Border Style="{StaticResource ShellBadgeStyle}"
+                                    Margin="0,0,0,6">
+                                <TextBlock Text="{Binding Rooms.Count, StringFormat={}{0} rooms}"
+                                           Style="{StaticResource ShellBadgeTextStyle}" />
                             </Border>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
-                <Border Background="{StaticResource ShellSurfaceSoftBrush}"
-                        BorderBrush="{StaticResource ShellBorderSoftBrush}"
-                        BorderThickness="1"
-                        CornerRadius="12"
-                        Padding="18">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasRooms}" Value="False">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <StackPanel VerticalAlignment="Center"
-                                HorizontalAlignment="Center">
-                        <TextBlock Text="No rooms yet"
-                                   Style="{StaticResource ShellSectionTitleStyle}"
-                                   TextAlignment="Center" />
-                        <TextBlock Text="{Binding EmptyStateText}"
-                                   Style="{StaticResource ShellCatalogEmptyStateTextStyle}"
-                                   Margin="0,6,0,0"
-                                   MaxWidth="240" />
+                            <TextBlock Text="{Binding EmptyStateText}"
+                                       Style="{StaticResource ShellMiniLabelStyle}"
+                                       HorizontalAlignment="Right"
+                                       TextAlignment="Right"
+                                       MaxWidth="240"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
-                </Border>
-            </Grid>
-        </DockPanel>
+                    </views:ShellPanelHeaderView.RightContent>
+                </views:ShellPanelHeaderView>
+
+                <StackPanel DockPanel.Dock="Top"
+                            Margin="0,0,0,16">
+                    <TextBlock Text="Room name"
+                               Style="{StaticResource ShellMiniLabelStyle}"
+                               Margin="2,0,0,6" />
+                    <TextBox Text="{Binding PendingRoomName, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource ShellToolbarTextBoxStyle}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter"
+                                        Command="{Binding AddRoomCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+
+                    <TextBlock Text="Ceiling height (inches)"
+                               Style="{StaticResource ShellMiniLabelStyle}"
+                               Margin="2,12,0,6" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding PendingCeilingHeightText, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource ShellToolbarTextBoxStyle}"
+                                 Margin="0,0,10,0" />
+                        <Button Grid.Column="1"
+                                Content="Add Room"
+                                Command="{Binding AddRoomCommand}"
+                                Style="{StaticResource ShellToolbarButtonStyle}"
+                                Margin="0,0,8,0" />
+                        <Button Grid.Column="2"
+                                Content="Refresh"
+                                Command="{Binding RefreshCommand}"
+                                Style="{StaticResource ShellToolbarButtonStyle}"
+                                Margin="0" />
+                    </Grid>
+                </StackPanel>
+
+                <Grid>
+                    <ListBox ItemsSource="{Binding Rooms}"
+                             SelectedItem="{Binding SelectedRoom, Mode=TwoWay}"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource ShellCatalogItemCardStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding Name}"
+                                                       Style="{StaticResource ShellCatalogDisplayNameStyle}" />
+                                            <TextBlock Text="{Binding CeilingHeightDisplay}"
+                                                       Style="{StaticResource ShellCatalogMetaStyle}"
+                                                       Margin="0,4,0,0" />
+                                        </StackPanel>
+
+                                        <Border Grid.Column="1"
+                                                Style="{StaticResource ShellCatalogWidthBadgeStyle}"
+                                                VerticalAlignment="Center">
+                                            <StackPanel>
+                                                <TextBlock Text="Walls"
+                                                           Style="{StaticResource ShellMiniLabelStyle}" />
+                                                <TextBlock Text="{Binding WallCountDisplay}"
+                                                           Style="{StaticResource ShellCatalogWidthBadgeTextStyle}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <Border Background="{StaticResource ShellSurfaceSoftBrush}"
+                            BorderBrush="{StaticResource ShellBorderSoftBrush}"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Padding="18">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasRooms}" Value="False">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel VerticalAlignment="Center"
+                                    HorizontalAlignment="Center">
+                            <TextBlock Text="No rooms yet"
+                                       Style="{StaticResource ShellSectionTitleStyle}"
+                                       TextAlignment="Center" />
+                            <TextBlock Text="{Binding EmptyStateText}"
+                                       Style="{StaticResource ShellCatalogEmptyStateTextStyle}"
+                                       Margin="0,6,0,0"
+                                       MaxWidth="240"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </DockPanel>
+
+            <Border HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Margin="0,18,0,0"
+                    Padding="10,6"
+                    CornerRadius="999"
+                    Background="{StaticResource ShellWindowBrush}"
+                    BorderBrush="{StaticResource ShellBorderSoftBrush}"
+                    BorderThickness="1"
+                    IsHitTestVisible="False">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="Loading..."
+                           Style="{StaticResource ShellMiniLabelStyle}" />
+            </Border>
+        </Grid>
     </Border>
 </UserControl>

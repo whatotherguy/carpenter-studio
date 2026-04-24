@@ -1,3 +1,4 @@
+using CabinetDesigner.Application.Diagnostics;
 using CabinetDesigner.Application.DTOs;
 using CabinetDesigner.Application.Events;
 using CabinetDesigner.Application.Persistence;
@@ -7,9 +8,9 @@ namespace CabinetDesigner.Presentation.ViewModels;
 
 public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
 {
-    private const string SelectionPromptText = "Select a cabinet to see selection context.";
-    private const string NoProjectText = "Open a project to see the run summary.";
-    private const string NoRunsText = "No runs in design.";
+    private const string SelectionPromptText = "A run is available for review in this panel. Select a cabinet on the canvas to jump to its run context.";
+    private const string NoProjectText = "No project is open, so there is no run summary yet. Open or create a project to populate this panel.";
+    private static readonly string NoRunsText = $"No runs have been created in this design yet. Use the current {AlphaLimitations.AllByCode["ALPHA-RUN-INSERT-NOT-IMPLEMENTED"].Title.ToLowerInvariant()} path to add cabinets from the catalog (press F1 for alpha notes).";
     private const string LiveSourceLabel = "Live run summary";
     private const string NoProjectSourceLabel = "No project open";
     private const string NoRunsSourceLabel = "No runs in design";
@@ -149,13 +150,13 @@ public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
     }
 
     private void OnProjectOpened(ProjectOpenedEvent _) =>
-        DispatchIfNeeded(() => RefreshState(resetSelection: true));
+        UiDispatchHelper.Run(() => RefreshState(resetSelection: true));
 
     private void OnProjectClosed(ProjectClosedEvent _) =>
-        DispatchIfNeeded(() => RefreshState(resetSelection: true));
+        UiDispatchHelper.Run(() => RefreshState(resetSelection: true));
 
     private void OnDesignChanged<TEvent>(TEvent _) where TEvent : IApplicationEvent =>
-        DispatchIfNeeded(() => RefreshState(resetSelection: false));
+        UiDispatchHelper.Run(() => RefreshState(resetSelection: false));
 
     private void RefreshState(bool resetSelection = false)
     {
@@ -221,16 +222,4 @@ public sealed class RunSummaryPanelViewModel : ObservableObject, IDisposable
     private static string FormatCabinetCount(int count) => count == 1 ? "1 cabinet" : $"{count} cabinets";
 
     private static string FormatSlotCount(int count) => count == 1 ? "1 slot" : $"{count} slots";
-
-    private static void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
-    }
 }

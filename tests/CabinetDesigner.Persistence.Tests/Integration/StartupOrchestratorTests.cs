@@ -15,7 +15,7 @@ public sealed class StartupOrchestratorTests
     public async Task RunAsync_AppliesMigrationsOnFreshDatabase()
     {
         await using var fixture = new SqliteTestFixture();
-        var orchestrator = new StartupOrchestrator(fixture.MigrationRunner);
+        var orchestrator = new StartupOrchestrator(fixture.MigrationRunner, fixture.ConnectionFactory);
 
         await orchestrator.RunAsync();
 
@@ -30,7 +30,7 @@ public sealed class StartupOrchestratorTests
     public async Task RunAsync_IsIdempotent_WhenCalledOnAlreadyMigratedDatabase()
     {
         await using var fixture = new SqliteTestFixture();
-        var orchestrator = new StartupOrchestrator(fixture.MigrationRunner);
+        var orchestrator = new StartupOrchestrator(fixture.MigrationRunner, fixture.ConnectionFactory);
 
         await orchestrator.RunAsync();
         var exception = await Record.ExceptionAsync(() => orchestrator.RunAsync());
@@ -43,7 +43,7 @@ public sealed class StartupOrchestratorTests
     {
         await using var fixture = new SqliteTestFixture();
         var failingRunner = new MigrationRunner(fixture.ConnectionFactory, [new ThrowingMigration()]);
-        var orchestrator = new StartupOrchestrator(failingRunner);
+        var orchestrator = new StartupOrchestrator(failingRunner, fixture.ConnectionFactory);
 
         // The migration table setup runs before Apply is called, so we need an empty DB
         // (fixture has not been initialized) – the runner will create schema_migrations and
@@ -57,7 +57,7 @@ public sealed class StartupOrchestratorTests
         await using var fixture = new SqliteTestFixture();
         var failingRunner = new MigrationRunner(fixture.ConnectionFactory, [new ThrowingMigration()]);
         var logger = new CapturingLogger();
-        var orchestrator = new StartupOrchestrator(failingRunner, logger);
+        var orchestrator = new StartupOrchestrator(failingRunner, fixture.ConnectionFactory, logger);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => orchestrator.RunAsync());
 
@@ -71,7 +71,7 @@ public sealed class StartupOrchestratorTests
     {
         await using var fixture = new SqliteTestFixture();
         var logger = new CapturingLogger();
-        var orchestrator = new StartupOrchestrator(fixture.MigrationRunner, logger);
+        var orchestrator = new StartupOrchestrator(fixture.MigrationRunner, fixture.ConnectionFactory, logger);
 
         await orchestrator.RunAsync();
 

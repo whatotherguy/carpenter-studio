@@ -30,7 +30,8 @@
                            Foreground="{StaticResource ShellTextBrush}"
                            FontWeight="SemiBold"
                            Margin="2,6,0,0"
-                           TextTrimming="CharacterEllipsis" />
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding StatusMessage}" />
             </StackPanel>
 
             <Border Grid.Column="1"

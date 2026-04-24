@@ -27,7 +27,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     private readonly IHitTester _hitTester;
     private readonly IEditorCanvasHost _canvasHost;
     private readonly IEditorInteractionService _interactionService;
-    private readonly IAppLogger? _logger;
+    private readonly IAppLogger _logger;
     private RenderSceneDto? _scene;
     private IReadOnlyList<Guid> _selectedCabinetIds = [];
     private Guid? _hoveredCabinetId;
@@ -88,7 +88,7 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         CancelWallDrawingCommand = new RelayCommand(CancelWallDrawingMode, () => IsWallDrawingMode);
         SelectAllCommand = new RelayCommand(ExecuteSelectAll, () => Scene is not null);
         SelectNoneCommand = new RelayCommand(ExecuteSelectNone, () => Scene is not null);
-        DeleteSelectedCommand = new AsyncRelayCommand(ExecuteDeleteSelectedAsync, logger, eventBus, CanDeleteSelected);
+        DeleteSelectedCommand = new AsyncRelayCommand(ExecuteDeleteSelectedAsync, "canvas.delete-selected", logger, eventBus, CanDeleteSelected);
 
         _eventBus.Subscribe<DesignChangedEvent>(OnDesignChanged);
         _eventBus.Subscribe<UndoAppliedEvent>(OnUndoApplied);
@@ -266,6 +266,13 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
         catch (InvalidOperationException exception)
         {
+            UserActionErrorReporter.Report(
+                _logger,
+                _eventBus,
+                "Presentation",
+                "canvas.drop-cabinet",
+                "Failed to place cabinet from drop gesture.",
+                exception);
             StatusMessage = exception.Message == "Cannot place cabinet: run capacity exceeded."
                 ? "Cannot place cabinet: run capacity exceeded."
                 : exception.Message;
@@ -487,14 +494,13 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             }
             catch (Exception exception)
             {
-                _logger?.Log(new LogEntry
-                {
-                    Level = LogLevel.Error,
-                    Category = "EditorCanvasViewModel",
-                    Message = "Unhandled exception while adding a wall.",
-                    Timestamp = DateTimeOffset.UtcNow,
-                    Exception = exception
-                });
+                UserActionErrorReporter.Report(
+                    _logger,
+                    _eventBus,
+                    "Presentation",
+                    "canvas.wall.add",
+                    "Unhandled exception while adding a wall.",
+                    exception);
                 StatusMessage = $"Failed to add wall: {exception.Message}";
             }
             finally
@@ -622,14 +628,13 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
             }
             catch (Exception exception)
             {
-                _logger?.Log(new LogEntry
-                {
-                    Level = LogLevel.Error,
-                    Category = "EditorCanvasViewModel",
-                    Message = "Unhandled exception escaping CommitDragAsync.",
-                    Timestamp = DateTimeOffset.UtcNow,
-                    Exception = exception
-                });
+                UserActionErrorReporter.Report(
+                    _logger,
+                    _eventBus,
+                    "Presentation",
+                    "canvas.drag.commit",
+                    "Unhandled exception escaping CommitDragAsync.",
+                    exception);
                 StatusMessage = "Drag failed unexpectedly.";
                 RefreshScene();
             }
@@ -811,6 +816,13 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
         catch (InvalidOperationException exception)
         {
+            UserActionErrorReporter.Report(
+                _logger,
+                _eventBus,
+                "Presentation",
+                "canvas.delete-selected",
+                "Failed to delete selected cabinet(s).",
+                exception);
             StatusMessage = exception.Message;
         }
         finally
@@ -863,14 +875,14 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         catch (InvalidOperationException invalidOp)
         {
             // Cabinet may have been removed between mouse-down and the drag threshold being reached.
-            _logger?.Log(new LogEntry
-            {
-                Level = LogLevel.Warning,
-                Category = "EditorCanvasViewModel",
-                Message = "Could not begin drag; cabinet may have been removed before the drag threshold was reached.",
-                Timestamp = DateTimeOffset.UtcNow,
-                Exception = invalidOp
-            });
+            UserActionErrorReporter.Report(
+                _logger,
+                _eventBus,
+                "Presentation",
+                "canvas.drag.begin",
+                "Could not begin drag; cabinet may have been removed before the drag threshold was reached.",
+                invalidOp);
+            StatusMessage = invalidOp.Message;
             _pendingDragCabinetId = null;
         }
     }
@@ -900,14 +912,13 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
         catch (Exception exception)
         {
-            _logger?.Log(new LogEntry
-            {
-                Level = LogLevel.Error,
-                Category = "EditorCanvasViewModel",
-                Message = "An unexpected error occurred while committing a drag operation.",
-                Timestamp = DateTimeOffset.UtcNow,
-                Exception = exception
-            });
+            UserActionErrorReporter.Report(
+                _logger,
+                _eventBus,
+                "Presentation",
+                "canvas.drag.commit",
+                "An unexpected error occurred while committing a drag operation.",
+                exception);
             _interactionService.OnDragAborted();
             StatusMessage = "Drag failed.";
         }
@@ -956,28 +967,28 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
     }
 
     private void OnDesignChanged(DesignChangedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             RefreshScene();
             StatusMessage = "Design updated.";
         });
 
     private void OnUndoApplied(UndoAppliedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             RefreshScene();
             StatusMessage = "Undo applied.";
         });
 
     private void OnRedoApplied(RedoAppliedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             RefreshScene();
             StatusMessage = "Redo applied.";
         });
 
     private void OnProjectClosed(ProjectClosedEvent _) =>
-        DispatchIfNeeded(() =>
+        UiDispatchHelper.Run(() =>
         {
             if (_isDragActive || _pendingDragCabinetId is not null)
             {
@@ -1040,18 +1051,6 @@ public sealed class EditorCanvasViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(IsBusy));
-    }
-
-    private static void DispatchIfNeeded(Action action)
-    {
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || dispatcher.CheckAccess())
-        {
-            action();
-            return;
-        }
-
-        dispatcher.Invoke(action);
     }
 
     private sealed class NoOpRoomService : IRoomService

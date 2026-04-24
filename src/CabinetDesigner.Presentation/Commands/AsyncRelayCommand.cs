@@ -9,6 +9,7 @@ namespace CabinetDesigner.Presentation.Commands;
 public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 {
     private readonly Func<Task> _executeAsync;
+    private readonly string _commandName;
     private readonly Func<bool>? _canExecute;
     private readonly IAppLogger _logger;
     private readonly IApplicationEventBus _eventBus;
@@ -17,11 +18,14 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
 
     public AsyncRelayCommand(
         Func<Task> executeAsync,
+        string commandName,
         IAppLogger logger,
         IApplicationEventBus eventBus,
         Func<bool>? canExecute = null)
     {
         _executeAsync = executeAsync ?? throw new ArgumentNullException(nameof(executeAsync));
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandName);
+        _commandName = commandName;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
         _canExecute = canExecute;
@@ -58,15 +62,13 @@ public sealed class AsyncRelayCommand : ICommand, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            _logger.Log(new LogEntry
-            {
-                Level = LogLevel.Error,
-                Category = "Presentation",
-                Message = "Async command execution failed.",
-                Timestamp = DateTimeOffset.UtcNow,
-                Exception = ex
-            });
-            _eventBus.Publish(new CommandExecutionFailedEvent(ex.Message, ex));
+            UserActionErrorReporter.Report(
+                _logger,
+                _eventBus,
+                "Presentation",
+                _commandName,
+                "Async command execution failed.",
+                ex);
         }
         finally
         {

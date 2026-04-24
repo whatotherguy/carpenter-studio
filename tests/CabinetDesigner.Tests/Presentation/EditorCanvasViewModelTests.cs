@@ -489,7 +489,7 @@ public sealed class EditorCanvasViewModelTests
     }
 
     [Fact]
-    public void BeginDrag_WhenServiceThrowsInvalidOperationException_LogsWarning()
+    public void BeginDrag_WhenServiceThrowsInvalidOperationException_LogsErrorAndSurfacesStatus()
     {
         var logger = new CapturingAppLogger();
         var throwingInteraction = new ThrowingOnBeginInteractionService();
@@ -503,10 +503,12 @@ public sealed class EditorCanvasViewModelTests
         viewModel.OnMouseMove(10d, 5d);
 
         Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Warning, logger.Entries[0].Level);
-        Assert.Equal("EditorCanvasViewModel", logger.Entries[0].Category);
+        Assert.Equal(LogLevel.Error, logger.Entries[0].Level);
+        Assert.Equal("Presentation", logger.Entries[0].Category);
+        Assert.Equal("canvas.drag.begin", logger.Entries[0].Properties!["commandName"]);
         Assert.NotNull(logger.Entries[0].Exception);
         Assert.IsType<InvalidOperationException>(logger.Entries[0].Exception);
+        Assert.Equal("Cabinet no longer exists.", viewModel.StatusMessage);
     }
 
     [Fact]
@@ -528,7 +530,8 @@ public sealed class EditorCanvasViewModelTests
         var entry = await logger.WaitForEntryAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.Equal("EditorCanvasViewModel", entry.Category);
+        Assert.Equal("Presentation", entry.Category);
+        Assert.Equal("canvas.drag.commit", entry.Properties!["commandName"]);
         Assert.NotNull(entry.Exception);
         Assert.Equal("Drag failed.", viewModel.StatusMessage);
     }

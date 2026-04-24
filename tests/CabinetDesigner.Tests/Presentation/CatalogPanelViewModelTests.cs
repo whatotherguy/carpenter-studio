@@ -50,7 +50,7 @@ public sealed class CatalogPanelViewModelTests
         Assert.Empty(viewModel.FilteredItems);
         Assert.False(viewModel.HasFilteredItems);
         Assert.Equal("0 of 5 items", viewModel.ItemCountText);
-        Assert.Equal("Try another cabinet name, category, type id, or width.", viewModel.EmptyStateText);
+        Assert.Equal("No catalog items match the current search. Try another cabinet name, category, type id, or width.", viewModel.EmptyStateText);
     }
 
     [Fact]

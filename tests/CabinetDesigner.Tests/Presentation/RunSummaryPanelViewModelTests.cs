@@ -39,9 +39,9 @@ public sealed class RunSummaryPanelViewModelTests
         Assert.Equal("-", viewModel.CabinetCountDisplay);
         Assert.Equal("0 slots", viewModel.SlotCountDisplay);
         Assert.Equal("0 selected", viewModel.SelectionSummaryDisplay);
-        Assert.Equal("Open a project to see the run summary.", viewModel.StatusMessage);
+        Assert.Equal("No project is open, so there is no run summary yet. Open or create a project to populate this panel.", viewModel.StatusMessage);
         Assert.Equal("No project open", viewModel.SourceLabel);
-        Assert.Equal("Open a project to see the run summary.", viewModel.EmptyStateText);
+        Assert.Equal("No project is open, so there is no run summary yet. Open or create a project to populate this panel.", viewModel.EmptyStateText);
         Assert.Empty(viewModel.Slots);
     }
 
@@ -145,8 +145,8 @@ public sealed class RunSummaryPanelViewModelTests
         Assert.True(viewModel.IsProjectOpen);
         Assert.False(viewModel.HasActiveRun);
         Assert.Equal("No runs in design", viewModel.SourceLabel);
-        Assert.Equal("No runs in design.", viewModel.EmptyStateText);
-        Assert.Equal("No runs in design.", viewModel.StatusMessage);
+        Assert.Equal("No runs have been created in this design yet. Use the current run insertion workflow path to add cabinets from the catalog (press F1 for alpha notes).", viewModel.EmptyStateText);
+        Assert.Equal("No runs have been created in this design yet. Use the current run insertion workflow path to add cabinets from the catalog (press F1 for alpha notes).", viewModel.StatusMessage);
         Assert.Empty(viewModel.Slots);
     }
 
@@ -171,8 +171,8 @@ public sealed class RunSummaryPanelViewModelTests
         Assert.False(viewModel.HasSelection);
         Assert.False(viewModel.HasActiveRun);
         Assert.Equal("No project open", viewModel.SourceLabel);
-        Assert.Equal("Open a project to see the run summary.", viewModel.EmptyStateText);
-        Assert.Equal("Open a project to see the run summary.", viewModel.StatusMessage);
+        Assert.Equal("No project is open, so there is no run summary yet. Open or create a project to populate this panel.", viewModel.EmptyStateText);
+        Assert.Equal("No project is open, so there is no run summary yet. Open or create a project to populate this panel.", viewModel.StatusMessage);
         Assert.Equal("0 selected", viewModel.SelectionSummaryDisplay);
         Assert.Empty(viewModel.Slots);
     }

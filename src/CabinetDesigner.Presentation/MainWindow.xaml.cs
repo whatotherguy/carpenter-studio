@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Windows;
 using CabinetDesigner.Application.Diagnostics;
+using CabinetDesigner.Application.Events;
 using CabinetDesigner.Presentation.ViewModels;
 
 namespace CabinetDesigner.Presentation;
@@ -10,11 +11,13 @@ public partial class MainWindow : Window
 {
     private readonly ShellViewModel _viewModel;
     private readonly IAppLogger? _logger;
+    private readonly IApplicationEventBus? _eventBus;
     private bool _closeAfterSavePending;
 
-    public MainWindow(ShellViewModel viewModel, IAppLogger? logger = null)
+    public MainWindow(ShellViewModel viewModel, IApplicationEventBus? eventBus = null, IAppLogger? logger = null)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        _eventBus = eventBus;
         _logger = logger;
         InitializeComponent();
         DataContext = _viewModel;
@@ -72,14 +75,27 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            _logger?.Log(new LogEntry
+            if (_logger is not null && _eventBus is not null)
             {
-                Level = LogLevel.Error,
-                Category = "MainWindow",
-                Message = "Save failed during close-after-save flow.",
-                Timestamp = DateTimeOffset.UtcNow,
-                Exception = exception
-            });
+                UserActionErrorReporter.Report(
+                    _logger,
+                    _eventBus,
+                    "Presentation",
+                    "project.close-after-save",
+                    "Save failed during close-after-save flow.",
+                    exception);
+            }
+            else
+            {
+                _logger?.Log(new LogEntry
+                {
+                    Level = LogLevel.Error,
+                    Category = "MainWindow",
+                    Message = "Save failed during close-after-save flow.",
+                    Timestamp = DateTimeOffset.UtcNow,
+                    Exception = exception
+                });
+            }
             MessageBox.Show(
                 "The project could not be saved. Your changes may not be persisted.\n\nPlease check the application log for details.",
                 "Save Failed",

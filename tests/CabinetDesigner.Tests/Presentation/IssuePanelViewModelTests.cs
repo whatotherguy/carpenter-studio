@@ -19,7 +19,7 @@ public sealed class IssuePanelViewModelTests
         Assert.Equal("Validation service data", viewModel.SourceLabel);
         Assert.Equal("0E 0W 0I", viewModel.CountSummaryDisplay);
         Assert.False(viewModel.HasManufactureBlockers);
-        Assert.Equal("No validation issues.", viewModel.EmptyStateText);
+        Assert.Equal("No validation issues match the current view. Keep designing or change the filter to see other diagnostics.", viewModel.EmptyStateText);
         Assert.Empty(viewModel.AllIssues);
         Assert.Empty(viewModel.FilteredIssues);
         Assert.False(viewModel.HasFilteredIssues);
@@ -35,7 +35,7 @@ public sealed class IssuePanelViewModelTests
         Assert.False(viewModel.IsPlaceholderData);
         Assert.Equal("Validation service data", viewModel.SourceLabel);
         Assert.Equal("0E 0W 0I", viewModel.CountSummaryDisplay);
-        Assert.Equal("No validation issues.", viewModel.EmptyStateText);
+        Assert.Equal("No validation issues match the current view. Keep designing or change the filter to see other diagnostics.", viewModel.EmptyStateText);
         Assert.Empty(viewModel.AllIssues);
         Assert.Empty(viewModel.FilteredIssues);
         Assert.False(viewModel.HasManufactureBlockers);
